@@ -1,10 +1,10 @@
 'use client';
 
 import { forwardRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, HTMLMotionProps } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-interface CyberpunkCardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface CyberpunkCardProps extends Omit<HTMLMotionProps<'div'>, 'ref'> {
   variant?: 'default' | 'service' | 'feature' | 'testimonial';
   glowEffect?: boolean;
   hoverEffect?: boolean;
