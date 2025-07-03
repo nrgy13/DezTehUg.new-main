@@ -4,7 +4,7 @@ import { forwardRef } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-interface CyberpunkCardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface CyberpunkCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onDrag' | 'onDragStart' | 'onDragEnd'> {
   variant?: 'default' | 'service' | 'feature' | 'testimonial';
   glowEffect?: boolean;
   hoverEffect?: boolean;
