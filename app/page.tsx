@@ -244,11 +244,7 @@ export default function Home() {
                 >
                   <div className="flex flex-col h-full">
                     <div className="mb-4">
-                      {typeof service.icon === 'string' ? (
-                        <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
-                      ) : (
-                        <service.icon className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
-                      )}
+                      <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
                     </div>
                     
                     <h3 className="text-xl font-orbitron font-semibold text-content-primary mb-3 group-hover:text-poison-green transition-colors">
