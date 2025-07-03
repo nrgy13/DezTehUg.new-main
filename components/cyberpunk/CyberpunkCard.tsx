@@ -1,13 +1,14 @@
 'use client';
 
 import { forwardRef } from 'react';
-import { motion, HTMLMotionProps } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-interface CyberpunkCardProps extends Omit<HTMLMotionProps<'div'>, 'ref'> {
+interface CyberpunkCardProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'default' | 'service' | 'feature' | 'testimonial';
   glowEffect?: boolean;
   hoverEffect?: boolean;
+  children: React.ReactNode;
 }
 
 const CyberpunkCard = forwardRef<HTMLDivElement, CyberpunkCardProps>(
@@ -15,9 +16,10 @@ const CyberpunkCard = forwardRef<HTMLDivElement, CyberpunkCardProps>(
     const baseClasses = cn(
       'relative rounded-lg bg-bg-primary border transition-all duration-300',
       {
-        'border-gray-200 hover:border-poison-green': (variant === 'default' || variant === 'testimonial') && hoverEffect,
+        'border-gray-200 hover:border-poison-green': variant === 'default' && hoverEffect,
         'border-gray-200 hover:border-neon-orange': variant === 'service' && hoverEffect,
         'border-cyber-blue/30 hover:border-cyber-blue': variant === 'feature' && hoverEffect,
+        'border-gray-200 hover:border-poison-green': variant === 'testimonial' && hoverEffect,
         'shadow-lg hover:shadow-xl': hoverEffect,
         'shadow-cyberpunk': glowEffect,
       },
