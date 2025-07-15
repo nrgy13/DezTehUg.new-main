@@ -120,7 +120,7 @@ export function LogoText() {
         >
           {/* ДЕЗ в красном цвете */}
           <motion.span
-            className="font-bebas font-bold text-5xl tracking-wider"
+            className="font-bebas font-bold text-3xl tracking-wider"
             style={{ color: '#e20819', textShadow: '0px 0px 1px rgba(226,8,25,0.5)' }}
             variants={letterVariants}
             custom={0}
@@ -128,7 +128,7 @@ export function LogoText() {
             Д
           </motion.span>
           <motion.span
-            className="font-bebas font-bold text-5xl tracking-wider"
+            className="font-bebas font-bold text-3xl tracking-wider"
             style={{ color: '#e20819', textShadow: '0px 0px 1px rgba(226,8,25,0.5)' }}
             variants={letterVariants}
             custom={1}
@@ -136,7 +136,7 @@ export function LogoText() {
             Е
           </motion.span>
           <motion.span
-            className="font-bebas font-bold text-5xl tracking-wider"
+            className="font-bebas font-bold text-3xl tracking-wider"
             style={{ color: '#e20819', textShadow: '0px 0px 1px rgba(226,8,25,0.5)' }}
             variants={letterVariants}
             custom={2}
@@ -146,7 +146,7 @@ export function LogoText() {
           
           {/* ТЕХ в зеленом цвете */}
           <motion.span
-            className="font-bebas font-bold text-5xl tracking-wider"
+            className="font-bebas font-bold text-3xl tracking-wider"
             style={{ color: '#4cb032', textShadow: '0px 0px 1px rgba(76,176,50,0.5)' }}
             variants={letterVariants}
             custom={3}
@@ -154,7 +154,7 @@ export function LogoText() {
             Т
           </motion.span>
           <motion.span
-            className="font-bebas font-bold text-5xl tracking-wider"
+            className="font-bebas font-bold text-3xl tracking-wider"
             style={{ color: '#4cb032', textShadow: '0px 0px 1px rgba(76,176,50,0.5)' }}
             variants={letterVariants}
             custom={4}
@@ -162,7 +162,7 @@ export function LogoText() {
             Е
           </motion.span>
           <motion.span
-            className="font-bebas font-bold text-5xl tracking-wider"
+            className="font-bebas font-bold text-3xl tracking-wider"
             style={{ color: '#4cb032', textShadow: '0px 0px 1px rgba(76,176,50,0.5)' }}
             variants={letterVariants}
             custom={5}
@@ -172,7 +172,7 @@ export function LogoText() {
           
           {/* ЮГ в красном цвете */}
           <motion.span
-            className="font-bebas font-bold text-5xl tracking-wider"
+            className="font-bebas font-bold text-3xl tracking-wider"
             style={{ color: '#e20819', textShadow: '0px 0px 1px rgba(226,8,25,0.5)' }}
             variants={letterVariants}
             custom={6}
@@ -180,7 +180,7 @@ export function LogoText() {
             Ю
           </motion.span>
           <motion.span
-            className="font-bebas font-bold text-5xl tracking-wider"
+            className="font-bebas font-bold text-3xl tracking-wider"
             style={{ color: '#e20819', textShadow: '0px 0px 1px rgba(226,8,25,0.5)' }}
             variants={letterVariants}
             custom={7}
@@ -214,8 +214,8 @@ export function LogoText() {
       
       {/* Подпись под логотипом */}
       <motion.span
-        className="text-sm text-content-secondary mt-2 font-roboto-condensed tracking-wider w-full text-center relative z-10 font-medium"
-        style={{ letterSpacing: '0.05em' }}
+        className="text-xs text-content-secondary mt-1 font-roboto-condensed tracking-wider text-center relative z-10 font-medium"
+        style={{ letterSpacing: '0.05em', maxWidth: 'fit-content', margin: '0.25rem auto 0 auto' }}
         initial={{ opacity: 0.7 }}
         animate={{
           opacity: isHovered || isAnimating ? [0.7, 1, 0.7] : 0.7,

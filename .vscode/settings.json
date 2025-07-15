@@ -1,4 +1,47 @@
 {
-    "editor.bracketPairColorization.independentColorPoolPerBracketType": false,
-    "editor.bracketPairColorization.enabled": false
+  "github.copilot.enable": {
+    "*": true,
+    "yaml": true,
+    "plaintext": true,
+    "markdown": true,
+    "typescript": true,
+    "javascript": true,
+    "typescriptreact": true,
+    "javascriptreact": true,
+    "json": true,
+    "css": true,
+    "scss": true,
+    "html": true
+  },
+  "github.copilot.inlineSuggest.enable": true,
+  "github.copilot.editor.enableAutoCompletions": true,
+  "github.copilot.advanced": {
+    "secret_key": "github.copilot.advanced",
+    "length": 500,
+    "temperature": "",
+    "top_p": "",
+    "stop_sequences": [],
+    "inlineSuggestEnable": true,
+    "listCount": 10,
+    "indentationMode": {
+      "python": "tab",
+      "javascript": "space",
+      "typescript": "space",
+      "typescriptreact": "space",
+      "javascriptreact": "space"
+    }
+  },
+  "github.copilot.chat.localeOverride": "ru",
+  "editor.inlineSuggest.enabled": true,
+  "editor.inlineSuggest.showToolbar": "onHover",
+  "editor.suggest.preview": true,
+  "editor.acceptSuggestionOnCommitCharacter": false,
+  "editor.acceptSuggestionOnEnter": "on",
+  "editor.tabCompletion": "on",
+  "typescript.suggest.autoImports": true,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "emmet.includeLanguages": {
+    "typescript": "html",
+    "typescriptreact": "html"
+  }
 }

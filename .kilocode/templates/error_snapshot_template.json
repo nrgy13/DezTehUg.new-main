@@ -1,0 +1,78 @@
+{
+  "snapshot_metadata": {
+    "version": "1.0.0",
+    "timestamp": "YYYY-MM-DDTHH:MM:SS.sssZ",
+    "session_id": "debug_session_YYYYMMDD_HHMMSS",
+    "error_id": "error_YYYYMMDD_HHMMSS_XXX",
+    "snapshot_type": "error_context"
+  },
+  "error_details": {
+    "error_message": "Description of the error",
+    "error_type": "ErrorType",
+    "stack_trace": [
+      "at function1 (file1.js:line:column)",
+      "at function2 (file2.js:line:column)"
+    ],
+    "error_code": "ERR_CODE",
+    "severity": "critical|high|medium|low"
+  },
+  "context_snapshot": {
+    "current_task": {
+      "description": "Current task being executed",
+      "progress": "percentage or description",
+      "step": "current step in the task"
+    },
+    "active_files": [
+      {
+        "path": "path/to/file",
+        "status": "modified|created|deleted",
+        "last_action": "action performed on file"
+      }
+    ],
+    "environment_state": {
+      "working_directory": "current working directory",
+      "active_processes": ["process1", "process2"],
+      "environment_variables": {
+        "key": "value"
+      }
+    },
+    "recent_actions": [
+      {
+        "action_id": "001",
+        "action_name": "action_name",
+        "timestamp": "YYYY-MM-DDTHH:MM:SS.sssZ",
+        "status": "completed|failed|in_progress",
+        "details": {}
+      }
+    ]
+  },
+  "debug_context": {
+    "token_usage": {
+      "current": 0,
+      "max": 60000,
+      "percentage": 0
+    },
+    "logging_state": {
+      "log_level": "DEBUG",
+      "active_filters": ["IGNORE:INFO", "COLLAPSE:DUPLICATES"],
+      "temp_log_file": ".debug_session.log"
+    },
+    "monitoring_data": {
+      "trace_execution": true,
+      "performance_metrics": {},
+      "memory_usage": {}
+    }
+  },
+  "recovery_instructions": {
+    "recommended_action": "description of recommended recovery action",
+    "alternative_actions": [
+      "alternative action 1",
+      "alternative action 2"
+    ],
+    "rollback_point": "identifier of safe rollback point",
+    "manual_steps": [
+      "step 1 for manual recovery",
+      "step 2 for manual recovery"
+    ]
+  }
+}

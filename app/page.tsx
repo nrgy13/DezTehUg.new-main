@@ -1,8 +1,9 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ArrowRight, CheckCircle, Star, Phone, Calculator, Shield, Zap, Award, Clock } from 'lucide-react';
+import { ArrowRight, CheckCircle, Star, Phone, Calculator, Shield } from 'lucide-react';
 import { ServiceIcon } from '@/components/ServiceIcon';
+import { TrustFactorIcon } from '@/components/TrustFactorIcon';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { FloatingParticles } from '@/components/FloatingParticles';
@@ -42,19 +43,19 @@ const trustFactors = [
   {
     title: 'Полное соответствие законодательству',
     value: <a href="http://fp.crc.ru/" target="_blank" rel="noopener noreferrer" className="text-poison-green hover:text-neon-orange transition-colors font-orbitron">РОСПОТРЕБНАДЗОР</a>,
-    icon: Award,
-    color: 'text-poison-green',
+    icon: 'award',
+    color: 'text-electric-blue',
   },
   {
     title: 'Оборудование нового поколения',
     value: '99.9% эффективность',
-    icon: Zap,
+    icon: 'zap',
     color: 'text-neon-orange',
   },
   {
     title: 'Экстренный выезд 24/7',
     value: '2 часа до выезда',
-    icon: Clock,
+    icon: 'clock',
     color: 'text-cyber-blue',
   },
 ];
@@ -65,13 +66,13 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-bg-primary via-bg-secondary to-bg-primary pt-24 pb-16">
         <FloatingParticles particleCount={50} />
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-0 left-0 w-full h-full">
-            <svg className="w-full h-full" viewBox="0 0 1200 800">
+        {/* Cyber Grid Background Pattern - Full Width */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-0 w-screen h-full">
+            <svg className="w-full h-full" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
               <defs>
-                <pattern id="cyber-grid" width="60" height="60" patternUnits="userSpaceOnUse">
-                  <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#1E40AF" strokeWidth="1"/>
+                <pattern id="cyber-grid" width="25" height="25" patternUnits="userSpaceOnUse">
+                  <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#1E40AF" strokeWidth="0.8"/>
                 </pattern>
               </defs>
               <rect width="100%" height="100%" fill="url(#cyber-grid)" />
@@ -244,11 +245,7 @@ export default function Home() {
                 >
                   <div className="flex flex-col h-full">
                     <div className="mb-4">
-                      {typeof service.icon === 'string' ? (
-                        <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
-                      ) : (
-                        <service.icon className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
-                      )}
+                      <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
                     </div>
                     
                     <h3 className="text-xl font-orbitron font-semibold text-content-primary mb-3 group-hover:text-poison-green transition-colors">
@@ -301,7 +298,7 @@ export default function Home() {
               >
                 <CyberpunkCard className="text-center p-8 group">
                   <div className="mb-6">
-                    <factor.icon className={`h-16 w-16 ${factor.color} mx-auto group-hover:animate-pulse`} />
+                    <TrustFactorIcon name={factor.icon as 'award' | 'zap' | 'clock'} className={`h-16 w-16 ${factor.color} mx-auto group-hover:animate-pulse`} />
                   </div>
                   
                   <h3 className="text-xl font-orbitron font-semibold text-content-primary mb-3">
@@ -364,7 +361,7 @@ export default function Home() {
                 <span>Бесплатная консультация</span>
               </div>
               <div className="flex items-center space-x-2">
-                <Clock className="h-4 w-4 text-neon-orange" />
+                <TrustFactorIcon name="clock" className="h-4 w-4 text-neon-orange" />
                 <span>Выезд в течение 2 часов</span>
               </div>
               <div className="flex items-center space-x-2">

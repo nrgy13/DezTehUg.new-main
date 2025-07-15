@@ -1,0 +1,123 @@
+import { Metadata } from 'next';
+import { HeroSection } from '@/components/services/HeroSection';
+import { ProblemSection } from '@/components/services/ProblemSection';
+import { SolutionSection } from '@/components/services/SolutionSection';
+import { CTASection } from '@/components/services/CTASection';
+import { FinalCTASection } from '@/components/services/FinalCTASection';
+import { disinfectionData } from '@/data/services/disinfection';
+
+export const metadata: Metadata = {
+  title: disinfectionData.metadata.title,
+  description: disinfectionData.metadata.description,
+  keywords: disinfectionData.metadata.keywords,
+  openGraph: {
+    title: disinfectionData.metadata.title,
+    description: disinfectionData.metadata.description,
+    type: 'website',
+    locale: 'ru_RU',
+    url: '/services/disinfection',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: disinfectionData.metadata.title,
+    description: disinfectionData.metadata.description,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  alternates: {
+    canonical: '/services/disinfection',
+  },
+};
+
+export default function DisinfectionPage() {
+  return (
+    <div className="service-disinfection light-theme-page">
+      {/* Structured Data for SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Service",
+            "name": "Дезинфекция",
+            "description": disinfectionData.metadata.description,
+            "provider": {
+              "@type": "Organization",
+              "name": "ДЕЗТЕХЮГ",
+              "url": "https://deztehug.ru",
+              "telephone": "+7 (495) 123-45-67",
+              "address": {
+                "@type": "PostalAddress",
+                "addressLocality": "Москва",
+                "addressCountry": "RU"
+              }
+            },
+            "areaServed": {
+              "@type": "Place",
+              "name": "Москва и Московская область"
+            },
+            "serviceType": "Дезинфекция",
+            "category": "Санитарные услуги",
+            "offers": {
+              "@type": "Offer",
+              "availability": "https://schema.org/InStock",
+              "priceRange": "$$",
+              "validFrom": new Date().toISOString(),
+              "url": "/calculator"
+            }
+          })
+        }}
+      />
+
+      {/* Light Theme Background Wrapper */}
+      <div className="light-bg-wrapper">
+        {/* Subtle Cyber Grid Background */}
+        <div className="light-cyber-grid"></div>
+        
+        {/* Floating Light Particles */}
+        <div className="light-particles">
+          {[...Array(15)].map((_, i) => (
+            <div
+              key={i}
+              className="light-particle"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 10}s`,
+                animationDuration: `${8 + Math.random() * 4}s`
+              }}
+            />
+          ))}
+        </div>
+        
+        {/* Gradient Overlays */}
+        <div className="light-gradient-overlay-1"></div>
+        <div className="light-gradient-overlay-2"></div>
+
+        {/* Hero Section */}
+        <HeroSection data={disinfectionData.hero} />
+
+        {/* Problem Section */}
+        <ProblemSection data={disinfectionData.problem} />
+
+        {/* Solution Section */}
+        <SolutionSection data={disinfectionData.solution} />
+
+        {/* CTA Section */}
+        <CTASection data={disinfectionData.cta} />
+
+        {/* Final CTA Section */}
+        <FinalCTASection data={disinfectionData.finalCta} />
+      </div>
+    </div>
+  );
+}

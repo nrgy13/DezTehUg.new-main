@@ -9,57 +9,36 @@ import { useEffect, useState, useCallback } from 'react';
 
 const MainContent = ({ children }: { children: React.ReactNode }) => {
   const { isLoading, unregisterLoading } = useLoading();
-  const [isMounted, setIsMounted] = useState(false);
   
-  // Функция для обработки завершения загрузки с искусственной задержкой
-  const handleMounted = useCallback(() => {
-    setIsMounted(true);
-    // Добавляем искусственную задержку в 6 секунд
-    // Это гарантирует, что экран загрузки будет отображаться полные 6 секунд
-    setTimeout(() => {
-      unregisterLoading('initial');
-    }, 6000);
-  }, [unregisterLoading]);
-
   useEffect(() => {
-    // Используем requestIdleCallback для выполнения монтирования в период простоя браузера
-    // С fallback на setTimeout для браузеров, которые не поддерживают requestIdleCallback
-    if (typeof window !== 'undefined') {
-      if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(() => {
-          handleMounted();
-        });
-      } else {
-        setTimeout(handleMounted, 10);
-      }
-    }
-  }, [handleMounted]);
+    // Простая логика: показываем загрузочный экран ровно 3 секунды
+    const timer = setTimeout(() => {
+      unregisterLoading('initial');
+    }, 3000);
 
-  if (!isMounted) {
-    return <LoadingScreen />;
-  }
+    return () => clearTimeout(timer);
+  }, [unregisterLoading]);
 
   return (
     // Убираем фон отсюда, чтобы он не перекрывал частицы в дочерних компонентах
     <div className="min-h-screen flex flex-col">
+      {/* Экран загрузки для главной страницы */}
       <AnimatePresence>
         {isLoading && <LoadingScreen />}
       </AnimatePresence>
 
-      {!isLoading && (
-        <motion.div
-          className="flex flex-col flex-1"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }} // Уменьшено время анимации для более быстрого отображения
-        >
-          <Header />
-          <main className="flex-1">
-            {children}
-          </main>
-          <Footer />
-        </motion.div>
-      )}
+      <motion.div
+        className="flex flex-col flex-1"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Header />
+        <main className="flex-1">
+          {children}
+        </main>
+        <Footer />
+      </motion.div>
     </div>
   );
 };

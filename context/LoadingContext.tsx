@@ -23,7 +23,7 @@ export const useLoading = () => {
 
 export const LoadingProvider = ({ children }: { children: ReactNode }) => {
   const [loadingSources, setLoadingSources] = useState<Set<string>>(new Set(['initial']));
-  const [minLoadingTime, setMinLoadingTime] = useState<number>(6000); // 6 секунд минимум
+  const [minLoadingTime, setMinLoadingTime] = useState<number>(3000); // 3 секунды минимум для демонстрации
   const [loadingStartTime, setLoadingStartTime] = useState<number>(Date.now());
   
   const registerLoading = useCallback((id: string) => {
@@ -46,32 +46,33 @@ export const LoadingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [loadingSources.size]);
 
-  // Изначально считаем, что страница грузится, 'initial' удалится в главном layout
-  useEffect(() => {
-    const handleLoad = () => {
-      // Проверяем, прошло ли минимальное время загрузки
-      const timeElapsed = Date.now() - loadingStartTime;
-      
-      if (timeElapsed >= minLoadingTime) {
-        unregisterLoading('initial');
-      } else {
-        // Если не прошло минимальное время, ждем оставшееся время
-        const remainingTime = minLoadingTime - timeElapsed;
-        setTimeout(() => {
-          unregisterLoading('initial');
-        }, remainingTime);
-      }
-    };
+  // Отключаем автоматическое удаление 'initial' при загрузке окна
+  // Теперь управление загрузочным экраном полностью в руках AppWrapper
+  // useEffect(() => {
+  //   const handleLoad = () => {
+  //     // Проверяем, прошло ли минимальное время загрузки
+  //     const timeElapsed = Date.now() - loadingStartTime;
+  //
+  //     if (timeElapsed >= minLoadingTime) {
+  //       unregisterLoading('initial');
+  //     } else {
+  //       // Если не прошло минимальное время, ждем оставшееся время
+  //       const remainingTime = minLoadingTime - timeElapsed;
+  //       setTimeout(() => {
+  //         unregisterLoading('initial');
+  //       }, remainingTime);
+  //     }
+  //   };
 
-    // Проверяем, загрузилось ли уже окно
-    if (document.readyState === 'complete') {
-      handleLoad();
-    } else {
-      window.addEventListener('load', handleLoad);
-    }
+  //   // Проверяем, загрузилось ли уже окно
+  //   if (document.readyState === 'complete') {
+  //     handleLoad();
+  //   } else {
+  //     window.addEventListener('load', handleLoad);
+  //   }
     
-    return () => window.removeEventListener('load', handleLoad);
-  }, [unregisterLoading, loadingStartTime, minLoadingTime]);
+  //   return () => window.removeEventListener('load', handleLoad);
+  // }, [unregisterLoading, loadingStartTime, minLoadingTime]);
 
   // Мемоизируем значение контекста для предотвращения ненужных ререндеров
   const contextValue = useMemo(() => ({

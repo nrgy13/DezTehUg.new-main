@@ -34,35 +34,36 @@ const objectTypes = [
     title: 'Жилые помещения',
     description: 'Квартиры, дома, коттеджи',
     icon: Home,
-    multiplier: 1.0,
+    collectiveDiscountThreshold: 4, // квартир
+    collectiveDiscount: 0.2, // 20%
   },
   {
     id: 'office' as ObjectType,
     title: 'Офисные помещения',
-    description: 'Офисы, коворкинги, БЦ',
+    description: 'Торговые и производственные',
     icon: Building,
-    multiplier: 1.2,
+    collectiveDiscountThreshold: 1000, // м²
+    collectiveDiscount: 0.15, // 15%
   },
   {
     id: 'medical' as ObjectType,
     title: 'Медицинские учреждения',
-    description: 'Клиники, больницы, лаборатории',
+    description: 'Госучреждения',
     icon: Building2,
-    multiplier: 1.8,
   },
   {
     id: 'food' as ObjectType,
     title: 'Пищевые производства',
-    description: 'Рестораны, кафе, пекарни',
+    description: 'Общепит',
     icon: Factory,
-    multiplier: 1.5,
   },
   {
     id: 'warehouse' as ObjectType,
     title: 'Складские помещения',
-    description: 'Склады, логистические центры',
+    description: 'Частный сектор',
     icon: Warehouse,
-    multiplier: 0.8,
+    collectiveDiscountThreshold: 12, // соток (1200 м²)
+    collectiveDiscount: 0.15, // 15%
   },
 ];
 
@@ -71,32 +72,114 @@ const services = [
     id: 'disinfection' as ServiceType,
     title: 'Дезинфекция',
     description: 'Уничтожение вирусов и бактерий',
-    basePrice: 150,
     duration: '1-3 часа',
   },
   {
     id: 'pest-control' as ServiceType,
     title: 'Дезинсекция',
     description: 'Уничтожение насекомых',
-    basePrice: 200,
     duration: '2-4 часа',
   },
   {
     id: 'deratization' as ServiceType,
     title: 'Дератизация',
     description: 'Уничтожение грызунов',
-    basePrice: 250,
     duration: '2-5 часов',
   },
   {
     id: 'water-analysis' as ServiceType,
     title: 'Анализ воды',
     description: 'Лабораторные исследования',
-    basePrice: 2500,
     duration: '24-48 часов',
-    isFixed: true,
   },
 ];
+
+// Ценовая матрица согласно новому прайс-листу
+const pricingMatrix: Record<ObjectType, Partial<Record<ServiceType, any>>> = {
+  residential: {
+    'pest-control': {
+      // Дезинсекция для квартир по комнатам
+      getRoomPrice: (rooms: number) => {
+        if (rooms === 1) return 5000; // 1-комнатная до 50 м²
+        if (rooms === 2) return 6000; // 2-комнатная 50-90 м²
+        if (rooms >= 3) return 7900; // 3+ комнатная 90-130 м²
+        return 5000;
+      }
+    },
+    'deratization': {
+      // Дератизация для квартир по комнатам (те же цены что и дезинсекция)
+      getRoomPrice: (rooms: number) => {
+        if (rooms === 1) return 5000; // 1-комнатная до 50 м²
+        if (rooms === 2) return 6000; // 2-комнатная 50-90 м²
+        if (rooms >= 3) return 7900; // 3+ комнатная 90-130 м²
+        return 5000;
+      }
+    },
+    'disinfection': {
+      pricePerSqm: 50 // 50 руб/м²
+    }
+  },
+  office: {
+    'pest-control': {
+      basePrice: 5450, // до 50 м²
+      threshold: 50,
+      pricePerSqmOver: 20 // за каждый м² свыше 50
+    },
+    'deratization': {
+      basePrice: 4950, // до 50 м²
+      threshold: 50,
+      pricePerSqmOver: 20 // за каждый м² свыше 50
+    },
+    'disinfection': {
+      pricePerSqm: 25 // COVID-19: 25 руб/м²
+    }
+  },
+  medical: {
+    'pest-control': {
+      basePrice: 5450, // до 100 м²
+      threshold: 100,
+      pricePerSqmOver: 45 // за каждый м² свыше 100
+    },
+    'deratization': {
+      basePrice: 4950, // до 100 м²
+      threshold: 100,
+      pricePerSqmOver: 45 // за каждый м² свыше 100
+    },
+    'disinfection': {
+      pricePerSqm: 35 // 35 руб/м²
+    }
+  },
+  food: {
+    'pest-control': {
+      basePrice: 6000, // до 50 м²
+      threshold: 50,
+      pricePerSqmOver: 50 // за каждый м² свыше 50
+    },
+    'deratization': {
+      basePrice: 5500, // до 50 м²
+      threshold: 50,
+      pricePerSqmOver: 50 // за каждый м² свыше 50
+    },
+    'disinfection': {
+      pricePerSqm: 25 // COVID-19: 25 руб/м²
+    }
+  },
+  warehouse: {
+    'pest-control': {
+      basePrice: 5450, // до 100 м²
+      threshold: 100,
+      pricePerSqmOver: 45 // за каждый м² свыше 100
+    },
+    'deratization': {
+      basePrice: 4950, // до 100 м²
+      threshold: 100,
+      pricePerSqmOver: 45 // за каждый м² свыше 100
+    },
+    'disinfection': {
+      pricePerSqm: 35 // 35 руб/м²
+    }
+  }
+};
 
 export default function CalculatorPage() {
   const [state, setState] = useState<CalculatorState>({
@@ -116,25 +199,74 @@ export default function CalculatorPage() {
     },
   });
 
+  const calculateServicePrice = (serviceId: ServiceType): number => {
+    if (!state.objectType) return 0;
+    
+    const service = services.find(s => s.id === serviceId);
+    if (!service) return 0;
+    
+    // Фиксированная цена для анализа воды - 2500 руб для всех типов объектов
+    if (serviceId === 'water-analysis') {
+      return 2500;
+    }
+    
+    const pricing = pricingMatrix[state.objectType]?.[serviceId];
+    if (!pricing) return 0;
+    
+    // Для жилых помещений дезинсекция и дератизация рассчитываются по комнатам
+    if (state.objectType === 'residential' && (serviceId === 'pest-control' || serviceId === 'deratization') && 'getRoomPrice' in pricing) {
+      return pricing.getRoomPrice(state.rooms);
+    }
+    
+    // Для услуг с базовой ценой и доплатой за превышение
+    if ('basePrice' in pricing && 'threshold' in pricing && 'pricePerSqmOver' in pricing) {
+      const { basePrice, threshold, pricePerSqmOver } = pricing;
+      if (state.area <= threshold) {
+        return basePrice;
+      } else {
+        return basePrice + (state.area - threshold) * pricePerSqmOver;
+      }
+    }
+    
+    // Для услуг с ценой за м²
+    if ('pricePerSqm' in pricing) {
+      return pricing.pricePerSqm * state.area;
+    }
+    
+    return 0;
+  };
+
   const calculateTotal = () => {
     if (!state.objectType) return 0;
     
-    const objectMultiplier = objectTypes.find(t => t.id === state.objectType)?.multiplier || 1;
-    const urgencyMultiplier = state.urgency ? 1.5 : 1;
-    const packageDiscount = state.services.length >= 3 ? 0.85 : state.services.length >= 2 ? 0.95 : 1;
-    
-    const total = state.services.reduce((sum, serviceId) => {
-      const service = services.find(s => s.id === serviceId);
-      if (!service) return sum;
-      
-      if (service.isFixed) {
-        return sum + service.basePrice;
-      }
-      
-      return sum + (service.basePrice * state.area * objectMultiplier);
+    // Базовая стоимость услуг
+    const baseTotal = state.services.reduce((sum, serviceId) => {
+      return sum + calculateServicePrice(serviceId);
     }, 0);
     
-    return Math.round(total * urgencyMultiplier * packageDiscount);
+    // Коллективная скидка
+    const objectType = objectTypes.find(t => t.id === state.objectType);
+    let collectiveDiscount = 1;
+    if (objectType?.collectiveDiscountThreshold && objectType?.collectiveDiscount) {
+      const threshold = objectType.collectiveDiscountThreshold;
+      const checkValue = state.objectType === 'residential' ? state.rooms :
+                        state.objectType === 'warehouse' ? state.area / 100 : // соток
+                        state.area;
+      
+      if (checkValue >= threshold) {
+        collectiveDiscount = 1 - objectType.collectiveDiscount;
+      }
+    }
+    
+    // Комплексная скидка при заказе 3+ услуг: 15%
+    const packageDiscount = state.services.length >= 3 ? 0.85 : 1;
+    
+    // Срочный выезд: +50%
+    const urgencyMultiplier = state.urgency ? 1.5 : 1;
+    
+    const total = baseTotal * collectiveDiscount * packageDiscount * urgencyMultiplier;
+    
+    return Math.round(total);
   };
 
   const nextStep = () => {
@@ -414,9 +546,23 @@ export default function CalculatorPage() {
                         <div className="flex justify-between items-center">
                           <div className="text-sm">
                             <div className="font-medium text-poison-green">
-                              {service.isFixed 
-                                ? `${service.basePrice} ₽`
-                                : `от ${service.basePrice} ₽/м²`
+                              {service.id === 'water-analysis'
+                                ? '2 500 ₽'
+                                : state.objectType === 'residential' && (service.id === 'pest-control' || service.id === 'deratization')
+                                  ? 'от 5 000 ₽'
+                                  : state.objectType === 'residential' && service.id === 'disinfection'
+                                    ? '50 ₽/м²'
+                                    : state.objectType && pricingMatrix[state.objectType]?.[service.id]
+                                      ? (() => {
+                                          const pricing = pricingMatrix[state.objectType][service.id];
+                                          if ('basePrice' in pricing) {
+                                            return `от ${pricing.basePrice} ₽`;
+                                          } else if ('pricePerSqm' in pricing) {
+                                            return `${pricing.pricePerSqm} ₽/м²`;
+                                          }
+                                          return 'Цена по запросу';
+                                        })()
+                                      : 'Цена по запросу'
                               }
                             </div>
                             <div className="text-content-muted">
@@ -430,7 +576,7 @@ export default function CalculatorPage() {
                 </div>
                 
                 {/* Package Deals */}
-                {state.services.length >= 2 && (
+                {state.services.length >= 3 && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -439,13 +585,10 @@ export default function CalculatorPage() {
                     <CyberpunkCard className="p-4 neon-border">
                       <div className="text-center">
                         <div className="text-lg font-orbitron font-bold text-neon-orange mb-2">
-                          🎉 Скидка на комплексные услуги!
+                          🎉 Комплексная скидка!
                         </div>
                         <div className="text-content-secondary">
-                          {state.services.length >= 3 
-                            ? 'Скидка 15% за заказ от 3 услуг'
-                            : 'Скидка 5% за заказ от 2 услуг'
-                          }
+                          Скидка 15% за заказ от 3 услуг
                         </div>
                       </div>
                     </CyberpunkCard>
@@ -641,20 +784,34 @@ export default function CalculatorPage() {
                     const service = services.find(s => s.id === serviceId);
                     if (!service) return null;
                     
-                    const objectMultiplier = objectTypes.find(t => t.id === state.objectType)?.multiplier || 1;
-                    const cost = service.isFixed 
-                      ? service.basePrice
-                      : service.basePrice * state.area * objectMultiplier;
+                    const cost = calculateServicePrice(serviceId);
+                    
+                    // Формируем описание расчета
+                    let description = '';
+                    if (serviceId === 'water-analysis') {
+                      description = 'Фиксированная стоимость';
+                    } else if (state.objectType) {
+                      const pricing = pricingMatrix[state.objectType]?.[serviceId];
+                      if (state.objectType === 'residential' && (serviceId === 'pest-control' || serviceId === 'deratization')) {
+                        description = `${state.rooms}-комнатная квартира`;
+                      } else if (pricing && 'basePrice' in pricing && 'threshold' in pricing) {
+                        const { basePrice, threshold, pricePerSqmOver } = pricing;
+                        if (state.area <= threshold) {
+                          description = `Базовая цена до ${threshold} м²`;
+                        } else {
+                          description = `${basePrice} ₽ + ${pricePerSqmOver} ₽/м² × ${state.area - threshold} м²`;
+                        }
+                      } else if (pricing && 'pricePerSqm' in pricing) {
+                        description = `${pricing.pricePerSqm} ₽/м² × ${state.area} м²`;
+                      }
+                    }
                     
                     return (
                       <div key={serviceId} className="flex justify-between items-center p-4 bg-bg-secondary rounded-lg">
                         <div>
                           <div className="font-medium text-content-primary">{service.title}</div>
                           <div className="text-sm text-content-muted">
-                            {service.isFixed 
-                              ? 'Фиксированная стоимость'
-                              : `${service.basePrice} ₽/м² × ${state.area} м² × ${objectMultiplier}`
-                            }
+                            {description}
                           </div>
                         </div>
                         <div className="text-lg font-orbitron font-bold text-content-primary">
@@ -664,13 +821,41 @@ export default function CalculatorPage() {
                     );
                   })}
                   
-                  {state.services.length >= 2 && (
+                  {/* Коллективная скидка */}
+                  {(() => {
+                    const objectType = objectTypes.find(t => t.id === state.objectType);
+                    if (objectType?.collectiveDiscountThreshold && objectType?.collectiveDiscount) {
+                      const threshold = objectType.collectiveDiscountThreshold;
+                      const checkValue = state.objectType === 'residential' ? state.rooms :
+                                        state.objectType === 'warehouse' ? state.area / 100 : // соток
+                                        state.area;
+                      
+                      if (checkValue >= threshold) {
+                        return (
+                          <div className="flex justify-between items-center p-4 bg-cyber-blue/10 rounded-lg border border-cyber-blue/30">
+                            <div className="text-cyber-blue font-medium">
+                              Коллективная скидка
+                              {state.objectType === 'residential' && ` (от ${threshold} квартир)`}
+                              {state.objectType === 'office' && ` (от ${threshold} м²)`}
+                              {state.objectType === 'warehouse' && ` (от ${threshold} соток)`}
+                            </div>
+                            <div className="text-lg font-orbitron font-bold text-cyber-blue">
+                              -{Math.round(objectType.collectiveDiscount * 100)}%
+                            </div>
+                          </div>
+                        );
+                      }
+                    }
+                    return null;
+                  })()}
+                  
+                  {state.services.length >= 3 && (
                     <div className="flex justify-between items-center p-4 bg-poison-green/10 rounded-lg border border-poison-green/30">
                       <div className="text-poison-green font-medium">
-                        Скидка на комплексные услуги
+                        Комплексная скидка (3+ услуги)
                       </div>
                       <div className="text-lg font-orbitron font-bold text-poison-green">
-                        -{state.services.length >= 3 ? '15%' : '5%'}
+                        -15%
                       </div>
                     </div>
                   )}

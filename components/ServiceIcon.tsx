@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { Bug, SprayCan, Rat, Beaker } from 'lucide-react';
 
 type ServiceIconProps = {
-  name: 'bug' | 'spray' | 'rat' | 'beaker';
+  name: 'bug' | 'spray' | 'rat' | 'beaker' | 'disinfection' | 'pest-control' | 'deratization' | 'water-analysis';
   className?: string;
 };
 
@@ -16,11 +16,21 @@ type ServiceIconProps = {
 export function ServiceIcon({ name, className = 'h-6 w-6' }: ServiceIconProps) {
   const [iconExists, setIconExists] = useState<boolean>(true);
   
+  // Определяем путь к иконке в зависимости от типа
+  const getIconPath = (iconName: string) => {
+    const serviceIcons = ['disinfection', 'pest-control', 'deratization', 'water-analysis'];
+    if (serviceIcons.includes(iconName)) {
+      return `/icons/services/${iconName}.svg`;
+    }
+    return `/icons/${iconName}.svg`;
+  };
+  
   // Проверяем, существует ли пользовательская иконка
   useEffect(() => {
     const checkIconExists = async () => {
       try {
-        const res = await fetch(`/icons/${name}.svg`);
+        const iconPath = getIconPath(name);
+        const res = await fetch(iconPath);
         setIconExists(res.status === 200);
       } catch (error) {
         setIconExists(false);
@@ -32,13 +42,14 @@ export function ServiceIcon({ name, className = 'h-6 w-6' }: ServiceIconProps) {
   
   // Если пользовательская иконка существует, используем ее
   if (iconExists) {
+    const iconPath = getIconPath(name);
     return (
       <div className={className}>
-        <Image 
-          src={`/icons/${name}.svg`} 
-          alt={`${name} icon`} 
-          width={24} 
-          height={24} 
+        <Image
+          src={iconPath}
+          alt={`${name} icon`}
+          width={24}
+          height={24}
           className="w-full h-full"
         />
       </div>

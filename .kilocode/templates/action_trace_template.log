@@ -1,0 +1,16 @@
+# Action Trace Log Template
+# Format: [TIMESTAMP] [STATUS] [ACTION_ID] [ACTION_NAME] [DETAILS]
+# STATUS: START, END, ERROR, CHECKPOINT
+# Example entries:
+
+# [2025-01-07T18:30:00.000Z] [START] [001] [file_write] {"path": "example.js", "size": 1024}
+# [2025-01-07T18:30:01.500Z] [END] [001] [file_write] {"success": true, "duration": 1500}
+# [2025-01-07T18:30:02.000Z] [START] [002] [execute_command] {"command": "npm test"}
+# [2025-01-07T18:30:05.000Z] [ERROR] [002] [execute_command] {"error": "Command failed", "exit_code": 1}
+# [2025-01-07T18:30:05.100Z] [CHECKPOINT] [003] [context_save] {"tokens_used": 25000, "context_size": "compressed"}
+
+# Session metadata
+SESSION_ID: debug_session_YYYYMMDD_HHMMSS
+START_TIME: YYYY-MM-DDTHH:MM:SS.sssZ
+MODE: debug
+PROFILE: debug_profile.json

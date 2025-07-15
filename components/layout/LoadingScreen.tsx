@@ -11,13 +11,14 @@ export const LoadingScreen: React.FC = memo(() => {
   const [startTime] = useState(Date.now());
 
   useEffect(() => {
-    // Адаптивное время загрузки - 6 секунд
-    const maxDuration = 6000;
-    const minIncrement = 5; // Минимальный прирост за интервал
+    // Адаптивное время загрузки - 3 секунды
+    const maxDuration = 3000;
+    const minIncrement = 3; // Минимальный прирост за интервал для более плавной анимации
     
     // Используем requestAnimationFrame вместо setInterval для более плавной анимации
     let animationFrameId: number;
     let lastTimestamp: number;
+    let currentProgress = 0;
     
     const updateProgress = (timestamp: number) => {
       if (!lastTimestamp) lastTimestamp = timestamp;
@@ -27,12 +28,13 @@ export const LoadingScreen: React.FC = memo(() => {
       
       // Обеспечиваем плавный прогресс, но с минимальным приростом
       const newProgress = Math.max(
-        progress + minIncrement,
+        currentProgress + minIncrement,
         elapsedPercent
       );
       
       if (newProgress < 100) {
-        setProgress(Math.min(99, newProgress)); // Никогда не достигаем 100% до завершения загрузки
+        currentProgress = Math.min(99, newProgress); // Никогда не достигаем 100% до завершения загрузки
+        setProgress(currentProgress);
         animationFrameId = requestAnimationFrame(updateProgress);
       } else {
         setProgress(100);
@@ -46,7 +48,7 @@ export const LoadingScreen: React.FC = memo(() => {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [progress, startTime]);
+  }, [startTime]); // Убираем зависимость от progress
 
   return (
     <motion.div
@@ -98,7 +100,7 @@ export const LoadingScreen: React.FC = memo(() => {
           />
         </div>
         <p className="text-center text-sm font-mono mt-2 text-poison-green">
-          ЗАГРУЗКА... {progress}%
+          ЗАГРУЗКА... {Math.round(progress)}%
         </p>
       </div>
     </motion.div>
