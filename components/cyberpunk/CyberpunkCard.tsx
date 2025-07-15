@@ -10,6 +10,7 @@ interface CyberpunkCardCustomProps {
   variant?: 'default' | 'service' | 'feature' | 'testimonial';
   glowEffect?: boolean;
   hoverEffect?: boolean;
+  children: React.ReactNode;
 }
 
 // Combine with Framer Motion's props using the canonical React way
