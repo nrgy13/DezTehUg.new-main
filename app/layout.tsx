@@ -14,6 +14,7 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://deztehug.netlify.app'),
   title: 'DEZTECHYUG - Дезинфекция будущего уже сегодня | Профессиональная санитарная служба',
   description: 'Элитная команда технологичных специалистов. 10 лет безупречной работы. Полное уничтожение угроз за 24 часа. Дезинфекция, дезинсекция, дератизация, анализ воды.',
   keywords: 'дезинфекция, дезинсекция, дератизация, анализ воды, санитарная служба, уничтожение насекомых, борьба с грызунами, профессиональная обработка',
@@ -22,6 +23,8 @@ export const metadata: Metadata = {
     description: 'Элитная команда технологичных специалистов. 10 лет безупречной работы.',
     type: 'website',
     locale: 'ru_RU',
+    url: 'https://deztehug.netlify.app',
+    siteName: 'DEZTECHYUG',
   },
   robots: {
     index: true,

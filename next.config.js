@@ -1,16 +1,26 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Временно отключаем export для тестирования
-  // output: 'export',
+  // Статический экспорт для Netlify (Next.js 13+ App Router)
+  output: 'export',
+  
+  // Оптимизация для Netlify деплоя
   eslint: {
     ignoreDuringBuilds: true,
   },
   images: {
     unoptimized: true
   },
-  // Обеспечиваем правильную обработку статических файлов
-  trailingSlash: true,
-  assetPrefix: '',
+  // Netlify оптимизация
+  trailingSlash: false,
+  
+  // Заголовки безопасности настроены в netlify.toml для статического экспорта
+  // async headers() не совместимо с output: 'export'
+
+  // Экспериментальные функции для оптимизации
+  // Убираем экспериментальную CSS оптимизацию для статического экспорта
+  // experimental: {
+  //   optimizeCss: true,
+  // },
 };
 
 module.exports = nextConfig;
