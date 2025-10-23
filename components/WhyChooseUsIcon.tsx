@@ -1,66 +1,53 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
-import { Shield, Zap, Award, CheckCircle, Clock } from 'lucide-react';
+import { Shield, Zap, Award, CheckCircle, Clock, RefreshCw } from 'lucide-react';
 
-type WhyChooseUsIconProps = {
-  name: 'shield' | 'zap' | 'award' | 'check-circle' | 'clock' | 'cycle';
+type WhyChooseUsIconName = 'shield' | 'zap' | 'award' | 'check-circle' | 'clock' | 'cycle';
+
+interface WhyChooseUsIconProps {
+  name: WhyChooseUsIconName;
   className?: string;
-};
+}
 
 /**
- * Компонент WhyChooseUsIcon заменяет иконки из библиотеки lucide-react на пользовательские SVG иконки
- * для блока "Почему выбирают ДЕЗТЕХЮГ"
- * Если пользовательская иконка не найдена, используется иконка из библиотеки lucide-react
+ * Компонент WhyChooseUsIcon отображает иконки преимуществ из директории /public/icons/why-choose-us/
+ * Использует Next.js Image для оптимальной загрузки SVG иконок.
+ * При ошибке загрузки или отсутствии файла используется fallback иконка из lucide-react.
  */
 export function WhyChooseUsIcon({ name, className = 'h-6 w-6' }: WhyChooseUsIconProps) {
-  const [iconExists, setIconExists] = useState<boolean>(true);
-  
-  // Проверяем, существует ли пользовательская иконка
-  useEffect(() => {
-    const checkIconExists = async () => {
-      try {
-        const res = await fetch(`/icons/why-choose-us/${name}.svg`);
-        setIconExists(res.status === 200);
-      } catch (error) {
-        setIconExists(false);
-      }
-    };
-    
-    checkIconExists();
-  }, [name]);
-  
-  // Если пользовательская иконка существует, используем ее
-  if (iconExists) {
-    return (
-      <div className={className}>
-        <Image 
-          src={`/icons/why-choose-us/${name}.svg`} 
-          alt={`${name} icon`} 
-          width={48} 
-          height={48} 
-          className="w-full h-full"
-        />
-      </div>
-    );
+  const [error, setError] = useState(false);
+
+  // Формируем стандартизированный путь к иконке
+  const iconSrc = `/icons/why-choose-us/${name}.svg`;
+
+  // Карта для fallback-иконок
+  const fallbackIcons: { [key in WhyChooseUsIconName]: React.ElementType } = {
+    shield: Shield,
+    zap: Zap,
+    award: Award,
+    'check-circle': CheckCircle,
+    clock: Clock,
+    cycle: RefreshCw, // Более подходящая иконка для cycle
+  };
+
+  const FallbackComponent = fallbackIcons[name] || Shield; // Shield как дефолтный fallback
+
+  // Если произошла ошибка загрузки SVG, показываем fallback иконку
+  if (error) {
+    return <FallbackComponent className={className} />;
   }
-  
-  // Если пользовательская иконка не найдена, используем иконку из библиотеки lucide-react
-  switch (name) {
-    case 'shield':
-      return <Shield className={className} />;
-    case 'zap':
-      return <Zap className={className} />;
-    case 'award':
-      return <Award className={className} />;
-    case 'check-circle':
-      return <CheckCircle className={className} />;
-    case 'clock':
-      return <Clock className={className} />;
-    case 'cycle':
-      return <Shield className={className} />; // fallback to shield for cycle
-    default:
-      return <Shield className={className} />;
-  }
+
+  return (
+    <Image
+      src={iconSrc}
+      alt={`${name} icon`}
+      width={24}
+      height={24}
+      className={className}
+      onError={() => setError(true)}
+      priority={false} // Иконки не являются критически важными для LCP
+    />
+  );
 }

@@ -3,10 +3,94 @@
 import { motion } from 'framer-motion';
 import { CTASectionProps } from '@/types/services';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
+import Image from 'next/image';
+import { useState } from 'react';
+import { AlertTriangle, Phone, Calendar, Shield } from 'lucide-react';
 
 interface CTASectionComponentProps {
   data: CTASectionProps;
 }
+
+// Embedded icon components
+const UrgentIcon = ({ accentColor }: { accentColor: string }) => {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return <AlertTriangle className="text-2xl mr-3" style={{ color: accentColor }} />;
+  }
+
+  return (
+    <Image
+      src="/icons/services/shared-cta-finalcta/urgent-cta.svg"
+      alt="Срочно"
+      width={24}
+      height={24}
+      className="mr-3"
+      style={{ filter: `brightness(0) saturate(100%) hue-rotate(0deg)`, color: accentColor }}
+      onError={() => setError(true)}
+    />
+  );
+};
+
+const PhoneIcon = ({ accentColor }: { accentColor: string }) => {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return <Phone className="text-2xl mb-2 cyber-glow" style={{ color: accentColor }} />;
+  }
+
+  return (
+    <Image
+      src="/icons/services/shared-cta-finalcta/phone-cta.svg"
+      alt="Телефон"
+      width={24}
+      height={24}
+      className="mb-2 cyber-glow"
+      style={{ filter: `brightness(0) saturate(100%) hue-rotate(0deg)`, color: accentColor }}
+      onError={() => setError(true)}
+    />
+  );
+};
+
+const ConsultationIcon = ({ accentColor }: { accentColor: string }) => {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return <Calendar className="text-2xl mb-2 cyber-glow" style={{ color: accentColor }} />;
+  }
+
+  return (
+    <Image
+      src="/icons/services/shared-cta-finalcta/consultation-cta.svg"
+      alt="Консультация"
+      width={24}
+      height={24}
+      className="mb-2 cyber-glow"
+      style={{ filter: `brightness(0) saturate(100%) hue-rotate(0deg)`, color: accentColor }}
+      onError={() => setError(true)}
+    />
+  );
+};
+
+const GuaranteeIcon = ({ accentColor }: { accentColor: string }) => {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return <Shield className="text-2xl mb-2 cyber-glow" style={{ color: accentColor }} />;
+  }
+
+  return (
+    <Image
+      src="/icons/services/shared-cta-finalcta/guarantee-cta.svg"
+      alt="Гарантия"
+      width={24}
+      height={24}
+      className="mb-2 cyber-glow"
+      style={{ filter: `brightness(0) saturate(100%) hue-rotate(0deg)`, color: accentColor }}
+      onError={() => setError(true)}
+    />
+  );
+};
 
 export function CTASection({ data }: CTASectionComponentProps) {
   return (
@@ -57,16 +141,19 @@ export function CTASection({ data }: CTASectionComponentProps) {
             transition={{ duration: 0.8 }}
             viewport={{ once: true }}
           >
-            <h2 
-              className="text-4xl md:text-6xl font-bold mb-6 cyber-glow"
-              style={{ color: data.accentColor }}
+            <h2
+              className="text-4xl md:text-6xl font-bold mb-6 cyber-glow flame-title font-orbitron"
+              style={{
+                color: data.accentColor,
+                textShadow: `0 0 10px rgba(255, 107, 53, 0.5), 0 0 20px rgba(255, 107, 53, 0.4)`
+              }}
             >
               {data.title}
             </h2>
-            <h3 className="text-2xl md:text-3xl text-gray-700 mb-8 font-light">
+            <h3 className="text-2xl md:text-3xl text-gray-900 mb-8 font-medium font-orbitron tracking-tight">
               {data.subtitle}
             </h3>
-            <p className="text-lg text-gray-600 leading-relaxed">
+            <p className="text-lg text-gray-800 leading-relaxed tracking-normal">
               {data.description}
             </p>
           </motion.div>
@@ -124,14 +211,9 @@ export function CTASection({ data }: CTASectionComponentProps) {
                     ease: "easeInOut"
                   }}
                 >
-                  <span 
-                    className="text-2xl mr-3"
-                    style={{ color: data.accentColor }}
-                  >
-                    ⚡
-                  </span>
-                  <span 
-                    className="text-xl font-bold cyber-glow"
+                  <UrgentIcon accentColor={data.accentColor} />
+                  <span
+                    className="text-xl font-bold cyber-glow font-orbitron"
                     style={{ color: data.accentColor }}
                   >
                     СРОЧНО!
@@ -202,36 +284,21 @@ export function CTASection({ data }: CTASectionComponentProps) {
             viewport={{ once: true }}
           >
             <div className="cyber-card p-4">
-              <div 
-                className="text-2xl mb-2 cyber-glow"
-                style={{ color: data.accentColor }}
-              >
-                📞
-              </div>
+              <PhoneIcon accentColor={data.accentColor} />
               <p className="text-gray-700 text-sm">
                 Бесплатная консультация
               </p>
             </div>
             
             <div className="cyber-card p-4">
-              <div 
-                className="text-2xl mb-2 cyber-glow"
-                style={{ color: data.accentColor }}
-              >
-                🚀
-              </div>
+              <ConsultationIcon accentColor={data.accentColor} />
               <p className="text-gray-700 text-sm">
                 Выезд в день обращения
               </p>
             </div>
             
             <div className="cyber-card p-4">
-              <div 
-                className="text-2xl mb-2 cyber-glow"
-                style={{ color: data.accentColor }}
-              >
-                💯
-              </div>
+              <GuaranteeIcon accentColor={data.accentColor} />
               <p className="text-gray-700 text-sm">
                 Гарантия результата
               </p>

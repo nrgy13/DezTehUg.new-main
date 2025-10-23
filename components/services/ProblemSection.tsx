@@ -2,6 +2,10 @@
 
 import { motion } from 'framer-motion';
 import { ProblemSectionProps } from '@/types/services';
+import { ProblemIcon } from '@/components/ProblemIcon';
+import Image from 'next/image';
+import { useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 interface ProblemSectionComponentProps {
   data: ProblemSectionProps;
@@ -26,16 +30,19 @@ export function ProblemSection({ data }: ProblemSectionComponentProps) {
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
         >
-          <h2 
-            className="text-4xl md:text-6xl font-bold mb-6 cyber-glow"
-            style={{ color: data.accentColor }}
+          <h2
+            className="text-4xl md:text-6xl font-bold mb-6 cyber-glow-muted flame-title font-orbitron"
+            style={{
+              color: data.accentColor,
+              textShadow: '0 1px 2px rgba(0,0,0,0.7), 0 0 10px rgba(255, 107, 53, 0.4)'
+            }}
           >
             {data.title}
           </h2>
-          <h3 className="text-2xl md:text-3xl text-gray-700 mb-8 font-light">
+          <h3 className="text-2xl md:text-3xl text-gray-800 mb-8 font-medium">
             {data.subtitle}
           </h3>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-lg text-gray-700 max-w-3xl mx-auto font-medium leading-relaxed tracking-tight">
             {data.description}
           </p>
         </motion.div>
@@ -56,27 +63,26 @@ export function ProblemSection({ data }: ProblemSectionComponentProps) {
             >
               {/* Problem Icon */}
               <div className="flex items-center mb-6">
-                <div 
-                  className="w-16 h-16 rounded-lg flex items-center justify-center mr-4 cyber-glow"
-                  style={{ backgroundColor: `${data.accentColor}20` }}
-                >
-                  <span 
-                    className="text-2xl"
-                    style={{ color: data.accentColor }}
-                  >
-                    {problem.icon}
-                  </span>
+                <div className="mr-4">
+                  <ProblemIcon
+                    src={problem.icon}
+                    alt={problem.title}
+                    color={data.accentColor}
+                  />
                 </div>
-                <h4 
-                  className="text-xl font-bold cyber-glow"
-                  style={{ color: data.accentColor }}
+                <h4
+                  className="text-xl font-bold font-orbitron tracking-tight"
+                  style={{
+                    color: data.accentColor,
+                    textShadow: `0 0 8px ${data.accentColor}80, 0 0 10px rgba(255, 107, 53, 0.5)`
+                  }}
                 >
                   {problem.title}
                 </h4>
               </div>
 
               {/* Problem Description */}
-              <p className="text-gray-700 mb-6 leading-relaxed">
+              <p className="text-gray-800 mb-6 font-medium leading-relaxed tracking-tight">
                 {problem.description}
               </p>
 
@@ -85,7 +91,7 @@ export function ProblemSection({ data }: ProblemSectionComponentProps) {
                 className="border-l-4 pl-4 py-2"
                 style={{ borderColor: data.accentColor }}
               >
-                <p className="text-sm text-gray-600 mb-1 uppercase tracking-wide">
+                <p className="text-sm text-gray-700 mb-1 uppercase tracking-wider font-medium">
                   Последствия:
                 </p>
                 <p 
@@ -136,12 +142,7 @@ export function ProblemSection({ data }: ProblemSectionComponentProps) {
                 ease: "easeInOut"
               }}
             >
-              <span 
-                className="text-2xl"
-                style={{ color: data.accentColor }}
-              >
-                ⚠️
-              </span>
+              <WarningIcon accentColor={data.accentColor} />
             </motion.div>
             
             <h4 
@@ -151,7 +152,7 @@ export function ProblemSection({ data }: ProblemSectionComponentProps) {
               Не откладывайте решение проблемы!
             </h4>
             
-            <p className="text-gray-700 text-lg">
+            <p className="text-gray-800 text-lg font-medium leading-snug">
               Каждый день промедления усугубляет ситуацию и увеличивает стоимость решения проблемы.
               Обратитесь к профессионалам ДЕЗТЕХЮГ уже сегодня!
             </p>
@@ -159,5 +160,34 @@ export function ProblemSection({ data }: ProblemSectionComponentProps) {
         </motion.div>
       </div>
     </section>
+  );
+}
+
+interface WarningIconProps {
+  accentColor: string;
+}
+
+function WarningIcon({ accentColor }: WarningIconProps) {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return (
+      <AlertTriangle
+        className="text-2xl"
+        style={{ color: accentColor }}
+      />
+    );
+  }
+
+  return (
+    <Image
+      src="/icons/services/shared-problem/warning.svg"
+      alt="Warning"
+      width={24}
+      height={24}
+      className="text-2xl"
+      style={{ color: accentColor }}
+      onError={() => setError(true)}
+    />
   );
 }

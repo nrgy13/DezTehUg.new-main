@@ -7,6 +7,7 @@ import { TrustFactorIcon } from '@/components/TrustFactorIcon';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { FloatingParticles } from '@/components/FloatingParticles';
+import AnimatedIcon from '@/components/AnimatedIcon';
 
 const services = [
   {
@@ -65,7 +66,7 @@ export default function Home() {
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-bg-primary via-bg-secondary to-bg-primary pt-24 pb-16">
-        <FloatingParticles particleCount={50} />
+        <FloatingParticles particleCount={50} strategy="client-only" />
         {/* Cyber Grid Background Pattern - Full Width */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 left-0 w-screen h-full">
@@ -245,7 +246,11 @@ export default function Home() {
                 >
                   <div className="flex flex-col h-full">
                     <div className="mb-4">
-                      <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
+                      {index === 0 ? (
+                        <AnimatedIcon animationName="antibiotic.json" className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
+                      ) : (
+                        <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
+                      )}
                     </div>
                     
                     <h3 className="text-xl font-orbitron font-semibold text-content-primary mb-3 group-hover:text-poison-green transition-colors">

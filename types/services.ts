@@ -32,12 +32,18 @@ export interface SolutionStep {
   details: string[];
 }
 
+export interface WhyChooseUsItem {
+  icon: string;
+  title: string;
+}
+
 export interface SolutionSectionProps {
   title: string;
   subtitle: string;
   description: string;
   steps: SolutionStep[];
   benefits: string[];
+  whyChooseUs?: WhyChooseUsItem[];
   accentColor: string;
 }
 

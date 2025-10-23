@@ -1,72 +1,70 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React from 'react';
 import Image from 'next/image';
 import { Bug, SprayCan, Rat, Beaker } from 'lucide-react';
 
-type ServiceIconProps = {
-  name: 'bug' | 'spray' | 'rat' | 'beaker' | 'disinfection' | 'pest-control' | 'deratization' | 'water-analysis';
+type ServiceIconName = 'bug' | 'spray' | 'rat' | 'beaker' | 'disinfection' | 'pest-control' | 'deratization' | 'water-analysis';
+
+interface ServiceIconProps {
+  name: ServiceIconName;
   className?: string;
-};
+}
 
 /**
- * Компонент ServiceIcon заменяет иконки из библиотеки lucide-react на пользовательские SVG иконки
- * Если пользовательская иконка не найдена, используется иконка из библиотеки lucide-react
+ * Компонент ServiceIcon отображает иконки сервисов из директории /icons/services/
+ * Использует Next.js Image компонент для оптимальной загрузки SVG иконок
+ * При отсутствии SVG иконки показывает fallback иконку из lucide-react
  */
 export function ServiceIcon({ name, className = 'h-6 w-6' }: ServiceIconProps) {
-  const [iconExists, setIconExists] = useState<boolean>(true);
+  const [error, setError] = React.useState(false);
   
-  // Определяем путь к иконке в зависимости от типа
-  const getIconPath = (iconName: string) => {
-    const serviceIcons = ['disinfection', 'pest-control', 'deratization', 'water-analysis'];
-    if (serviceIcons.includes(iconName)) {
-      return `/icons/services/${iconName}.svg`;
-    }
-    return `/icons/${iconName}.svg`;
+  const iconNameMapping: Record<ServiceIconName, string> = {
+    bug: 'pest-control',
+    spray: 'disinfection',
+    rat: 'deratization',
+    beaker: 'water-analysis',
+    'pest-control': 'pest-control',
+    disinfection: 'disinfection',
+    deratization: 'deratization',
+    'water-analysis': 'water-analysis',
   };
-  
-  // Проверяем, существует ли пользовательская иконка
-  useEffect(() => {
-    const checkIconExists = async () => {
-      try {
-        const iconPath = getIconPath(name);
-        const res = await fetch(iconPath);
-        setIconExists(res.status === 200);
-      } catch (error) {
-        setIconExists(false);
-      }
-    };
-    
-    checkIconExists();
-  }, [name]);
-  
-  // Если пользовательская иконка существует, используем ее
-  if (iconExists) {
-    const iconPath = getIconPath(name);
-    return (
-      <div className={className}>
-        <Image
-          src={iconPath}
-          alt={`${name} icon`}
-          width={24}
-          height={24}
-          className="w-full h-full"
-        />
-      </div>
-    );
-  }
-  
-  // Если пользовательская иконка не найдена, используем иконку из библиотеки lucide-react
-  switch (name) {
-    case 'bug':
-      return <Bug className={className} />;
-    case 'spray':
-      return <SprayCan className={className} />;
-    case 'rat':
-      return <Rat className={className} />;
-    case 'beaker':
-      return <Beaker className={className} />;
+
+  const finalIconName = iconNameMapping[name] || 'pest-control';
+  const iconSrc = `/icons/services/${finalIconName}.svg`;
+
+  let FallbackComponent: React.ElementType;
+
+  switch (finalIconName) {
+    case 'disinfection':
+      FallbackComponent = SprayCan;
+      break;
+    case 'pest-control':
+      FallbackComponent = Bug;
+      break;
+    case 'deratization':
+      FallbackComponent = Rat;
+      break;
+    case 'water-analysis':
+      FallbackComponent = Beaker;
+      break;
     default:
-      return <Bug className={className} />;
+      FallbackComponent = Bug;
   }
+
+  if (error) {
+    return <FallbackComponent className={className} />;
+  }
+
+  return (
+    <Image
+      src={iconSrc}
+      alt={`${name} icon`}
+      width={24}
+      height={24}
+      className={className}
+      onError={() => setError(true)}
+      priority={false}
+    />
+  );
 }

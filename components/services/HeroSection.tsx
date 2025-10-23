@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { HeroSectionProps } from '@/types/services';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
+import MoleculeAnimation from '@/components/MoleculeAnimation';
 
 interface HeroSectionComponentProps {
   data: HeroSectionProps;
@@ -11,48 +12,22 @@ interface HeroSectionComponentProps {
 export function HeroSection({ data }: HeroSectionComponentProps) {
   return (
     <section
-      className="relative min-h-screen flex items-center justify-center overflow-hidden"
+      className="relative min-h-screen pt-20 flex items-center justify-center overflow-hidden"
       style={{ '--accent-color': data.accentColor } as React.CSSProperties}
     >
       {/* Cyber Grid Background */}
       <div className="absolute inset-0 cyber-grid opacity-20"></div>
       
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0">
-        <motion.div
-          className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full opacity-10"
-          style={{ backgroundColor: data.accentColor }}
-          animate={{
-            scale: [1, 1.2, 1],
-            opacity: [0.1, 0.2, 0.1],
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute bottom-1/4 right-1/4 w-48 h-48 rounded-full opacity-10"
-          style={{ backgroundColor: data.accentColor }}
-          animate={{
-            scale: [1.2, 1, 1.2],
-            opacity: [0.2, 0.1, 0.2],
-          }}
-          transition={{
-            duration: 3,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-      </div>
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
           {/* Title */}
           <motion.h1
-            className="text-5xl md:text-7xl font-bold mb-6 cyber-glow"
-            style={{ color: data.accentColor }}
+            className="text-5xl md:text-7xl font-bold mb-6 cyber-glow-muted flame-title font-orbitron"
+            style={{
+              color: data.accentColor,
+              textShadow: '0 1px 2px rgba(0,0,0,0.7)'
+            }}
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
@@ -62,7 +37,7 @@ export function HeroSection({ data }: HeroSectionComponentProps) {
 
           {/* Subtitle */}
           <motion.h2
-            className="text-2xl md:text-3xl text-gray-700 mb-8 font-light"
+            className="text-2xl md:text-3xl text-gray-800 mb-8 font-medium flame-subtitle font-orbitron leading-relaxed tracking-wide"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
@@ -72,7 +47,7 @@ export function HeroSection({ data }: HeroSectionComponentProps) {
 
           {/* Description */}
           <motion.p
-            className="text-lg md:text-xl text-gray-600 mb-12 max-w-3xl mx-auto leading-relaxed"
+            className="text-lg md:text-xl text-gray-700 mb-12 max-w-3xl mx-auto font-medium leading-relaxed tracking-normal"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
@@ -98,7 +73,7 @@ export function HeroSection({ data }: HeroSectionComponentProps) {
                   className="w-3 h-3 rounded-full mx-auto mb-3 cyber-glow"
                   style={{ backgroundColor: data.accentColor }}
                 />
-                <p className="text-gray-700 font-medium">{feature}</p>
+                <p className="text-gray-700 font-medium flame-feature leading-normal tracking-normal">{feature}</p>
               </motion.div>
             ))}
           </motion.div>
@@ -122,29 +97,11 @@ export function HeroSection({ data }: HeroSectionComponentProps) {
         </div>
       </div>
 
-      {/* Floating Particles */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[...Array(20)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 rounded-full"
-            style={{ 
-              backgroundColor: data.accentColor,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              y: [0, -100, 0],
-              opacity: [0, 1, 0],
-            }}
-            transition={{
-              duration: 3 + Math.random() * 2,
-              repeat: Infinity,
-              delay: Math.random() * 2,
-            }}
-          />
-        ))}
-      </div>
+      {/* Molecule Animation */}
+      <MoleculeAnimation
+        accentColor={data.accentColor}
+        count={8}
+      />
     </section>
   );
 }

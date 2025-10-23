@@ -78,46 +78,20 @@ export default function DisinfectionPage() {
         }}
       />
 
-      {/* Light Theme Background Wrapper */}
-      <div className="light-bg-wrapper">
-        {/* Subtle Cyber Grid Background */}
-        <div className="light-cyber-grid"></div>
-        
-        {/* Floating Light Particles */}
-        <div className="light-particles">
-          {[...Array(15)].map((_, i) => (
-            <div
-              key={i}
-              className="light-particle"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 10}s`,
-                animationDuration: `${8 + Math.random() * 4}s`
-              }}
-            />
-          ))}
-        </div>
-        
-        {/* Gradient Overlays */}
-        <div className="light-gradient-overlay-1"></div>
-        <div className="light-gradient-overlay-2"></div>
+      {/* Hero Section */}
+      <HeroSection data={disinfectionData.hero} />
 
-        {/* Hero Section */}
-        <HeroSection data={disinfectionData.hero} />
+      {/* Problem Section */}
+      <ProblemSection data={disinfectionData.problem} />
 
-        {/* Problem Section */}
-        <ProblemSection data={disinfectionData.problem} />
+      {/* Solution Section */}
+      <SolutionSection data={disinfectionData.solution} />
 
-        {/* Solution Section */}
-        <SolutionSection data={disinfectionData.solution} />
+      {/* CTA Section */}
+      <CTASection data={disinfectionData.cta} />
 
-        {/* CTA Section */}
-        <CTASection data={disinfectionData.cta} />
-
-        {/* Final CTA Section */}
-        <FinalCTASection data={disinfectionData.finalCta} />
-      </div>
+      {/* Final CTA Section */}
+      <FinalCTASection data={disinfectionData.finalCta} />
     </div>
   );
 }

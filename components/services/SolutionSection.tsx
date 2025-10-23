@@ -2,6 +2,10 @@
 
 import { motion } from 'framer-motion';
 import { SolutionSectionProps } from '@/types/services';
+import Image from 'next/image';
+import { useState } from 'react';
+import { Shield, Target, Zap, CheckCircle, Clock, Settings } from 'lucide-react';
+import { WhyChooseUsIcon } from '@/components/WhyChooseUsIcon';
 
 interface SolutionSectionComponentProps {
   data: SolutionSectionProps;
@@ -25,16 +29,19 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
         >
-          <h2 
-            className="text-4xl md:text-6xl font-bold mb-6 cyber-glow"
-            style={{ color: data.accentColor }}
+          <h2
+            className="text-4xl md:text-6xl font-bold mb-6 cyber-glow-muted flame-title font-orbitron"
+            style={{
+              color: data.accentColor,
+              textShadow: '0 1px 2px rgba(0,0,0,0.7), 0 0 10px rgba(255, 107, 53, 0.4)'
+            }}
           >
             {data.title}
           </h2>
-          <h3 className="text-2xl md:text-3xl text-gray-700 mb-8 font-light">
+          <h3 className="text-2xl md:text-3xl text-gray-800 mb-8 font-medium flame-subtitle font-orbitron tracking-tight leading-relaxed">
             {data.subtitle}
           </h3>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-lg text-gray-800 max-w-3xl mx-auto font-medium tracking-normal leading-snug">
             {data.description}
           </p>
         </motion.div>
@@ -66,30 +73,30 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
                   </div>
                   
                   {/* Icon Container */}
-                  <div 
+                  <div
                     className="w-32 h-32 rounded-2xl flex items-center justify-center mx-auto cyber-card"
                     style={{ backgroundColor: `${data.accentColor}10` }}
                   >
-                    <span 
-                      className="text-4xl"
-                      style={{ color: data.accentColor }}
-                    >
-                      {step.icon}
-                    </span>
+                    <div className="mx-auto" style={{ color: data.accentColor }}>
+                      <StepIcon iconName={step.icon} accentColor={data.accentColor} />
+                    </div>
                   </div>
                 </motion.div>
               </div>
 
               {/* Step Content */}
               <div className={`lg:w-2/3 ${index % 2 === 1 ? 'lg:order-1 lg:pr-12' : 'lg:pl-12'}`}>
-                <h4 
-                  className="text-2xl md:text-3xl font-bold mb-4 cyber-glow"
-                  style={{ color: data.accentColor }}
+                <h4
+                  className="text-2xl md:text-3xl font-bold mb-4 font-orbitron tracking-tight"
+                  style={{
+                    color: data.accentColor,
+                    textShadow: `0 0 10px ${data.accentColor}60, 0 0 8px rgba(255, 107, 53, 0.4), 0 1px 2px rgba(0,0,0,0.3)`
+                  }}
                 >
                   {step.title}
                 </h4>
                 
-                <p className="text-gray-700 text-lg mb-6 leading-relaxed">
+                <p className="text-gray-800 text-lg mb-6 font-medium tracking-normal leading-snug">
                   {step.description}
                 </p>
 
@@ -108,7 +115,7 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
                         className="w-2 h-2 rounded-full mt-2 mr-3 flex-shrink-0 cyber-glow"
                         style={{ backgroundColor: data.accentColor }}
                       />
-                      <p className="text-gray-600">{detail}</p>
+                      <p className="text-gray-800 font-medium tracking-tight leading-relaxed">{detail}</p>
                     </motion.div>
                   ))}
                 </div>
@@ -129,43 +136,94 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
           ))}
         </div>
 
-        {/* Benefits Section */}
-        <motion.div
-          className="max-w-4xl mx-auto"
-          initial={{ opacity: 0, y: 50 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.4 }}
-          viewport={{ once: true }}
-        >
-          <h4 
-            className="text-3xl font-bold text-center mb-12 cyber-glow"
-            style={{ color: data.accentColor }}
+        {/* WhyChooseUs Section - NEW SYSTEM */}
+        {data.whyChooseUs && data.whyChooseUs.length > 0 && (
+          <motion.div
+            className="max-w-4xl mx-auto"
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            viewport={{ once: true }}
           >
-            Преимущества нашего подхода
-          </h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {data.benefits.map((benefit, index) => (
-              <motion.div
-                key={index}
-                className="cyber-card p-6 text-center group hover:scale-105 transition-all duration-300"
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                whileHover={{
-                  boxShadow: `0 0 30px ${data.accentColor}40`,
-                }}
-              >
-                <div 
-                  className="w-4 h-4 rounded-full mx-auto mb-4 cyber-glow"
-                  style={{ backgroundColor: data.accentColor }}
-                />
-                <p className="text-gray-700 font-medium">{benefit}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
+            <h4
+              className="text-3xl font-bold text-center mb-12 font-orbitron tracking-tight"
+              style={{
+                color: data.accentColor,
+                textShadow: `0 0 10px ${data.accentColor}60, 0 0 8px rgba(255, 107, 53, 0.4), 0 1px 2px rgba(0,0,0,0.3)`
+              }}
+            >
+              Преимущества нашего подхода
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {data.whyChooseUs.map((item, index) => (
+                <motion.div
+                  key={index}
+                  className="cyber-card p-6 text-center group hover:scale-105 transition-all duration-300"
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: index * 0.1 }}
+                  viewport={{ once: true }}
+                  whileHover={{
+                    boxShadow: `0 0 30px ${data.accentColor}40`,
+                  }}
+                >
+                  <div className="mb-4">
+                    <WhyChooseUsIconDynamic
+                      iconPath={item.icon}
+                      className="mx-auto h-12 w-12"
+                      accentColor={data.accentColor}
+                    />
+                  </div>
+                  <p className="text-gray-800 font-medium tracking-tight leading-relaxed">{item.title}</p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Benefits Section - LEGACY SYSTEM (fallback) */}
+        {(!data.whyChooseUs || data.whyChooseUs.length === 0) && data.benefits && data.benefits.length > 0 && (
+          <motion.div
+            className="max-w-4xl mx-auto"
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            viewport={{ once: true }}
+          >
+            <h4
+              className="text-3xl font-bold text-center mb-12 font-orbitron tracking-tight"
+              style={{
+                color: data.accentColor,
+                textShadow: `0 0 10px ${data.accentColor}60, 0 0 8px rgba(255, 107, 53, 0.4), 0 1px 2px rgba(0,0,0,0.3)`
+              }}
+            >
+              Преимущества нашего подхода
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {data.benefits.map((benefit, index) => (
+                <motion.div
+                  key={index}
+                  className="cyber-card p-6 text-center group hover:scale-105 transition-all duration-300"
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: index * 0.1 }}
+                  viewport={{ once: true }}
+                  whileHover={{
+                    boxShadow: `0 0 30px ${data.accentColor}40`,
+                  }}
+                >
+                  <div
+                    className="w-4 h-4 rounded-full mx-auto mb-4 cyber-glow"
+                    style={{ backgroundColor: data.accentColor }}
+                  />
+                  <p className="text-gray-800 font-medium tracking-tight leading-relaxed">{benefit}</p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Process Guarantee */}
         <motion.div
@@ -191,22 +249,17 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
                 ease: "linear"
               }}
             >
-              <span 
-                className="text-3xl"
-                style={{ color: data.accentColor }}
-              >
-                🛡️
-              </span>
+              <ShieldIcon accentColor={data.accentColor} />
             </motion.div>
             
-            <h5 
-              className="text-2xl font-bold mb-4 cyber-glow"
+            <h5
+              className="text-2xl font-bold mb-4 cyber-glow font-orbitron"
               style={{ color: data.accentColor }}
             >
               Гарантия качества
             </h5>
             
-            <p className="text-gray-700">
+            <p className="text-gray-800 font-medium tracking-tight leading-relaxed">
               Мы гарантируем эффективность наших методов и предоставляем гарантию на все виды работ.
               Если проблема вернется в течение гарантийного периода - мы устраним её бесплатно!
             </p>
@@ -214,5 +267,121 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
         </motion.div>
       </div>
     </section>
+  );
+}
+
+interface StepIconProps {
+  iconName: string;
+  accentColor: string;
+}
+
+function StepIcon({ iconName, accentColor }: StepIconProps) {
+  const [error, setError] = useState(false);
+
+  // Lucide React fallback icons
+  const getFallbackIcon = (name: string) => {
+    switch (name) {
+      case 'shield': return Shield;
+      case 'target': return Target;
+      case 'zap': return Zap;
+      case 'check': return CheckCircle;
+      case 'clock': return Clock;
+      case 'settings': return Settings;
+      default: return Target;
+    }
+  };
+
+  if (error) {
+    const FallbackIcon = getFallbackIcon(iconName);
+    return (
+      <FallbackIcon
+        className="h-12 w-12"
+        style={{ color: accentColor }}
+      />
+    );
+  }
+
+  return (
+    <Image
+      src={iconName} // Используем iconName напрямую, так как он уже содержит полный путь
+      alt={iconName}
+      width={48}
+      height={48}
+      className="h-12 w-12"
+      // style={{ filter: `brightness(0) saturate(100%) invert(1)` }} // Удален фильтр инверсии
+      onError={() => setError(true)}
+    />
+  );
+}
+
+interface ShieldIconProps {
+  accentColor: string;
+}
+
+function ShieldIcon({ accentColor }: ShieldIconProps) {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return (
+      <Shield
+        className="text-3xl"
+        style={{ color: accentColor }}
+      />
+    );
+  }
+
+  return (
+    <Image
+      src="/icons/services/disinfection/shield-guarantee.svg"
+      alt="Shield"
+      width={32}
+      height={32}
+      className="text-3xl"
+      // style={{ filter: `brightness(0) saturate(100%) invert(1)` }} // Удален фильтр инверсии
+      onError={() => setError(true)}
+    />
+  );
+}
+
+interface WhyChooseUsIconDynamicProps {
+  iconPath: string;
+  className?: string;
+  accentColor: string;
+}
+
+function WhyChooseUsIconDynamic({ iconPath, className = 'h-12 w-12', accentColor }: WhyChooseUsIconDynamicProps) {
+  const [error, setError] = useState(false);
+
+  // Fallback icon based on filename patterns
+  const getFallbackIconFromPath = (path: string) => {
+    if (path.includes('shield')) return Shield;
+    if (path.includes('people') || path.includes('safe')) return CheckCircle;
+    if (path.includes('bug') || path.includes('off')) return Target;
+    if (path.includes('zap') || path.includes('light')) return Zap;
+    if (path.includes('clock') || path.includes('time')) return Clock;
+    if (path.includes('settings') || path.includes('gear')) return Settings;
+    return Shield; // Default fallback
+  };
+
+  if (error) {
+    const FallbackIcon = getFallbackIconFromPath(iconPath);
+    return (
+      <FallbackIcon
+        className={className}
+        style={{ color: accentColor }}
+      />
+    );
+  }
+
+  return (
+    <Image
+      src={iconPath}
+      alt={iconPath.split('/').pop()?.replace('.svg', '') || 'icon'}
+      width={48}
+      height={48}
+      className={className}
+      style={{ filter: `hue-rotate(${accentColor === '#39FF14' ? '120deg' : accentColor === '#FF6B35' ? '20deg' : '0deg'})` }}
+      onError={() => setError(true)}
+    />
   );
 }

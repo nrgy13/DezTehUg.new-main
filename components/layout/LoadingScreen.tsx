@@ -82,6 +82,7 @@ export const LoadingScreen: React.FC = memo(() => {
             width={200}
             height={200}
             className="rounded-full"
+            style={{ width: 'auto', height: 'auto' }}
             priority
           />
         </motion.div>

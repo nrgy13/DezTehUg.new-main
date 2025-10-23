@@ -3,9 +3,99 @@
 import { motion } from 'framer-motion';
 import { FinalCTAProps } from '@/types/services';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
+import MoleculeAnimation from '../MoleculeAnimation';
+import Image from 'next/image';
+import { useState } from 'react';
+import { Phone, Mail, Clock, Target, Zap, DollarSign, Shield } from 'lucide-react';
 
 interface FinalCTASectionComponentProps {
   data: FinalCTAProps;
+}
+
+// Contact icons component
+function ContactIcon({ type, accentColor }: { type: 'phone' | 'email' | 'hours'; accentColor: string }) {
+  const [error, setError] = useState(false);
+
+  const iconMap = {
+    phone: { path: '/icons/services/shared-cta-finalcta/phone-cta.svg', fallback: Phone },
+    email: { path: '/icons/services/shared-cta-finalcta/email-finalcta.svg', fallback: Mail },
+    hours: { path: '/icons/services/shared-cta-finalcta/clock-finalcta.svg', fallback: Clock }
+  };
+
+  const { path, fallback: FallbackIcon } = iconMap[type];
+
+  if (error) {
+    return <FallbackIcon size={20} style={{ color: accentColor }} />;
+  }
+
+  return (
+    <Image
+      src={path}
+      alt={type}
+      width={20}
+      height={20}
+      style={{
+        filter: `brightness(0) saturate(100%) hue-rotate(0deg)`,
+        color: accentColor
+      }}
+      onError={() => setError(true)}
+    />
+  );
+}
+
+// Target icon component for main CTA
+function TargetIcon({ accentColor }: { accentColor: string }) {
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return <Target size={48} style={{ color: accentColor }} />;
+  }
+
+  return (
+    <Image
+      src="/icons/services/shared-cta-finalcta/target-finalcta.svg"
+      alt="target"
+      width={48}
+      height={48}
+      style={{
+        filter: `brightness(0) saturate(100%) hue-rotate(0deg)`,
+        color: accentColor
+      }}
+      onError={() => setError(true)}
+    />
+  );
+}
+
+// Benefits icons component
+function BenefitIcon({ type, accentColor }: { type: 'fast' | 'target' | 'money' | 'shield'; accentColor: string }) {
+  const [error, setError] = useState(false);
+
+  const iconMap = {
+    fast: { path: '/icons/services/shared-cta-finalcta/fast-finalcta.svg', fallback: Zap },
+    target: { path: '/icons/services/shared-cta-finalcta/accurate-finalcta.svg', fallback: Target },
+    money: { path: '/icons/services/shared-cta-finalcta/money-finalcta.svg', fallback: DollarSign },
+    shield: { path: '/icons/services/shared-cta-finalcta/shield-finalcta.svg', fallback: Shield }
+  };
+
+  const { path, fallback: FallbackIcon } = iconMap[type];
+
+  if (error) {
+    return <FallbackIcon size={18} style={{ color: accentColor }} />;
+  }
+
+  return (
+    <Image
+      src={path}
+      alt={type}
+      width={18}
+      height={18}
+      style={{
+        filter: `brightness(0) saturate(100%) hue-rotate(0deg)`,
+        color: accentColor
+      }}
+      onError={() => setError(true)}
+    />
+  );
 }
 
 export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
@@ -47,16 +137,19 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
             transition={{ duration: 0.8 }}
             viewport={{ once: true }}
           >
-            <h2 
-              className="text-4xl md:text-6xl font-bold mb-6 cyber-glow"
-              style={{ color: data.accentColor }}
+            <h2
+              className="text-4xl md:text-6xl font-bold mb-6 cyber-glow-muted flame-title font-orbitron"
+              style={{
+                color: data.accentColor,
+                textShadow: '0 1px 2px rgba(0,0,0,0.7)'
+              }}
             >
               {data.title}
             </h2>
-            <h3 className="text-2xl md:text-3xl text-gray-700 mb-8 font-light">
+            <h3 className="text-2xl md:text-3xl text-gray-800 mb-8 font-medium font-orbitron tracking-normal" style={{ lineHeight: '1.6' }}>
               {data.subtitle}
             </h3>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-lg text-gray-800 max-w-3xl mx-auto font-medium tracking-normal" style={{ lineHeight: '1.8', fontWeight: '500' }}>
               {data.description}
             </p>
           </motion.div>
@@ -71,9 +164,12 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
               viewport={{ once: true }}
             >
               <div className="cyber-card p-8">
-                <h4 
-                  className="text-2xl font-bold mb-6 cyber-glow"
-                  style={{ color: data.accentColor }}
+                <h4
+                  className="text-2xl font-bold mb-6 cyber-glow-muted font-orbitron"
+                  style={{
+                    color: data.accentColor,
+                    textShadow: '0 1px 2px rgba(0,0,0,0.7)'
+                  }}
                 >
                   Свяжитесь с нами прямо сейчас
                 </h4>
@@ -84,19 +180,14 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                   whileHover={{ scale: 1.02 }}
                   transition={{ type: "spring", stiffness: 300 }}
                 >
-                  <div 
+                  <div
                     className="w-12 h-12 rounded-lg flex items-center justify-center mr-4 cyber-glow"
                     style={{ backgroundColor: `${data.accentColor}20` }}
                   >
-                    <span 
-                      className="text-xl"
-                      style={{ color: data.accentColor }}
-                    >
-                      📞
-                    </span>
+                    <ContactIcon type="phone" accentColor={data.accentColor} />
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Телефон</p>
+                    <p className="text-gray-800 text-sm font-medium">Телефон</p>
                     <p 
                       className="text-xl font-bold group-hover:cyber-glow transition-all duration-300"
                       style={{ color: data.accentColor }}
@@ -112,19 +203,14 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                   whileHover={{ scale: 1.02 }}
                   transition={{ type: "spring", stiffness: 300 }}
                 >
-                  <div 
+                  <div
                     className="w-12 h-12 rounded-lg flex items-center justify-center mr-4 cyber-glow"
                     style={{ backgroundColor: `${data.accentColor}20` }}
                   >
-                    <span 
-                      className="text-xl"
-                      style={{ color: data.accentColor }}
-                    >
-                      📧
-                    </span>
+                    <ContactIcon type="email" accentColor={data.accentColor} />
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Email</p>
+                    <p className="text-gray-800 text-sm font-medium">Email</p>
                     <p 
                       className="text-lg font-medium group-hover:cyber-glow transition-all duration-300"
                       style={{ color: data.accentColor }}
@@ -140,20 +226,15 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                   whileHover={{ scale: 1.02 }}
                   transition={{ type: "spring", stiffness: 300 }}
                 >
-                  <div 
+                  <div
                     className="w-12 h-12 rounded-lg flex items-center justify-center mr-4 cyber-glow"
                     style={{ backgroundColor: `${data.accentColor}20` }}
                   >
-                    <span 
-                      className="text-xl"
-                      style={{ color: data.accentColor }}
-                    >
-                      🕒
-                    </span>
+                    <ContactIcon type="hours" accentColor={data.accentColor} />
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Режим работы</p>
-                    <p className="text-lg font-medium text-gray-700">
+                    <p className="text-gray-800 text-sm font-medium">Режим работы</p>
+                    <p className="text-lg font-medium text-gray-800">
                       {data.contactInfo.workingHours}
                     </p>
                   </div>
@@ -168,8 +249,8 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                 transition={{ duration: 0.8, delay: 0.4 }}
                 viewport={{ once: true }}
               >
-                <h5 
-                  className="text-xl font-bold mb-6 cyber-glow"
+                <h5
+                  className="text-xl font-bold mb-6 cyber-glow font-orbitron"
                   style={{ color: data.accentColor }}
                 >
                   Наши гарантии
@@ -189,7 +270,7 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                         className="w-3 h-3 rounded-full mt-1.5 mr-3 flex-shrink-0 cyber-glow"
                         style={{ backgroundColor: data.accentColor }}
                       />
-                      <p className="text-gray-700">{guarantee}</p>
+                      <p className="text-gray-800 font-medium tracking-normal" style={{ lineHeight: '1.6', fontWeight: '500' }}>{guarantee}</p>
                     </motion.div>
                   ))}
                 </div>
@@ -208,22 +289,6 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                 className="cyber-card p-12 border-2 relative overflow-hidden"
                 style={{ borderColor: data.accentColor }}
               >
-                {/* Animated Background */}
-                <motion.div
-                  className="absolute inset-0 opacity-10"
-                  style={{
-                    background: `radial-gradient(circle at center, ${data.accentColor}40, transparent)`,
-                  }}
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [0.1, 0.2, 0.1],
-                  }}
-                  transition={{
-                    duration: 3,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                />
 
                 {/* Pulsing Icon */}
                 <motion.div
@@ -243,22 +308,17 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                     ease: "easeInOut"
                   }}
                 >
-                  <span 
-                    className="text-4xl"
-                    style={{ color: data.accentColor }}
-                  >
-                    🎯
-                  </span>
+                  <TargetIcon accentColor={data.accentColor} />
                 </motion.div>
 
-                <h4 
-                  className="text-3xl font-bold mb-6 cyber-glow"
+                <h4
+                  className="text-3xl font-bold mb-6 cyber-glow font-orbitron"
                   style={{ color: data.accentColor }}
                 >
                   Получите расчет стоимости
                 </h4>
                 
-                <p className="text-gray-700 mb-8 text-lg">
+                <p className="text-gray-800 mb-8 text-lg font-medium tracking-normal">
                   Узнайте точную стоимость услуг за 2 минуты с помощью нашего калькулятора
                 </p>
 
@@ -292,40 +352,32 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                 {/* Additional Benefits */}
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="flex items-center justify-center">
-                    <span 
-                      className="text-lg mr-2"
-                      style={{ color: data.accentColor }}
-                    >
-                      ⚡
-                    </span>
-                    <span className="text-gray-600">Быстро</span>
+                    <BenefitIcon
+                      type="fast"
+                      accentColor={data.accentColor}
+                    />
+                    <span className="text-gray-800 font-medium ml-2">Быстро</span>
                   </div>
                   <div className="flex items-center justify-center">
-                    <span 
-                      className="text-lg mr-2"
-                      style={{ color: data.accentColor }}
-                    >
-                      🎯
-                    </span>
-                    <span className="text-gray-600">Точно</span>
+                    <BenefitIcon
+                      type="target"
+                      accentColor={data.accentColor}
+                    />
+                    <span className="text-gray-800 font-medium ml-2">Точно</span>
                   </div>
                   <div className="flex items-center justify-center">
-                    <span 
-                      className="text-lg mr-2"
-                      style={{ color: data.accentColor }}
-                    >
-                      💰
-                    </span>
-                    <span className="text-gray-600">Выгодно</span>
+                    <BenefitIcon
+                      type="money"
+                      accentColor={data.accentColor}
+                    />
+                    <span className="text-gray-800 font-medium ml-2">Выгодно</span>
                   </div>
                   <div className="flex items-center justify-center">
-                    <span 
-                      className="text-lg mr-2"
-                      style={{ color: data.accentColor }}
-                    >
-                      🛡️
-                    </span>
-                    <span className="text-gray-600">Надежно</span>
+                    <BenefitIcon
+                      type="shield"
+                      accentColor={data.accentColor}
+                    />
+                    <span className="text-gray-800 font-medium ml-2">Надежно</span>
                   </div>
                 </div>
               </div>
@@ -334,32 +386,8 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
         </div>
       </div>
 
-      {/* Floating Particles */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[...Array(25)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 rounded-full"
-            style={{ 
-              backgroundColor: data.accentColor,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              y: [0, -100, 0],
-              x: [0, Math.random() * 50 - 25, 0],
-              opacity: [0, 1, 0],
-              scale: [0, 1, 0],
-            }}
-            transition={{
-              duration: 5 + Math.random() * 3,
-              repeat: Infinity,
-              delay: Math.random() * 3,
-              ease: "easeInOut"
-            }}
-          />
-        ))}
-      </div>
+      {/* Molecule Animation */}
+      <MoleculeAnimation accentColor={data.accentColor} count={12} />
     </section>
   );
 }
