@@ -176,7 +176,7 @@ export default function Home() {
                   size="lg"
                   className="pulse-cta group"
                 >
-                  <Calculator className="h-6 w-6 mr-3 group-hover:animate-pulse group-hover:scale-110 transition-transform" />
+                  <Calculator className="h-6 w-6 mr-3  group-hover:scale-110 transition-transform" />
                   <span className="inline-block">Рассчитать стоимость услуг</span>
                 </CyberpunkButton>
                 
@@ -247,9 +247,15 @@ export default function Home() {
                   <div className="flex flex-col h-full">
                     <div className="mb-4">
                       {index === 0 ? (
-                        <AnimatedIcon animationName="antibiotic.json" className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
+                        <AnimatedIcon animationName="antibiotic.json" className={`h-12 w-12 ${service.color} `} />
+                      ) : index === 1 ? (
+                        <AnimatedIcon animationName="insect.json" className={`h-12 w-12 ${service.color} `} />
+                      ) : index === 2 ? (
+                        <AnimatedIcon animationName="mouse.json" className={`h-12 w-12 ${service.color} `} />
+                      ) : index === 3 ? (
+                        <AnimatedIcon animationName="microscope.json" className={`h-12 w-12 ${service.color} `} />
                       ) : (
-                        <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-12 w-12 ${service.color} group-hover:animate-pulse`} />
+                        <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-12 w-12 ${service.color} `} />
                       )}
                     </div>
                     
@@ -303,7 +309,7 @@ export default function Home() {
               >
                 <CyberpunkCard className="text-center p-8 group">
                   <div className="mb-6">
-                    <TrustFactorIcon name={factor.icon as 'award' | 'zap' | 'clock'} className={`h-16 w-16 ${factor.color} mx-auto group-hover:animate-pulse`} />
+                    <TrustFactorIcon name={factor.icon as 'award' | 'zap' | 'clock'} className={`h-16 w-16 ${factor.color} mx-auto `} />
                   </div>
                   
                   <h3 className="text-xl font-orbitron font-semibold text-content-primary mb-3">
@@ -346,7 +352,7 @@ export default function Home() {
                 size="xl"
                 className="pulse-cta"
               >
-                <Calculator className="h-6 w-6 mr-3 group-hover:animate-pulse group-hover:scale-110 transition-transform" />
+                <Calculator className="h-6 w-6 mr-3  group-hover:scale-110 transition-transform" />
                 <span className="inline-block">Рассчитать стоимость</span>
               </CyberpunkButton>
               

@@ -159,7 +159,7 @@ export function Footer() {
                       <div className="text-center">
                         <p className="font-medium text-content-primary text-sm group-hover:text-neon-orange group-hover:drop-shadow-[0_0_3px_#FF6B35] transition-all duration-300">info@deztechyug.ru</p>
                         <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">
-                          <span className="group-hover:animate-pulse">Ответ в течение 30 мин</span>
+                          <span className="">Ответ в течение 30 мин</span>
                         </p>
                       </div>
                     </div>

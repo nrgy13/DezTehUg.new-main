@@ -1,23 +1,27 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
 import { Bug, SprayCan, Rat, Beaker } from 'lucide-react';
+import AnimatedIcon from './AnimatedIcon';
 
 type ServiceIconName = 'bug' | 'spray' | 'rat' | 'beaker' | 'disinfection' | 'pest-control' | 'deratization' | 'water-analysis';
 
 interface ServiceIconProps {
   name: ServiceIconName;
   className?: string;
+  useAnimation?: boolean;
 }
 
 /**
  * Компонент ServiceIcon отображает иконки сервисов из директории /icons/services/
  * Использует Next.js Image компонент для оптимальной загрузки SVG иконок
  * При отсутствии SVG иконки показывает fallback иконку из lucide-react
+ * Поддерживает hover-анимации через AnimatedIcon компонент
  */
-export function ServiceIcon({ name, className = 'h-6 w-6' }: ServiceIconProps) {
-  const [error, setError] = React.useState(false);
+export function ServiceIcon({ name, className = 'h-6 w-6', useAnimation = false }: ServiceIconProps) {
+  const [error, setError] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   
   const iconNameMapping: Record<ServiceIconName, string> = {
     bug: 'pest-control',
@@ -52,19 +56,58 @@ export function ServiceIcon({ name, className = 'h-6 w-6' }: ServiceIconProps) {
       FallbackComponent = Bug;
   }
 
+  // Если включены анимации и курсор наведен, показываем анимированную иконку
+  if (useAnimation && isHovered) {
+    const animationMapping: Record<ServiceIconName, string> = {
+      bug: 'bug',
+      spray: 'spray',
+      rat: 'rat',
+      beaker: 'microscope',
+      'pest-control': 'bug',
+      disinfection: 'spray',
+      deratization: 'rat',
+      'water-analysis': 'microscope',
+    };
+    
+    const animationName = animationMapping[name];
+    return (
+      <div 
+        className={className}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <AnimatedIcon animationName={animationName} className="w-full h-full" />
+      </div>
+    );
+  }
+
   if (error) {
-    return <FallbackComponent className={className} />;
+    return (
+      <div 
+        className={className}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <FallbackComponent className="w-full h-full" />
+      </div>
+    );
   }
 
   return (
-    <Image
-      src={iconSrc}
-      alt={`${name} icon`}
-      width={24}
-      height={24}
+    <div 
       className={className}
-      onError={() => setError(true)}
-      priority={false}
-    />
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Image
+        src={iconSrc}
+        alt={`${name} icon`}
+        width={24}
+        height={24}
+        className="w-full h-full"
+        onError={() => setError(true)}
+        priority={false}
+      />
+    </div>
   );
 }

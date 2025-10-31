@@ -134,7 +134,7 @@ export default function AboutPage() {
                 className="group"
               >
                 Наши технологии
-                <Zap className="h-5 w-5 ml-2 group-hover:animate-pulse" />
+                <Zap className="h-5 w-5 ml-2 " />
               </CyberpunkButton>
             </motion.div>
 
