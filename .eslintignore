@@ -1,0 +1,29 @@
+# Dependencies
+node_modules
+.next
+out
+
+# Build
+dist
+build
+
+# Documentation and config files (non-JS)
+*.md
+*.toml
+*.json
+!tsconfig.json
+.netlify-deploy-checklist.md
+DEPLOYMENT_UPDATE_SUMMARY.md
+NETLIFY_DEPLOYMENT.md
+README.md
+
+# Test and coverage
+coverage
+
+# IDE
+.vscode
+.idea
+
+# Misc
+.DS_Store
+*.log
