@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { FloatingParticles } from '../FloatingParticles';
 
 // Мемоизируем компонент для предотвращения ненужных ререндеров
-export const LoadingScreen: React.FC = memo(() => {
+const LoadingScreenComponent: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [startTime] = useState(Date.now());
 
@@ -106,4 +106,8 @@ export const LoadingScreen: React.FC = memo(() => {
       </div>
     </motion.div>
   );
-});
+};
+
+LoadingScreenComponent.displayName = 'LoadingScreen';
+
+export const LoadingScreen = memo(LoadingScreenComponent);
