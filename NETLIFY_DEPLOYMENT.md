@@ -2,7 +2,16 @@
 
 ## Обзор проекта
 
-**DezTehUg** - это современный сайт санитарных услуг с cyberpunk дизайном, построенный на Next.js 14.0.4 с TypeScript и App Router. Проект полностью подготовлен для статического деплоя на Netlify.
+**DezTehUg** - это современный сайт санитарных услуг с cyberpunk дизайном, построенный на Next.js 14 с TypeScript и App Router. Проект полностью подготовлен для статического деплоя на Netlify.
+
+### Ключевые особенности Next.js 14 App Router
+
+Проект использует современную архитектуру Next.js 14 App Router со следующими функциями:
+- **Статический экспорт** (`output: 'export'`) для максимальной производительности
+- **App Router** - новая файловая система маршрутизации Next.js 14
+- **React Server Components** - оптимизированная отрисовка компонентов
+- **Metadata API** - встроенная оптимизация SEO
+- **Автоматическая оптимизация** изображений и ресурсов
 
 ## Предварительные требования
 
@@ -18,6 +27,31 @@
 - Аккаунт на [Netlify](https://netlify.com)
 - Репозиторий проекта на GitHub (уже настроен)
 - Доступ к настройкам домена (опционально)
+
+## 🚀 Быстрый старт (TL;DR)
+
+Для опытных пользователей - минимальная настройка:
+
+```bash
+# 1. Проверка локальной сборки
+npm run build
+
+# 2. Настройки в Netlify UI:
+Branch: main
+Build command: npm run build
+Publish directory: out
+
+# 3. Environment Variables:
+NODE_VERSION=18
+NPM_VERSION=9
+NEXT_TELEMETRY_DISABLED=1
+```
+
+**Конфигурация уже готова:**
+- ✅ `netlify.toml` - настроен
+- ✅ `next.config.js` - оптимизирован для статического экспорта
+- ✅ Redirects и headers - настроены
+- ✅ Next.js 14 App Router - совместим
 
 ## Пошаговое руководство по деплою
 
@@ -51,7 +85,7 @@
 3. **Настройте параметры деплоя:**
    ```
    Branch to deploy: main
-   Build command: npm run netlify
+   Build command: npm run build
    Publish directory: out
    ```
 
@@ -112,14 +146,16 @@ module.exports = nextConfig;
 ### netlify.toml
 ```toml
 [build]
-  command = "npm run netlify"
   publish = "out"
+  command = "npm run build"
 
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "9"
+  NEXT_TELEMETRY_DISABLED = "1"
 
-# URL redirects for service pages
+# Настройки для Next.js 14 App Router статического экспорта
+# Обработка маршрутов без .html расширения
 [[redirects]]
   from = "/services/disinfection"
   to = "/services/disinfection.html"
@@ -140,10 +176,9 @@ module.exports = nextConfig;
   to = "/services/water-analysis.html"
   status = 200
 
-# Main page redirects
 [[redirects]]
-  from = "/about"
-  to = "/about.html"
+  from = "/services"
+  to = "/services.html"
   status = 200
 
 [[redirects]]
@@ -152,27 +187,32 @@ module.exports = nextConfig;
   status = 200
 
 [[redirects]]
-  from = "/services"
-  to = "/services.html"
+  from = "/about"
+  to = "/about.html"
   status = 200
 
-# 404 handling
+# Обработка 404 ошибок
 [[redirects]]
   from = "/*"
   to = "/404.html"
   status = 404
 
-# Security headers
+# Заголовки безопасности
 [[headers]]
   for = "/*"
   [headers.values]
-    X-Content-Type-Options = "nosniff"
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self';"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self';"
 
-# Caching for static assets
+# Кэширование статических ресурсов
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 [[headers]]
   for = "/_next/static/*"
   [headers.values]
@@ -183,12 +223,55 @@ module.exports = nextConfig;
   [headers.values]
     Cache-Control = "public, max-age=31536000"
 
-# Font optimization
+# Настройки для файлов шрифтов
 [[headers]]
   for = "*.woff2"
   [headers.values]
     Cache-Control = "public, max-age=31536000"
     Access-Control-Allow-Origin = "*"
+
+# Настройки для изображений
+[[headers]]
+  for = "*.jpg"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "*.png"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# Настройки для CSS и JS
+[[headers]]
+  for = "*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# Настройки для манифеста и других метафайлов
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/robots.txt"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/sitemap.xml"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
 ```
 
 ### package.json (scripts)
@@ -197,12 +280,13 @@ module.exports = nextConfig;
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "netlify": "next build",
     "start": "next start",
     "lint": "next lint"
   }
 }
 ```
+
+**Примечание:** Команда `npm run build` использует Next.js 14 с настройкой `output: 'export'` в `next.config.js` для генерации статических файлов.
 
 ## Автоматические деплои
 
@@ -251,6 +335,29 @@ npm run build
 
 ### Проблема: Шрифты не загружаются
 **Решение:** Убедитесь, что в CSP разрешены `fonts.googleapis.com` и `fonts.gstatic.com`.
+
+### Проблема: Build fails на Next.js 14
+**Возможные причины и решения:**
+1. **Несовместимые зависимости:**
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   ```
+2. **Кэш Next.js:**
+   ```bash
+   rm -rf .next
+   npm run build
+   ```
+3. **Проверьте версию Node.js:**
+   ```bash
+   node -v  # Должна быть 18.x или выше
+   ```
+
+### Проблема: Маршруты не работают после деплоя
+**Решение:** 
+- Убедитесь, что `netlify.toml` содержит правильные redirect правила (status 200, не 301)
+- Проверьте, что в `next.config.js` установлено `output: 'export'`
+- Убедитесь, что `trailingSlash: false` в конфигурации Next.js
 
 ## Оптимизация производительности
 
@@ -465,6 +572,20 @@ if (process.env.SITE_MAINTENANCE === 'true') {
 ---
 
 *Создано: 15 июля 2025, 23:09 (UTC+3)*
-*Обновлено: 15 июля 2025, 23:56 (UTC+3)*
-*Версия руководства: 1.1.0*
+*Обновлено: 1 ноября 2024 (автоматическое обновление)*
+*Версия руководства: 1.2.0*
 *Статус проекта: Готов к продакшену*
+
+## История изменений
+
+### Версия 1.2.0 (1 ноября 2024)
+- ✅ Обновлена конфигурация для совместимости с Next.js 14 App Router
+- ✅ Исправлены redirect правила (301 заменены на 200 для внутренних маршрутов)
+- ✅ Добавлена переменная окружения `NEXT_TELEMETRY_DISABLED`
+- ✅ Синхронизирована документация с актуальной конфигурацией `netlify.toml`
+- ✅ Упрощена команда сборки (используется стандартный `npm run build`)
+- ✅ Улучшены заголовки безопасности и кэширования
+
+### Версия 1.1.0 (15 июля 2025)
+- Начальная версия документации
+- Настройка базовой конфигурации Netlify

@@ -5,49 +5,44 @@
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "9"
+  NEXT_TELEMETRY_DISABLED = "1"
 
-# Настройки для Next.js статического экспорта
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  conditions = {Role = ["admin"]}
-
-# Редиректы для страниц сервисов
-[[redirects]]
-  from = "/services"
-  to = "/services/"
-  status = 301
-
+# Настройки для Next.js 14 App Router статического экспорта
+# Обработка маршрутов без .html расширения
 [[redirects]]
   from = "/services/disinfection"
-  to = "/services/disinfection/"
-  status = 301
+  to = "/services/disinfection.html"
+  status = 200
 
 [[redirects]]
   from = "/services/pest-control"
-  to = "/services/pest-control/"
-  status = 301
+  to = "/services/pest-control.html"
+  status = 200
 
 [[redirects]]
   from = "/services/deratization"
-  to = "/services/deratization/"
-  status = 301
+  to = "/services/deratization.html"
+  status = 200
 
 [[redirects]]
   from = "/services/water-analysis"
-  to = "/services/water-analysis/"
-  status = 301
+  to = "/services/water-analysis.html"
+  status = 200
+
+[[redirects]]
+  from = "/services"
+  to = "/services.html"
+  status = 200
 
 [[redirects]]
   from = "/calculator"
-  to = "/calculator/"
-  status = 301
+  to = "/calculator.html"
+  status = 200
 
 [[redirects]]
   from = "/about"
-  to = "/about/"
-  status = 301
+  to = "/about.html"
+  status = 200
 
 # Обработка 404 ошибок
 [[redirects]]
