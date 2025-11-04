@@ -8,17 +8,22 @@ interface AnimatedIconProps {
   className?: string;
   autoplay?: boolean;
   loop?: boolean;
+  isHovered?: boolean; // Внешнее управление анимацией
 }
 
 const AnimatedIcon: React.FC<AnimatedIconProps> = ({ 
   animationName, 
   className, 
   autoplay = false, 
-  loop = false 
+  loop = false,
+  isHovered: externalIsHovered
 }) => {
   const [animationData, setAnimationData] = useState<any>(null);
-  const [isHovered, setIsHovered] = useState(false);
+  const [internalIsHovered, setInternalIsHovered] = useState(false);
   const lottieRef = useRef<any>(null);
+
+  // Используем внешнее состояние или внутреннее
+  const isHovered = externalIsHovered !== undefined ? externalIsHovered : internalIsHovered;
 
   useEffect(() => {
     const fetchAnimation = async () => {
@@ -35,17 +40,28 @@ const AnimatedIcon: React.FC<AnimatedIconProps> = ({
   fetchAnimation();
   }, [animationName]);
 
-  const handleMouseEnter = () => {
-    setIsHovered(true);
+  // Управление анимацией при изменении isHovered
+  useEffect(() => {
     if (lottieRef.current && animationData) {
-      lottieRef.current.play();
+      if (isHovered) {
+        lottieRef.current.play();
+      } else {
+        lottieRef.current.stop();
+        // Возвращаем к первому кадру
+        lottieRef.current.goToAndStop(0, true);
+      }
+    }
+  }, [isHovered, animationData]);
+
+  const handleMouseEnter = () => {
+    if (externalIsHovered === undefined) {
+      setInternalIsHovered(true);
     }
   };
 
   const handleMouseLeave = () => {
-    setIsHovered(false);
-    if (lottieRef.current && animationData) {
-      lottieRef.current.stop();
+    if (externalIsHovered === undefined) {
+      setInternalIsHovered(false);
     }
   };
 

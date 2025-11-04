@@ -7,6 +7,7 @@ import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { NeonInput } from '@/components/cyberpunk/NeonInput';
 import { CyberpunkProgressBar } from '@/components/cyberpunk/CyberpunkProgressBar';
+import AnimatedIcon from '@/components/AnimatedIcon';
 
 type ObjectType = 'residential' | 'office' | 'medical' | 'food' | 'warehouse';
 type ServiceType = 'disinfection' | 'pest-control' | 'deratization' | 'water-analysis';
@@ -34,6 +35,8 @@ const objectTypes = [
     title: 'Жилые помещения',
     description: 'Квартиры, дома, коттеджи',
     icon: Home,
+    animationName: 'family.json',
+    color: 'text-cyber-blue',
     collectiveDiscountThreshold: 4, // квартир
     collectiveDiscount: 0.2, // 20%
   },
@@ -42,6 +45,8 @@ const objectTypes = [
     title: 'Офисные помещения',
     description: 'Торговые и производственные',
     icon: Building,
+    animationName: 'building.json',
+    color: 'text-electric-blue',
     collectiveDiscountThreshold: 1000, // м²
     collectiveDiscount: 0.15, // 15%
   },
@@ -50,18 +55,24 @@ const objectTypes = [
     title: 'Медицинские учреждения',
     description: 'Госучреждения',
     icon: Building2,
+    animationName: 'hospital.json',
+    color: 'text-red-500',
   },
   {
     id: 'food' as ObjectType,
     title: 'Пищевые производства',
     description: 'Общепит',
     icon: Factory,
+    animationName: 'coffee-shop.json',
+    color: 'text-poison-green',
   },
   {
     id: 'warehouse' as ObjectType,
     title: 'Складские помещения',
     description: 'Частный сектор',
     icon: Warehouse,
+    animationName: 'warehouse.json',
+    color: 'text-neon-orange',
     collectiveDiscountThreshold: 12, // соток (1200 м²)
     collectiveDiscount: 0.15, // 15%
   },
@@ -198,6 +209,7 @@ export default function CalculatorPage() {
       preferredTime: '',
     },
   });
+  const [hoveredObjectIndex, setHoveredObjectIndex] = useState<number | null>(null);
 
   const calculateServicePrice = (serviceId: ServiceType): number => {
     if (!state.objectType) return 0;
@@ -312,8 +324,7 @@ export default function CalculatorPage() {
             transition={{ duration: 0.8 }}
             className="text-center space-y-6"
           >
-            <div className="flex items-center justify-center space-x-3 mb-6">
-              <Calculator className="h-8 w-8 text-poison-green" />
+            <div className="mb-6">
               <h1 className="text-3xl md:text-4xl font-orbitron font-bold text-content-primary">
                 Точный расчет стоимости за{' '}
                 <span className="text-poison-green">3 минуты</span>
@@ -358,7 +369,7 @@ export default function CalculatorPage() {
                 </h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                  {objectTypes.map((type) => (
+                  {objectTypes.map((type, index) => (
                     <motion.div
                       key={type.id}
                       whileHover={{ scale: 1.02 }}
@@ -371,11 +382,17 @@ export default function CalculatorPage() {
                             : 'hover:border-poison-green/50'
                         }`}
                         onClick={() => selectObjectType(type.id)}
+                        onMouseEnter={() => setHoveredObjectIndex(index)}
+                        onMouseLeave={() => setHoveredObjectIndex(null)}
                       >
                         <div className="text-center">
-                          <type.icon className={`h-12 w-12 mx-auto mb-4 ${
-                            state.objectType === type.id ? 'text-poison-green' : 'text-content-secondary'
-                          }`} />
+                          <AnimatedIcon
+                            animationName={type.animationName}
+                            className={`h-12 w-12 mx-auto mb-4 ${
+                              state.objectType === type.id ? 'text-poison-green' : type.color
+                            }`}
+                            isHovered={hoveredObjectIndex === index}
+                          />
                           <h3 className="font-orbitron font-semibold text-content-primary mb-2">
                             {type.title}
                           </h3>

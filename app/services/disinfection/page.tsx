@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { HeroSection } from '@/components/services/HeroSection';
+import { PremiumHeroSection } from '@/components/services/PremiumHeroSection';
 import { ProblemSection } from '@/components/services/ProblemSection';
 import { SolutionSection } from '@/components/services/SolutionSection';
 import { CTASection } from '@/components/services/CTASection';
@@ -78,8 +78,16 @@ export default function DisinfectionPage() {
         }}
       />
 
-      {/* Hero Section */}
-      <HeroSection data={disinfectionData.hero} />
+      {/* Premium Hero Section */}
+      <PremiumHeroSection
+        title={disinfectionData.hero.title}
+        subtitle={disinfectionData.hero.subtitle}
+        description={disinfectionData.hero.description}
+        features={disinfectionData.hero.features}
+        ctaText={disinfectionData.hero.ctaText}
+        ctaLink={disinfectionData.hero.ctaLink}
+        accentColor={disinfectionData.hero.accentColor}
+      />
 
       {/* Problem Section */}
       <ProblemSection data={disinfectionData.problem} />

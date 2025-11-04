@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Award, Users, Target, Clock, Zap } from 'lucide-react';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
+import AnimatedIcon from '@/components/AnimatedIcon';
 
 const teamMembers = [
   {
@@ -34,25 +36,29 @@ const achievements = [
     title: 'Более 5000 объектов обработано',
     description: 'Жилые дома, офисы, медучреждения, производства',
     icon: Users,
-    color: 'text-poison-green',
+    animationName: 'city.json',
+    color: 'text-neon-orange',
   },
   {
     title: '99.9% эффективность обработки',
     description: 'Подтверждено лабораторными исследованиями',
     icon: Target,
-    color: 'text-neon-orange',
+    animationName: 'goals.json',
+    color: 'text-poison-green',
   },
   {
     title: '15 действующих лицензий',
     description: 'Полное соответствие требованиям Роспотребнадзора',
     icon: Award,
+    animationName: 'patent.json',
     color: 'text-cyber-blue',
   },
   {
     title: '24/7 экстренная служба',
     description: 'Круглосуточная готовность к выезду',
     icon: Clock,
-    color: 'text-electric-blue',
+    animationName: 'alert.json',
+    color: 'text-red-500',
   },
 ];
 
@@ -61,25 +67,36 @@ const values = [
     title: 'Инновации',
     description: 'Используем только современные технологии и препараты последнего поколения',
     icon: Zap,
+    animationName: 'dropper.json',
+    color: 'text-poison-green',
   },
   {
     title: 'Безопасность',
     description: 'Все препараты сертифицированы и безопасны для людей и животных',
     icon: Shield,
+    animationName: 'shield.json',
+    color: 'text-poison-green',
   },
   {
     title: 'Результат',
     description: 'Гарантируем 100% уничтожение вредителей с письменной гарантией',
     icon: Target,
+    animationName: 'goals.json',
+    color: 'text-poison-green',
   },
   {
     title: 'Профессионализм',
     description: 'Команда лицензированных специалистов с многолетним опытом',
     icon: Award,
+    animationName: 'certificate (1).json',
+    color: 'text-poison-green',
   },
 ];
 
 export default function AboutPage() {
+  const [achievementsHoveredIndex, setAchievementsHoveredIndex] = useState<number | null>(null);
+  const [valuesHoveredIndex, setValuesHoveredIndex] = useState<number | null>(null);
+
   return (
     <div className="min-h-screen pt-24">
       {/* Hero Section */}
@@ -184,8 +201,16 @@ export default function AboutPage() {
                 transition={{ duration: 0.8, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <CyberpunkCard className="text-center p-6 h-full">
-                  <achievement.icon className={`h-12 w-12 ${achievement.color} mx-auto mb-4`} />
+                <CyberpunkCard 
+                  className="text-center p-6 h-full"
+                  onMouseEnter={() => setAchievementsHoveredIndex(index)}
+                  onMouseLeave={() => setAchievementsHoveredIndex(null)}
+                >
+                  <AnimatedIcon
+                    animationName={achievement.animationName}
+                    className={`h-12 w-12 mx-auto mb-4 ${achievement.color}`}
+                    isHovered={achievementsHoveredIndex === index}
+                  />
                   <h3 className="text-lg font-orbitron font-semibold text-content-primary mb-3">
                     {achievement.title}
                   </h3>
@@ -228,9 +253,6 @@ export default function AboutPage() {
                 viewport={{ once: true }}
               >
                 <CyberpunkCard className="p-6 text-center">
-                  <div className="mb-4">
-                    <member.icon className="h-16 w-16 text-poison-green mx-auto" />
-                  </div>
                   <h3 className="text-xl font-orbitron font-semibold text-content-primary mb-2">
                     {member.name}
                   </h3>
@@ -278,10 +300,18 @@ export default function AboutPage() {
                 transition={{ duration: 0.8, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <CyberpunkCard className="p-6 h-full">
+                <CyberpunkCard 
+                  className="p-6 h-full"
+                  onMouseEnter={() => setValuesHoveredIndex(index)}
+                  onMouseLeave={() => setValuesHoveredIndex(null)}
+                >
                   <div className="flex items-start space-x-4">
-                    <div className="bg-poison-green/10 p-3 rounded-lg">
-                      <value.icon className="h-8 w-8 text-poison-green" />
+                    <div className="p-3 rounded-lg">
+                      <AnimatedIcon
+                        animationName={value.animationName}
+                        className={`h-12 w-12 ${value.color}`}
+                        isHovered={valuesHoveredIndex === index}
+                      />
                     </div>
                     <div className="flex-1">
                       <h3 className="text-xl font-orbitron font-semibold text-content-primary mb-3">

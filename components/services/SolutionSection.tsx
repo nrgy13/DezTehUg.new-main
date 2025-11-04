@@ -12,13 +12,33 @@ interface SolutionSectionComponentProps {
 }
 
 export function SolutionSection({ data }: SolutionSectionComponentProps) {
+  // Яркие цветные акценты для элементов
+  const accentColors = ['#00FF00', '#0066FF', '#FF0000', '#FFD700'];
+  
   return (
     <section
       className="py-20 relative overflow-hidden bg-gradient-to-b from-white via-gray-50 to-white"
       style={{ '--accent-color': data.accentColor } as React.CSSProperties}
     >
+      {/* Animated Background Gradient */}
+      <motion.div
+        className="absolute inset-0 opacity-20"
+        animate={{
+          background: [
+            `radial-gradient(circle at 80% 20%, ${data.accentColor}10 0%, transparent 50%)`,
+            `radial-gradient(circle at 20% 80%, ${data.accentColor}10 0%, transparent 50%)`,
+            `radial-gradient(circle at 80% 20%, ${data.accentColor}10 0%, transparent 50%)`,
+          ],
+        }}
+        transition={{
+          duration: 8,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
+      
       {/* Background Elements */}
-      <div className="absolute inset-0 cyber-grid opacity-20"></div>
+      <div className="absolute inset-0 cyber-grid opacity-5"></div>
       
       <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
@@ -38,7 +58,10 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
           >
             {data.title}
           </h2>
-          <h3 className="text-2xl md:text-3xl text-gray-800 mb-8 font-medium flame-subtitle font-orbitron tracking-tight leading-relaxed">
+          <h3 
+            className="text-2xl md:text-3xl mb-8 font-medium flame-subtitle font-orbitron tracking-tight leading-relaxed"
+            style={{ color: data.accentColor }}
+          >
             {data.subtitle}
           </h3>
           <p className="text-lg text-gray-800 max-w-3xl mx-auto font-medium tracking-normal leading-snug">
@@ -65,17 +88,31 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
                   transition={{ type: "spring", stiffness: 300 }}
                 >
                   {/* Step Number */}
-                  <div 
-                    className="absolute -top-4 -left-4 w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold cyber-glow z-10"
+                  <motion.div 
+                    className="absolute -top-4 -left-4 w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold cyber-glow z-10 shadow-lg"
                     style={{ backgroundColor: data.accentColor }}
+                    animate={{
+                      boxShadow: [
+                        `0 0 20px ${data.accentColor}40`,
+                        `0 0 30px ${data.accentColor}60`,
+                        `0 0 20px ${data.accentColor}40`,
+                      ],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                    }}
                   >
                     {step.step}
-                  </div>
+                  </motion.div>
                   
                   {/* Icon Container */}
                   <div
-                    className="w-32 h-32 rounded-2xl flex items-center justify-center mx-auto cyber-card"
-                    style={{ backgroundColor: `${data.accentColor}10` }}
+                    className="w-32 h-32 rounded-2xl flex items-center justify-center mx-auto backdrop-blur-sm bg-white/80 border-2 shadow-xl"
+                    style={{ 
+                      borderColor: accentColors[index % accentColors.length],
+                      boxShadow: `0 8px 32px ${accentColors[index % accentColors.length]}20, 0 0 0 1px ${data.accentColor}10`
+                    }}
                   >
                     <div className="mx-auto" style={{ color: data.accentColor }}>
                       <StepIcon iconName={step.icon} accentColor={data.accentColor} />
@@ -89,8 +126,10 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
                 <h4
                   className="text-2xl md:text-3xl font-bold mb-4 font-orbitron tracking-tight"
                   style={{
-                    color: data.accentColor,
-                    textShadow: `0 0 10px ${data.accentColor}60, 0 0 8px rgba(255, 107, 53, 0.4), 0 1px 2px rgba(0,0,0,0.3)`
+                    background: `linear-gradient(135deg, ${data.accentColor} 0%, ${data.accentColor}dd 100%)`,
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
                   }}
                 >
                   {step.title}
@@ -156,28 +195,46 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
             </h4>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {data.whyChooseUs.map((item, index) => (
+              {data.whyChooseUs.map((item, index) => {
+                const markerColor = accentColors[index % accentColors.length];
+                return (
                 <motion.div
                   key={index}
-                  className="cyber-card p-6 text-center group hover:scale-105 transition-all duration-300"
+                  className="relative p-6 text-center group rounded-xl backdrop-blur-sm bg-white/80 border-2 overflow-hidden"
+                  style={{
+                    borderColor: `${markerColor}40`,
+                    boxShadow: `0 8px 32px ${markerColor}15, 0 0 0 1px ${data.accentColor}10`
+                  }}
                   initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: index * 0.1 }}
                   viewport={{ once: true }}
                   whileHover={{
-                    boxShadow: `0 0 30px ${data.accentColor}40`,
+                    scale: 1.03,
+                    boxShadow: `0 12px 40px ${markerColor}30, 0 0 0 2px ${markerColor}60`,
+                    borderColor: markerColor,
                   }}
                 >
-                  <div className="mb-4">
-                    <WhyChooseUsIconDynamic
-                      iconPath={item.icon}
-                      className="mx-auto h-12 w-12"
-                      accentColor={data.accentColor}
-                    />
+                  {/* Gradient Overlay */}
+                  <motion.div
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                    style={{
+                      background: `linear-gradient(135deg, ${markerColor}05 0%, transparent 100%)`,
+                    }}
+                  />
+                  <div className="relative z-10">
+                    <div className="mb-4">
+                      <WhyChooseUsIconDynamic
+                        iconPath={item.icon}
+                        className="mx-auto h-12 w-12"
+                        accentColor={data.accentColor}
+                      />
+                    </div>
+                    <p className="text-gray-800 font-medium tracking-tight leading-relaxed">{item.title}</p>
                   </div>
-                  <p className="text-gray-800 font-medium tracking-tight leading-relaxed">{item.title}</p>
                 </motion.div>
-              ))}
+                );
+              })}
             </div>
           </motion.div>
         )}

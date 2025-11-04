@@ -93,6 +93,7 @@ export function Footer() {
                       <Link
                         key={item.href}
                         href={item.href}
+                        prefetch={false}
                         className="group flex items-center justify-center text-content-muted hover:text-poison-green transition-all duration-300 relative"
                       >
                         <div className="w-1 h-1 bg-current rounded-full mr-3 opacity-0 group-hover:opacity-100 group-hover:shadow-[0_0_5px_#39FF14] transition-all duration-300" />

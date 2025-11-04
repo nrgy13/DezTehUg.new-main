@@ -93,54 +93,38 @@ const GuaranteeIcon = ({ accentColor }: { accentColor: string }) => {
 };
 
 export function CTASection({ data }: CTASectionComponentProps) {
+  // Яркие цветные акценты для элементов
+  const accentColors = ['#00FF00', '#0066FF', '#FF0000', '#FFD700'];
+  
   return (
     <section
-      className="py-20 relative overflow-hidden bg-gradient-to-r from-gray-50 via-white to-gray-50"
+      className="py-20 relative overflow-hidden bg-gradient-to-br from-white via-gray-50 to-white"
       style={{ '--accent-color': data.accentColor } as React.CSSProperties}
     >
-      {/* Background Effects */}
-      <div className="absolute inset-0 cyber-grid opacity-20"></div>
-      
-      {/* Animated Background Elements */}
+      {/* Animated Background Gradient */}
       <motion.div
-        className="absolute top-0 left-0 w-full h-2"
-        style={{ backgroundColor: data.accentColor }}
+        className="absolute inset-0 opacity-30"
         animate={{
-          scaleX: [0, 1, 0],
-          opacity: [0.5, 1, 0.5],
+          background: [
+            `radial-gradient(circle at 50% 50%, ${data.accentColor}15 0%, transparent 60%)`,
+            `radial-gradient(circle at 30% 70%, ${data.accentColor}15 0%, transparent 60%)`,
+            `radial-gradient(circle at 50% 50%, ${data.accentColor}15 0%, transparent 60%)`,
+          ],
         }}
         transition={{
-          duration: 3,
+          duration: 10,
           repeat: Infinity,
           ease: "easeInOut"
         }}
       />
       
-      <motion.div
-        className="absolute bottom-0 right-0 w-full h-2"
-        style={{ backgroundColor: data.accentColor }}
-        animate={{
-          scaleX: [0, 1, 0],
-          opacity: [0.5, 1, 0.5],
-        }}
-        transition={{
-          duration: 3,
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: 1.5
-        }}
-      />
+      {/* Background Effects */}
+      <div className="absolute inset-0 cyber-grid opacity-5"></div>
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
           {/* Header */}
-          <motion.div
-            className="mb-12"
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-          >
+          <div className="mb-12">
             <h2
               className="text-4xl md:text-6xl font-bold mb-6 cyber-glow flame-title font-orbitron"
               style={{
@@ -150,88 +134,103 @@ export function CTASection({ data }: CTASectionComponentProps) {
             >
               {data.title}
             </h2>
-            <h3 className="text-2xl md:text-3xl text-gray-900 mb-8 font-medium font-orbitron tracking-tight">
+            <h3 
+              className="text-2xl md:text-3xl mb-8 font-medium font-orbitron tracking-tight"
+              style={{ color: data.accentColor }}
+            >
               {data.subtitle}
             </h3>
-            <p className="text-lg text-gray-800 leading-relaxed tracking-normal">
+            <p className="text-lg text-gray-800 leading-relaxed tracking-normal font-medium">
               {data.description}
             </p>
-          </motion.div>
+          </div>
 
           {/* Features Grid */}
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            viewport={{ once: true }}
-          >
-            {data.features.map((feature, index) => (
-              <motion.div
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            {data.features.map((feature, index) => {
+              const markerColor = accentColors[index % accentColors.length];
+              return (
+              <div
                 key={index}
-                className="cyber-card p-6 group hover:scale-105 transition-all duration-300"
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                whileHover={{
-                  boxShadow: `0 0 30px ${data.accentColor}40`,
+                className="relative p-6 group rounded-xl backdrop-blur-sm bg-white/80 border-2 overflow-hidden"
+                style={{
+                  borderColor: `${markerColor}40`,
+                  boxShadow: `0 8px 32px ${markerColor}15, 0 0 0 1px ${data.accentColor}10`
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = `0 12px 40px ${markerColor}30, 0 0 0 2px ${markerColor}60`;
+                  e.currentTarget.style.borderColor = markerColor;
+                  e.currentTarget.style.transform = 'scale(1.03)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = `0 8px 32px ${markerColor}15, 0 0 0 1px ${data.accentColor}10`;
+                  e.currentTarget.style.borderColor = `${markerColor}40`;
+                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
-                <div 
-                  className="w-6 h-6 rounded-full mx-auto mb-4 cyber-glow"
-                  style={{ backgroundColor: data.accentColor }}
+                {/* Gradient Overlay */}
+                <motion.div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                  style={{
+                    background: `linear-gradient(135deg, ${markerColor}05 0%, transparent 100%)`,
+                  }}
                 />
-                <p className="text-gray-700 font-medium text-sm">{feature}</p>
-              </motion.div>
-            ))}
-          </motion.div>
+                <div className="relative z-10">
+                  <div 
+                    className="w-6 h-6 rounded-full mx-auto mb-4 cyber-glow"
+                    style={{ backgroundColor: markerColor }}
+                  />
+                  <p className="text-gray-800 font-medium text-sm">{feature}</p>
+                </div>
+              </div>
+              );
+            })}
+          </div>
 
           {/* Urgency Text */}
           {data.urgencyText && (
-            <motion.div
-              className="mb-8"
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, delay: 0.4 }}
-              viewport={{ once: true }}
-            >
-              <div 
-                className="cyber-card p-6 border-2 max-w-2xl mx-auto"
-                style={{ borderColor: data.accentColor }}
+            <div className="mb-8">
+              <motion.div 
+                className="relative p-6 border-2 max-w-2xl mx-auto rounded-xl backdrop-blur-sm bg-gradient-to-br from-white/90 to-red-50/50 overflow-hidden"
+                style={{ 
+                  borderColor: '#FF000040',
+                  boxShadow: `0 8px 32px rgba(255, 0, 0, 0.15), 0 0 0 1px ${data.accentColor}10`
+                }}
+                whileHover={{ scale: 1.02 }}
               >
+                {/* Animated Background */}
                 <motion.div
-                  className="flex items-center justify-center mb-4"
+                  className="absolute inset-0 opacity-20"
+                  style={{
+                    background: `radial-gradient(circle at center, rgba(255, 0, 0, 0.1) 0%, transparent 70%)`,
+                  }}
                   animate={{
                     scale: [1, 1.1, 1],
+                    opacity: [0.2, 0.3, 0.2],
                   }}
                   transition={{
-                    duration: 2,
+                    duration: 3,
                     repeat: Infinity,
-                    ease: "easeInOut"
                   }}
-                >
-                  <UrgentIcon accentColor={data.accentColor} />
-                  <span
-                    className="text-xl font-bold cyber-glow font-orbitron"
-                    style={{ color: data.accentColor }}
-                  >
-                    СРОЧНО!
-                  </span>
-                </motion.div>
-                <p className="text-gray-700 font-medium">{data.urgencyText}</p>
-              </div>
-            </motion.div>
+                />
+                <div className="relative z-10">
+                  <div className="flex items-center justify-center mb-4">
+                    <UrgentIcon accentColor={data.accentColor} />
+                    <span
+                      className="text-xl font-bold cyber-glow font-orbitron"
+                      style={{ color: data.accentColor }}
+                    >
+                      СРОЧНО!
+                    </span>
+                  </div>
+                  <p className="text-gray-800 font-medium">{data.urgencyText}</p>
+                </div>
+              </motion.div>
+            </div>
           )}
 
           {/* Main CTA Button */}
-          <motion.div
-            className="mb-8"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.6 }}
-            viewport={{ once: true }}
-          >
+          <div className="mb-8">
             <CyberpunkButton
               href={data.ctaLink}
               variant="primary"
@@ -239,99 +238,36 @@ export function CTASection({ data }: CTASectionComponentProps) {
               className="text-2xl px-16 py-6 relative overflow-hidden group"
               style={{ '--accent-color': data.accentColor } as React.CSSProperties}
             >
-              <motion.span
-                className="relative z-10"
-                animate={{
-                  textShadow: [
-                    `0 0 10px ${data.accentColor}`,
-                    `0 0 20px ${data.accentColor}`,
-                    `0 0 10px ${data.accentColor}`,
-                  ],
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              >
+              <span className="relative z-10">
                 {data.ctaText}
-              </motion.span>
-              
-              {/* Button Animation Effect */}
-              <motion.div
-                className="absolute inset-0 opacity-0 group-hover:opacity-100"
-                style={{
-                  background: `linear-gradient(45deg, transparent, ${data.accentColor}20, transparent)`,
-                }}
-                animate={{
-                  x: ['-100%', '100%'],
-                }}
-                transition={{
-                  duration: 1.5,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              />
+              </span>
             </CyberpunkButton>
-          </motion.div>
+          </div>
 
           {/* Additional Info */}
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.8 }}
-            viewport={{ once: true }}
-          >
-            <div className="cyber-card p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+            <div className="cyber-card p-4 border-4 bg-white" style={{ borderColor: '#00FF00', boxShadow: `0 4px 20px #00FF0030` }}>
               <PhoneIcon accentColor={data.accentColor} />
-              <p className="text-gray-700 text-sm">
+              <p className="text-gray-800 text-sm font-medium">
                 Бесплатная консультация
               </p>
             </div>
             
-            <div className="cyber-card p-4">
+            <div className="cyber-card p-4 border-4 bg-white" style={{ borderColor: '#0066FF', boxShadow: `0 4px 20px #0066FF30` }}>
               <ConsultationIcon accentColor={data.accentColor} />
-              <p className="text-gray-700 text-sm">
+              <p className="text-gray-800 text-sm font-medium">
                 Выезд в день обращения
               </p>
             </div>
             
-            <div className="cyber-card p-4">
+            <div className="cyber-card p-4 border-4 bg-white" style={{ borderColor: '#FFD700', boxShadow: `0 4px 20px #FFD70030` }}>
               <GuaranteeIcon accentColor={data.accentColor} />
-              <p className="text-gray-700 text-sm">
+              <p className="text-gray-800 text-sm font-medium">
                 Гарантия результата
               </p>
             </div>
-          </motion.div>
+          </div>
         </div>
-      </div>
-
-      {/* Floating Elements */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {[...Array(15)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-2 h-2 rounded-full opacity-60"
-            style={{ 
-              backgroundColor: data.accentColor,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              y: [0, -50, 0],
-              x: [0, Math.random() * 20 - 10, 0],
-              opacity: [0.6, 1, 0.6],
-              scale: [1, 1.5, 1],
-            }}
-            transition={{
-              duration: 4 + Math.random() * 2,
-              repeat: Infinity,
-              delay: Math.random() * 2,
-              ease: "easeInOut"
-            }}
-          />
-        ))}
       </div>
     </section>
   );

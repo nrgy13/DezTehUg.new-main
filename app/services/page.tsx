@@ -3,9 +3,10 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, CheckCircle } from 'lucide-react';
 import { ServiceIcon } from '@/components/ServiceIcon';
-import { WhyChooseUsIcon } from '@/components/WhyChooseUsIcon';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
+import AnimatedIcon from '@/components/AnimatedIcon';
+import { useState } from 'react';
 
 const services = [
   {
@@ -91,6 +92,9 @@ const services = [
 ];
 
 export default function ServicesPage() {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [whyChooseUsHoveredIndex, setWhyChooseUsHoveredIndex] = useState<number | null>(null);
+
   return (
     <div className="min-h-screen pt-24">
       {/* Hero Section */}
@@ -127,11 +131,41 @@ export default function ServicesPage() {
                 viewport={{ once: true }}
               >
                 <CyberpunkCard variant="service" className="h-full">
-                  <div className={`${service.bgColor} ${service.borderColor} border-l-4 p-8 flex flex-col h-full`}>
+                  <div 
+                    className={`${service.bgColor} ${service.borderColor} border-l-4 p-8 flex flex-col h-full`}
+                    onMouseEnter={() => setHoveredIndex(index)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                  >
                     <div className="flex-1 flex flex-col">
                       <div className="flex items-start space-x-4 mb-6">
                         <div className={`${service.bgColor} p-3 rounded-lg`}>
-                          <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-8 w-8 ${service.color}`} />
+                          {service.id === 'disinfection' ? (
+                            <AnimatedIcon 
+                              animationName="antibiotic.json" 
+                              className="h-12 w-12"
+                              isHovered={hoveredIndex === index}
+                            />
+                          ) : service.id === 'pest-control' ? (
+                            <AnimatedIcon 
+                              animationName="insect.json" 
+                              className="h-12 w-12"
+                              isHovered={hoveredIndex === index}
+                            />
+                          ) : service.id === 'deratization' ? (
+                            <AnimatedIcon 
+                              animationName="mouse.json" 
+                              className="h-12 w-12"
+                              isHovered={hoveredIndex === index}
+                            />
+                          ) : service.id === 'water-analysis' ? (
+                            <AnimatedIcon 
+                              animationName="microscope.json" 
+                              className="h-12 w-12"
+                              isHovered={hoveredIndex === index}
+                            />
+                          ) : (
+                            <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-8 w-8 ${service.color}`} />
+                          )}
                         </div>
                         <div className="flex-1">
                           <h2 className="text-2xl font-orbitron font-bold text-content-primary mb-2">
@@ -176,10 +210,11 @@ export default function ServicesPage() {
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row gap-3 mt-auto">
                       <CyberpunkButton
-                        href={service.href}
                         variant="primary"
                         size="default"
-                        className="flex-1 group"
+                        className="flex-1 group opacity-50 cursor-not-allowed"
+                        onClick={(e) => e.preventDefault()}
+                        disabled
                       >
                         Подробнее
                         <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -229,37 +264,37 @@ export default function ServicesPage() {
               {
                 title: 'Лицензированные специалисты',
                 description: '15 действующих лицензий, регулярное повышение квалификации',
-                iconName: 'shield' as const,
-                color: 'text-poison-green'
+                animationName: 'teamwork.json',
+                color: 'text-cyber-blue'
               },
               {
                 title: 'Современное оборудование',
                 description: 'Генераторы тумана, УЛВ распылители, дозирующие системы',
-                iconName: 'zap' as const,
+                animationName: 'skills.json',
                 color: 'text-neon-orange'
               },
               {
                 title: 'Безопасные препараты',
                 description: 'Сертифицированные средства 4-го класса опасности',
-                iconName: 'award' as const,
+                animationName: 'report.json',
                 color: 'text-cyber-blue'
               },
               {
                 title: 'Гарантия результата',
                 description: 'Письменная гарантия и гарантийное обслуживание',
-                iconName: 'check-circle' as const,
+                animationName: 'certificate.json',
                 color: 'text-poison-green'
               },
               {
                 title: 'Круглосуточная работа',
                 description: 'Экстренный выезд 24/7, работа в выходные и праздники',
-                iconName: 'clock' as const,
+                animationName: '24-hour-service.json',
                 color: 'text-neon-orange'
               },
               {
                 title: 'Полный цикл услуг',
                 description: 'От диагностики до профилактического обслуживания',
-                iconName: 'cycle' as const,
+                animationName: 'management.json',
                 color: 'text-cyber-blue'
               }
             ].map((item, index) => (
@@ -270,8 +305,16 @@ export default function ServicesPage() {
                 transition={{ duration: 0.8, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <CyberpunkCard className="text-center p-6 h-full">
-                  <WhyChooseUsIcon name={item.iconName} className={`h-12 w-12 ${item.color} mx-auto mb-4`} />
+                <CyberpunkCard 
+                  className="text-center p-6 h-full"
+                  onMouseEnter={() => setWhyChooseUsHoveredIndex(index)}
+                  onMouseLeave={() => setWhyChooseUsHoveredIndex(null)}
+                >
+                  <AnimatedIcon
+                    animationName={item.animationName}
+                    className={`h-12 w-12 ${item.color} mx-auto mb-4`}
+                    isHovered={whyChooseUsHoveredIndex === index}
+                  />
                   <h3 className="text-lg font-orbitron font-semibold text-content-primary mb-3">
                     {item.title}
                   </h3>

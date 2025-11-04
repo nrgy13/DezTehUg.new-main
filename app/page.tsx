@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, CheckCircle, Star, Phone, Calculator, Shield } from 'lucide-react';
 import { ServiceIcon } from '@/components/ServiceIcon';
@@ -62,6 +63,9 @@ const trustFactors = [
 ];
 
 export default function Home() {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [hoveredTrustIndex, setHoveredTrustIndex] = useState<number | null>(null);
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -241,19 +245,36 @@ export default function Home() {
               >
                 <CyberpunkCard 
                   variant="service" 
-                  className="h-full p-6 group cursor-pointer"
-                  onClick={() => window.location.href = service.href}
+                  className="h-full p-6 group cursor-default"
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
                 >
                   <div className="flex flex-col h-full">
                     <div className="mb-4">
                       {index === 0 ? (
-                        <AnimatedIcon animationName="antibiotic.json" className={`h-12 w-12 ${service.color} `} />
+                        <AnimatedIcon 
+                          animationName="antibiotic.json" 
+                          className={`h-12 w-12 ${service.color} `}
+                          isHovered={hoveredIndex === index}
+                        />
                       ) : index === 1 ? (
-                        <AnimatedIcon animationName="insect.json" className={`h-12 w-12 ${service.color} `} />
+                        <AnimatedIcon 
+                          animationName="insect.json" 
+                          className={`h-12 w-12 ${service.color} `}
+                          isHovered={hoveredIndex === index}
+                        />
                       ) : index === 2 ? (
-                        <AnimatedIcon animationName="mouse.json" className={`h-12 w-12 ${service.color} `} />
+                        <AnimatedIcon 
+                          animationName="mouse.json" 
+                          className={`h-12 w-12 ${service.color} `}
+                          isHovered={hoveredIndex === index}
+                        />
                       ) : index === 3 ? (
-                        <AnimatedIcon animationName="microscope.json" className={`h-12 w-12 ${service.color} `} />
+                        <AnimatedIcon 
+                          animationName="microscope.json" 
+                          className={`h-12 w-12 ${service.color} `}
+                          isHovered={hoveredIndex === index}
+                        />
                       ) : (
                         <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-12 w-12 ${service.color} `} />
                       )}
@@ -307,9 +328,33 @@ export default function Home() {
                 transition={{ duration: 0.8, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <CyberpunkCard className="text-center p-8 group">
+                <CyberpunkCard 
+                  className="text-center p-8 group"
+                  onMouseEnter={() => setHoveredTrustIndex(index)}
+                  onMouseLeave={() => setHoveredTrustIndex(null)}
+                >
                   <div className="mb-6">
-                    <TrustFactorIcon name={factor.icon as 'award' | 'zap' | 'clock'} className={`h-16 w-16 ${factor.color} mx-auto `} />
+                    {index === 0 ? (
+                      <AnimatedIcon 
+                        animationName="verified.json" 
+                        className={`h-16 w-16 ${factor.color} mx-auto`}
+                        isHovered={hoveredTrustIndex === index}
+                      />
+                    ) : index === 1 ? (
+                      <AnimatedIcon 
+                        animationName="brain-lightning.json" 
+                        className={`h-16 w-16 ${factor.color} mx-auto`}
+                        isHovered={hoveredTrustIndex === index}
+                      />
+                    ) : index === 2 ? (
+                      <AnimatedIcon 
+                        animationName="siren.json" 
+                        className={`h-16 w-16 ${factor.color} mx-auto`}
+                        isHovered={hoveredTrustIndex === index}
+                      />
+                    ) : (
+                      <TrustFactorIcon name={factor.icon as 'award' | 'zap' | 'clock'} className={`h-16 w-16 ${factor.color} mx-auto `} />
+                    )}
                   </div>
                   
                   <h3 className="text-xl font-orbitron font-semibold text-content-primary mb-3">

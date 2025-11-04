@@ -101,11 +101,11 @@ function BenefitIcon({ type, accentColor }: { type: 'fast' | 'target' | 'money' 
 export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
   return (
     <section 
-      className="py-20 relative overflow-hidden bg-gradient-to-b from-white via-gray-50 to-white"
+      className="py-20 relative overflow-hidden bg-white"
       style={{ '--accent-color': data.accentColor } as React.CSSProperties}
     >
       {/* Background Effects */}
-      <div className="absolute inset-0 cyber-grid opacity-20"></div>
+      <div className="absolute inset-0 cyber-grid opacity-10"></div>
       
       {/* Animated Border */}
       <motion.div
@@ -163,7 +163,7 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
               transition={{ duration: 0.8, delay: 0.2 }}
               viewport={{ once: true }}
             >
-              <div className="cyber-card p-8">
+              <div className="cyber-card p-8 border-4 bg-white" style={{ borderColor: '#0066FF', boxShadow: `0 4px 20px #0066FF30` }}>
                 <h4
                   className="text-2xl font-bold mb-6 cyber-glow-muted font-orbitron"
                   style={{
@@ -243,7 +243,8 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
 
               {/* Guarantees */}
               <motion.div
-                className="cyber-card p-8"
+                className="cyber-card p-8 border-4 bg-white"
+                style={{ borderColor: '#00FF00', boxShadow: `0 4px 20px #00FF0030` }}
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
@@ -286,8 +287,11 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
               viewport={{ once: true }}
             >
               <div 
-                className="cyber-card p-12 border-2 relative overflow-hidden"
-                style={{ borderColor: data.accentColor }}
+                className="cyber-card p-12 border-4 relative overflow-hidden bg-white"
+                style={{ 
+                  borderColor: '#FF0000',
+                  boxShadow: `0 4px 20px #FF000030, 0 0 0 1px ${data.accentColor}20`
+                }}
               >
 
                 {/* Pulsing Icon */}

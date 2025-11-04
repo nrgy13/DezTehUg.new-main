@@ -7,6 +7,23 @@ import { Header } from './Header';
 import { Footer } from './Footer';
 import { useEffect, useState, useCallback } from 'react';
 
+// Компонент для установки масштаба страницы
+const ViewportScale = () => {
+  useEffect(() => {
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+      viewport.setAttribute('content', 'width=device-width, initial-scale=0.9, maximum-scale=5, user-scalable=yes');
+    } else {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=0.9, maximum-scale=5, user-scalable=yes';
+      document.getElementsByTagName('head')[0].appendChild(meta);
+    }
+  }, []);
+
+  return null;
+};
+
 const MainContent = ({ children }: { children: React.ReactNode }) => {
   const { isLoading, unregisterLoading } = useLoading();
   
@@ -46,6 +63,7 @@ const MainContent = ({ children }: { children: React.ReactNode }) => {
 export const AppWrapper = ({ children }: { children: React.ReactNode }) => {
   return (
     <LoadingProvider>
+      <ViewportScale />
       <MainContent>{children}</MainContent>
     </LoadingProvider>
   );

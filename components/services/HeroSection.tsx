@@ -10,13 +10,16 @@ interface HeroSectionComponentProps {
 }
 
 export function HeroSection({ data }: HeroSectionComponentProps) {
+  // Яркие цветные акценты для элементов
+  const accentColors = ['#00FF00', '#0066FF', '#FF0000', '#FF6B35', '#FFD700'];
+  
   return (
     <section
-      className="relative min-h-screen pt-20 flex items-center justify-center overflow-hidden"
+      className="relative min-h-screen pt-20 flex items-center justify-center overflow-hidden bg-white"
       style={{ '--accent-color': data.accentColor } as React.CSSProperties}
     >
       {/* Cyber Grid Background */}
-      <div className="absolute inset-0 cyber-grid opacity-20"></div>
+      <div className="absolute inset-0 cyber-grid opacity-10"></div>
       
 
       <div className="container mx-auto px-4 relative z-10">
@@ -37,7 +40,8 @@ export function HeroSection({ data }: HeroSectionComponentProps) {
 
           {/* Subtitle */}
           <motion.h2
-            className="text-2xl md:text-3xl text-gray-800 mb-8 font-medium flame-subtitle font-orbitron leading-relaxed tracking-wide"
+            className="text-2xl md:text-3xl mb-8 font-medium flame-subtitle font-orbitron leading-relaxed tracking-wide"
+            style={{ color: data.accentColor }}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
@@ -47,7 +51,7 @@ export function HeroSection({ data }: HeroSectionComponentProps) {
 
           {/* Description */}
           <motion.p
-            className="text-lg md:text-xl text-gray-700 mb-12 max-w-3xl mx-auto font-medium leading-relaxed tracking-normal"
+            className="text-lg md:text-xl text-gray-800 mb-12 max-w-3xl mx-auto font-medium leading-relaxed tracking-normal"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
@@ -62,20 +66,31 @@ export function HeroSection({ data }: HeroSectionComponentProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.6 }}
           >
-            {data.features.map((feature, index) => (
-              <motion.div
-                key={index}
-                className="cyber-card p-6 text-center"
-                whileHover={{ scale: 1.05 }}
-                transition={{ type: "spring", stiffness: 300 }}
-              >
-                <div 
-                  className="w-3 h-3 rounded-full mx-auto mb-3 cyber-glow"
-                  style={{ backgroundColor: data.accentColor }}
-                />
-                <p className="text-gray-700 font-medium flame-feature leading-normal tracking-normal">{feature}</p>
-              </motion.div>
-            ))}
+            {data.features.map((feature, index) => {
+              const markerColor = accentColors[index % accentColors.length];
+              return (
+                <motion.div
+                  key={index}
+                  className="cyber-card p-6 text-center border-4 relative bg-white"
+                  style={{ 
+                    borderColor: markerColor,
+                    borderTopColor: markerColor,
+                    borderRightColor: markerColor,
+                    borderBottomColor: markerColor,
+                    borderLeftColor: markerColor,
+                    boxShadow: `0 4px 20px ${markerColor}30, 0 0 0 1px ${data.accentColor}20`
+                  }}
+                  whileHover={{ scale: 1.05, boxShadow: `0 8px 30px ${markerColor}50` }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                >
+                  <div 
+                    className="w-4 h-4 rounded-full mx-auto mb-3 cyber-glow"
+                    style={{ backgroundColor: markerColor }}
+                  />
+                  <p className="text-gray-800 font-medium flame-feature leading-normal tracking-normal">{feature}</p>
+                </motion.div>
+              );
+            })}
           </motion.div>
 
           {/* CTA Button */}
