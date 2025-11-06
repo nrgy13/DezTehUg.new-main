@@ -96,6 +96,25 @@ const values = [
 export default function AboutPage() {
   const [achievementsHoveredIndex, setAchievementsHoveredIndex] = useState<number | null>(null);
   const [valuesHoveredIndex, setValuesHoveredIndex] = useState<number | null>(null);
+  
+  // Обработчики для touch событий с предотвращением конфликтов
+  const handleAchievementTouchStart = (index: number) => {
+    setAchievementsHoveredIndex(index);
+  };
+  
+  const handleAchievementTouchEnd = () => {
+    // Небольшая задержка для завершения анимации
+    setTimeout(() => setAchievementsHoveredIndex(null), 500);
+  };
+  
+  const handleValueTouchStart = (index: number) => {
+    setValuesHoveredIndex(index);
+  };
+  
+  const handleValueTouchEnd = () => {
+    // Небольшая задержка для завершения анимации
+    setTimeout(() => setValuesHoveredIndex(null), 500);
+  };
 
   return (
     <div className="min-h-screen pt-24">
@@ -205,6 +224,8 @@ export default function AboutPage() {
                   className="text-center p-6 h-full"
                   onMouseEnter={() => setAchievementsHoveredIndex(index)}
                   onMouseLeave={() => setAchievementsHoveredIndex(null)}
+                  onTouchStart={() => handleAchievementTouchStart(index)}
+                  onTouchEnd={handleAchievementTouchEnd}
                 >
                   <AnimatedIcon
                     animationName={achievement.animationName}
@@ -304,6 +325,8 @@ export default function AboutPage() {
                   className="p-6 h-full"
                   onMouseEnter={() => setValuesHoveredIndex(index)}
                   onMouseLeave={() => setValuesHoveredIndex(null)}
+                  onTouchStart={() => handleValueTouchStart(index)}
+                  onTouchEnd={handleValueTouchEnd}
                 >
                   <div className="flex items-start space-x-4">
                     <div className="p-3 rounded-lg">

@@ -74,6 +74,8 @@ const AnimatedIcon: React.FC<AnimatedIconProps> = ({
       className={className}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleMouseEnter}
+      onTouchEnd={handleMouseLeave}
     >
       <Lottie 
         animationData={animationData}

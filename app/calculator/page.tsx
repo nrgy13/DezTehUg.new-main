@@ -210,6 +210,16 @@ export default function CalculatorPage() {
     },
   });
   const [hoveredObjectIndex, setHoveredObjectIndex] = useState<number | null>(null);
+  
+  // Обработчик для touch событий с предотвращением конфликтов
+  const handleObjectTouchStart = (index: number) => {
+    setHoveredObjectIndex(index);
+  };
+  
+  const handleObjectTouchEnd = () => {
+    // Небольшая задержка для завершения анимации
+    setTimeout(() => setHoveredObjectIndex(null), 500);
+  };
 
   const calculateServicePrice = (serviceId: ServiceType): number => {
     if (!state.objectType) return 0;
@@ -384,6 +394,8 @@ export default function CalculatorPage() {
                         onClick={() => selectObjectType(type.id)}
                         onMouseEnter={() => setHoveredObjectIndex(index)}
                         onMouseLeave={() => setHoveredObjectIndex(null)}
+                        onTouchStart={() => handleObjectTouchStart(index)}
+                        onTouchEnd={handleObjectTouchEnd}
                       >
                         <div className="text-center">
                           <AnimatedIcon
