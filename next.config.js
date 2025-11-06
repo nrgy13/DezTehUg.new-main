@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Статический экспорт для Netlify (Next.js 13+ App Router)
-  // Временно отключено для локальной разработки
-  // output: 'export',
+  output: 'export',
   
   // Оптимизация для Netlify деплоя
   eslint: {
