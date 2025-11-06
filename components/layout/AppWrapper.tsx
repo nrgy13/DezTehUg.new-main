@@ -55,6 +55,8 @@ const MainContent = ({ children }: { children: React.ReactNode }) => {
         return;
       }
       
+      const viewportHeight = window.innerHeight;
+      
       // Создаем невидимый маркер на половине страницы
       let marker = document.getElementById(markerId);
       if (!marker) {

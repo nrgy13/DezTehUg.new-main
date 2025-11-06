@@ -43,7 +43,7 @@ const achievements = [
     title: '99.9% эффективность обработки',
     description: 'Подтверждено лабораторными исследованиями',
     icon: Target,
-    animationName: 'goals.json',
+    animationName: 'target.json',
     color: 'text-poison-green',
   },
   {
