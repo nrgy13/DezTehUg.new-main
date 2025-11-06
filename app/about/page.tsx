@@ -103,8 +103,10 @@ export default function AboutPage() {
   };
   
   const handleAchievementTouchEnd = () => {
-    // Небольшая задержка для завершения анимации
-    setTimeout(() => setAchievementsHoveredIndex(null), 500);
+    // Не останавливаем анимацию сразу - даем доиграть до конца цикла
+    // Анимация остановится автоматически через useEffect в AnimatedIcon
+    // Используем стандартную длительность анимации (обычно 2 секунды)
+    setTimeout(() => setAchievementsHoveredIndex(null), 2000);
   };
   
   const handleValueTouchStart = (index: number) => {
@@ -112,8 +114,10 @@ export default function AboutPage() {
   };
   
   const handleValueTouchEnd = () => {
-    // Небольшая задержка для завершения анимации
-    setTimeout(() => setValuesHoveredIndex(null), 500);
+    // Не останавливаем анимацию сразу - даем доиграть до конца цикла
+    // Анимация остановится автоматически через useEffect в AnimatedIcon
+    // Используем стандартную длительность анимации (обычно 2 секунды)
+    setTimeout(() => setValuesHoveredIndex(null), 2000);
   };
 
   return (

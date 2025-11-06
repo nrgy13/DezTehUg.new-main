@@ -217,8 +217,10 @@ export default function CalculatorPage() {
   };
   
   const handleObjectTouchEnd = () => {
-    // Небольшая задержка для завершения анимации
-    setTimeout(() => setHoveredObjectIndex(null), 500);
+    // Не останавливаем анимацию сразу - даем доиграть до конца цикла
+    // Анимация остановится автоматически через useEffect в AnimatedIcon
+    // Используем стандартную длительность анимации (обычно 2 секунды)
+    setTimeout(() => setHoveredObjectIndex(null), 2000);
   };
 
   const calculateServicePrice = (serviceId: ServiceType): number => {

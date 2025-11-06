@@ -21,6 +21,8 @@ const AnimatedIcon: React.FC<AnimatedIconProps> = ({
   const [animationData, setAnimationData] = useState<any>(null);
   const [internalIsHovered, setInternalIsHovered] = useState(false);
   const lottieRef = useRef<any>(null);
+  const animationDurationRef = useRef<number | null>(null);
+  const stopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Используем внешнее состояние или внутреннее
   const isHovered = externalIsHovered !== undefined ? externalIsHovered : internalIsHovered;
@@ -31,6 +33,12 @@ const AnimatedIcon: React.FC<AnimatedIconProps> = ({
         const response = await fetch(`/animations/${animationName}`);
       const data = await response.json();
       setAnimationData(data);
+      
+      // Вычисляем длительность анимации в миллисекундах
+      // Длительность = (op - ip) / fr * 1000
+      if (data.op !== undefined && data.ip !== undefined && data.fr !== undefined) {
+        animationDurationRef.current = ((data.op - data.ip) / data.fr) * 1000;
+      }
     } catch (error) {
       console.error(`Error loading animation ${animationName}:`, error);
       setAnimationData(null);
@@ -43,14 +51,40 @@ const AnimatedIcon: React.FC<AnimatedIconProps> = ({
   // Управление анимацией при изменении isHovered
   useEffect(() => {
     if (lottieRef.current && animationData) {
+      // Очищаем предыдущий timeout, если он есть
+      if (stopTimeoutRef.current) {
+        clearTimeout(stopTimeoutRef.current);
+        stopTimeoutRef.current = null;
+      }
+
       if (isHovered) {
+        // Запускаем анимацию один раз (без loop)
+        lottieRef.current.setLoop(false);
         lottieRef.current.play();
       } else {
-        lottieRef.current.stop();
-        // Возвращаем к первому кадру
-        lottieRef.current.goToAndStop(0, true);
+        // При отпускании не останавливаем сразу - даем доиграть до конца цикла
+        // Используем длительность из animationData
+        const duration = animationDurationRef.current;
+        const delay = duration || 2000; // Используем длительность или стандартные 2 секунды
+        
+        // Даем анимации доиграть до конца цикла
+        stopTimeoutRef.current = setTimeout(() => {
+          if (lottieRef.current) {
+            lottieRef.current.stop();
+            lottieRef.current.goToAndStop(0, true);
+          }
+          stopTimeoutRef.current = null;
+        }, delay);
       }
     }
+
+    // Очистка timeout при размонтировании
+    return () => {
+      if (stopTimeoutRef.current) {
+        clearTimeout(stopTimeoutRef.current);
+        stopTimeoutRef.current = null;
+      }
+    };
   }, [isHovered, animationData]);
 
   const handleMouseEnter = () => {
