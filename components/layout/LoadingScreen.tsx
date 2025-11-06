@@ -79,8 +79,8 @@ const LoadingScreenComponent: React.FC = () => {
           <Image
             src="/logo.png"
             alt="DezTechYug Logo"
-            width={160}
-            height={160}
+            width={120}
+            height={120}
             className="rounded-full"
             style={{ width: 'auto', height: 'auto' }}
             priority

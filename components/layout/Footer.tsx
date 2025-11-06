@@ -90,18 +90,16 @@ export function Footer() {
                       { href: '/services/deratization', label: 'Дератизация' },
                       { href: '/services/water-analysis', label: 'Анализ воды' }
                     ].map((item) => (
-                      <Link
+                      <span
                         key={item.href}
-                        href={item.href}
-                        prefetch={false}
-                        className="group flex items-center justify-center text-content-muted hover:text-poison-green transition-all duration-300 relative"
+                        className="group flex items-center justify-center text-content-muted hover:text-poison-green transition-all duration-300 relative cursor-default"
                       >
                         <div className="w-1 h-1 bg-current rounded-full mr-3 opacity-0 group-hover:opacity-100 group-hover:shadow-[0_0_5px_#39FF14] transition-all duration-300" />
                         <span className="group-hover:translate-x-1 group-hover:drop-shadow-[0_0_3px_#39FF14] transition-all duration-300 relative">
                           {item.label}
                           <div className="absolute bottom-0 left-0 w-0 h-px bg-poison-green group-hover:w-full transition-all duration-300 shadow-[0_0_3px_#39FF14]" />
                         </span>
-                      </Link>
+                      </span>
                     ))}
                   </nav>
                 </div>
