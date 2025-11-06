@@ -1,5 +1,5 @@
 [build]
-  publish = "out"
+  # publish = "out"  # Удалено: плагин @netlify/plugin-nextjs сам управляет публикацией
   command = "npm run build"
 
 [build.environment]
