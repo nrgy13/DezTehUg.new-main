@@ -44,136 +44,114 @@ export function Footer() {
       <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
         {/* Main Footer Content */}
         <div className="py-12">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-12 lg:gap-8 max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10 max-w-6xl mx-auto">
             
             {/* Brand Section */}
-            <div className="space-y-6 flex flex-col items-center text-center">
-              <Link href="/" className="inline-block group">
-                <BrandLogo className="text-3xl transition-all duration-300 group-hover:scale-105 group-hover:drop-shadow-[0_0_15px_#39FF14]" />
-              </Link>
+            <div className="flex flex-col items-center text-center h-full">
+              <div className="mb-6">
+                <Link href="/" className="inline-block group">
+                  <BrandLogo className="text-3xl transition-all duration-300 group-hover:scale-105 group-hover:drop-shadow-[0_0_15px_#39FF14]" />
+                </Link>
+              </div>
               
-              <div className="space-y-6">
-                <p className="text-content-secondary text-sm leading-relaxed max-w-48 font-light group-hover:text-content-primary transition-colors">
+              <div className="mb-6">
+                <p className="text-content-secondary text-sm leading-relaxed max-w-xs mx-auto font-light group-hover:text-content-primary transition-colors">
                   Профессиональные решения для защиты вашего пространства.
                   Технологии будущего уже сегодня.
                 </p>
-                
-                {/* Enhanced Trust Indicators */}
-                <div className="flex flex-col items-center gap-4">
-                  <div className="flex items-center gap-3 group cursor-pointer">
-                    <div className="w-3 h-3 bg-poison-green rounded-full animate-pulse shadow-[0_0_8px_#39FF14] group-hover:shadow-[0_0_15px_#39FF14] transition-all duration-300" />
-                    <span className="text-xs font-medium text-content-muted group-hover:text-poison-green group-hover:drop-shadow-[0_0_5px_#39FF14] transition-all duration-300">
-                      Онлайн 24/7
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 group cursor-pointer">
-                    <Award className="w-4 h-4 text-neon-orange group-hover:drop-shadow-[0_0_8px_#FF6B35] transition-all duration-300" />
-                    <span className="text-xs font-medium text-content-muted group-hover:text-neon-orange group-hover:drop-shadow-[0_0_5px_#FF6B35] transition-all duration-300">
-                      15+ лицензий
-                    </span>
-                  </div>
+              </div>
+              
+              {/* Enhanced Trust Indicators */}
+              <div className="flex flex-col items-center gap-3.5 w-full">
+                <div className="flex items-center gap-3 group cursor-pointer">
+                  <div className="w-3 h-3 bg-poison-green rounded-full animate-pulse shadow-[0_0_8px_#39FF14] group-hover:shadow-[0_0_15px_#39FF14] transition-all duration-300" />
+                  <span className="text-xs font-medium text-content-muted group-hover:text-poison-green group-hover:drop-shadow-[0_0_5px_#39FF14] transition-all duration-300">
+                    Онлайн 24/7
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 group cursor-pointer">
+                  <Award className="w-4 h-4 text-neon-orange group-hover:drop-shadow-[0_0_8px_#FF6B35] transition-all duration-300" />
+                  <span className="text-xs font-medium text-content-muted group-hover:text-neon-orange group-hover:drop-shadow-[0_0_5px_#FF6B35] transition-all duration-300">
+                    15+ лицензий
+                  </span>
                 </div>
               </div>
             </div>
 
-                {/* Services */}
-                <div className="space-y-4 flex flex-col items-center text-center">
-                  <h3 className="text-lg font-orbitron font-semibold text-content-primary relative group cursor-default">
-                    Услуги
-                    <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-gradient-to-r from-poison-green to-transparent group-hover:shadow-[0_0_8px_#39FF14] transition-all duration-300" />
-                    <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-poison-green group-hover:w-12 transition-all duration-500 shadow-[0_0_5px_#39FF14]" />
-                  </h3>
-                  <nav className="space-y-2.5 flex flex-col items-center">
-                    {[
-                      { href: '/services/disinfection', label: 'Дезинфекция' },
-                      { href: '/services/pest-control', label: 'Дезинсекция' },
-                      { href: '/services/deratization', label: 'Дератизация' },
-                      { href: '/services/water-analysis', label: 'Анализ воды' }
-                    ].map((item) => (
-                      <span
-                        key={item.href}
-                        className="group flex items-center justify-center text-content-muted hover:text-poison-green transition-all duration-300 relative cursor-default"
-                      >
-                        <div className="w-1 h-1 bg-current rounded-full mr-3 opacity-0 group-hover:opacity-100 group-hover:shadow-[0_0_5px_#39FF14] transition-all duration-300" />
-                        <span className="group-hover:translate-x-1 group-hover:drop-shadow-[0_0_3px_#39FF14] transition-all duration-300 relative">
-                          {item.label}
-                          <div className="absolute bottom-0 left-0 w-0 h-px bg-poison-green group-hover:w-full transition-all duration-300 shadow-[0_0_3px_#39FF14]" />
-                        </span>
-                      </span>
-                    ))}
-                  </nav>
-                </div>
+            {/* Company */}
+            <div className="flex flex-col items-center text-center h-full">
+              <div className="mb-6 w-full">
+                <h3 className="text-lg font-orbitron font-semibold text-content-primary relative group cursor-default w-full">
+                  <span className="relative z-10 inline-block">Компания</span>
+                  <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-gradient-to-r from-neon-orange to-transparent group-hover:shadow-[0_0_8px_#FF6B35] transition-all duration-300" />
+                  <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-neon-orange group-hover:w-12 transition-all duration-500 shadow-[0_0_5px_#FF6B35]" />
+                </h3>
+              </div>
+              <nav className="space-y-2.5 flex flex-col items-center w-full">
+                {[
+                  { href: '/about', label: 'О нас' },
+                  { href: '/calculator', label: 'Калькулятор' },
+                  { href: '/contact', label: 'Контакты' },
+                  { href: '/privacy', label: 'Конфиденциальность' }
+                ].map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="group flex items-center justify-center text-content-muted hover:text-neon-orange transition-all duration-300 relative"
+                  >
+                    <div className="w-1 h-1 bg-current rounded-full mr-3 opacity-0 group-hover:opacity-100 group-hover:shadow-[0_0_5px_#FF6B35] transition-all duration-300" />
+                    <span className="group-hover:translate-x-1 group-hover:drop-shadow-[0_0_3px_#FF6B35] transition-all duration-300 relative">
+                      {item.label}
+                      <div className="absolute bottom-0 left-0 w-0 h-px bg-neon-orange group-hover:w-full transition-all duration-300 shadow-[0_0_3px_#FF6B35]" />
+                    </span>
+                  </Link>
+                ))}
+              </nav>
+            </div>
 
-                {/* Company */}
-                <div className="space-y-4 flex flex-col items-center text-center">
-                  <h3 className="text-lg font-orbitron font-semibold text-content-primary relative group cursor-default">
-                    Компания
-                    <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-gradient-to-r from-neon-orange to-transparent group-hover:shadow-[0_0_8px_#FF6B35] transition-all duration-300" />
-                    <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-neon-orange group-hover:w-12 transition-all duration-500 shadow-[0_0_5px_#FF6B35]" />
-                  </h3>
-                  <nav className="space-y-2.5 flex flex-col items-center">
-                    {[
-                      { href: '/about', label: 'О нас' },
-                      { href: '/calculator', label: 'Калькулятор' },
-                      { href: '/contact', label: 'Контакты' },
-                      { href: '/privacy', label: 'Конфиденциальность' }
-                    ].map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className="group flex items-center justify-center text-content-muted hover:text-neon-orange transition-all duration-300 relative"
-                      >
-                        <div className="w-1 h-1 bg-current rounded-full mr-3 opacity-0 group-hover:opacity-100 group-hover:shadow-[0_0_5px_#FF6B35] transition-all duration-300" />
-                        <span className="group-hover:translate-x-1 group-hover:drop-shadow-[0_0_3px_#FF6B35] transition-all duration-300 relative">
-                          {item.label}
-                          <div className="absolute bottom-0 left-0 w-0 h-px bg-neon-orange group-hover:w-full transition-all duration-300 shadow-[0_0_3px_#FF6B35]" />
-                        </span>
-                      </Link>
-                    ))}
-                  </nav>
-                </div>
-
-                {/* Contact */}
-                <div className="space-y-4 flex flex-col items-center text-center">
-                  <h3 className="text-lg font-orbitron font-semibold text-content-primary relative group cursor-default">
-                    Связь
-                    <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-gradient-to-r from-cyber-blue to-transparent group-hover:shadow-[0_0_8px_#1E40AF] transition-all duration-300" />
-                    <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-cyber-blue group-hover:w-12 transition-all duration-500 shadow-[0_0_5px_#1E40AF]" />
-                  </h3>
-                  <div className="space-y-3.5 flex flex-col items-center">
-                    <div className="group flex items-center gap-2 cursor-pointer">
-                      <div className="w-8 h-8 bg-gray-50 rounded-xl flex items-center justify-center group-hover:bg-poison-green/10 group-hover:shadow-[0_0_8px_rgba(57,255,20,0.3)] transition-all duration-300 flex-shrink-0">
-                        <Phone className="w-4 h-4 text-poison-green group-hover:drop-shadow-[0_0_5px_#39FF14] group-hover:scale-110 transition-all duration-300" />
-                      </div>
-                      <div className="text-center">
-                        <p className="font-medium text-content-primary text-sm group-hover:text-poison-green group-hover:drop-shadow-[0_0_3px_#39FF14] transition-all duration-300">+7 (XXX) XXX-XX-XX</p>
-                        <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">Круглосуточно</p>
-                      </div>
-                    </div>
-                    
-                    <div className="group flex items-center gap-2 cursor-pointer">
-                      <div className="w-8 h-8 bg-gray-50 rounded-xl flex items-center justify-center group-hover:bg-neon-orange/10 group-hover:shadow-[0_0_8px_rgba(255,107,53,0.3)] transition-all duration-300 flex-shrink-0">
-                        <Mail className="w-4 h-4 text-neon-orange group-hover:drop-shadow-[0_0_5px_#FF6B35] group-hover:scale-110 transition-all duration-300" />
-                      </div>
-                      <div className="text-center">
-                        <p className="font-medium text-content-primary text-sm group-hover:text-neon-orange group-hover:drop-shadow-[0_0_3px_#FF6B35] transition-all duration-300">info@deztechyug.ru</p>
-                        <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">
-                          <span className="">Ответ в течение 30 мин</span>
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="group flex items-center gap-2 cursor-pointer">
-                      <div className="w-8 h-8 bg-gray-50 rounded-xl flex items-center justify-center group-hover:bg-cyber-blue/10 group-hover:shadow-[0_0_8px_rgba(30,64,175,0.3)] transition-all duration-300 flex-shrink-0">
-                        <MapPin className="w-4 h-4 text-cyber-blue group-hover:drop-shadow-[0_0_5px_#1E40AF] group-hover:scale-110 transition-all duration-300" />
-                      </div>
-                      <div className="text-center">
-                        <p className="font-medium text-content-primary text-sm group-hover:text-cyber-blue group-hover:drop-shadow-[0_0_3px_#1E40AF] transition-all duration-300">г. Краснодар</p>
-                        <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">Выезд по всему региону</p>
-                      </div>
-                    </div>
+            {/* Contact */}
+            <div className="flex flex-col items-center text-center h-full">
+              <div className="mb-6 w-full">
+                <h3 className="text-lg font-orbitron font-semibold text-content-primary relative group cursor-default w-full">
+                  <span className="relative z-10 inline-block">Связь</span>
+                  <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-0.5 bg-gradient-to-r from-cyber-blue to-transparent group-hover:shadow-[0_0_8px_#1E40AF] transition-all duration-300" />
+                  <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-cyber-blue group-hover:w-12 transition-all duration-500 shadow-[0_0_5px_#1E40AF]" />
+                </h3>
+              </div>
+              <div className="space-y-3.5 flex flex-col items-center w-full">
+                <div className="group flex items-center gap-2 cursor-pointer w-full justify-center">
+                  <div className="w-8 h-8 bg-gray-50 rounded-xl flex items-center justify-center group-hover:bg-poison-green/10 group-hover:shadow-[0_0_8px_rgba(57,255,20,0.3)] transition-all duration-300 flex-shrink-0">
+                    <Phone className="w-4 h-4 text-poison-green group-hover:drop-shadow-[0_0_5px_#39FF14] group-hover:scale-110 transition-all duration-300" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-medium text-content-primary text-sm group-hover:text-poison-green group-hover:drop-shadow-[0_0_3px_#39FF14] transition-all duration-300">+7 (XXX) XXX-XX-XX</p>
+                    <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">Круглосуточно</p>
                   </div>
                 </div>
+                
+                <div className="group flex items-center gap-2 cursor-pointer w-full justify-center">
+                  <div className="w-8 h-8 bg-gray-50 rounded-xl flex items-center justify-center group-hover:bg-neon-orange/10 group-hover:shadow-[0_0_8px_rgba(255,107,53,0.3)] transition-all duration-300 flex-shrink-0">
+                    <Mail className="w-4 h-4 text-neon-orange group-hover:drop-shadow-[0_0_5px_#FF6B35] group-hover:scale-110 transition-all duration-300" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-medium text-content-primary text-sm group-hover:text-neon-orange group-hover:drop-shadow-[0_0_3px_#FF6B35] transition-all duration-300">info@deztechyug.ru</p>
+                    <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">
+                      <span className="">Ответ в течение 30 мин</span>
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="group flex items-center gap-2 cursor-pointer w-full justify-center">
+                  <div className="w-8 h-8 bg-gray-50 rounded-xl flex items-center justify-center group-hover:bg-cyber-blue/10 group-hover:shadow-[0_0_8px_rgba(30,64,175,0.3)] transition-all duration-300 flex-shrink-0">
+                    <MapPin className="w-4 h-4 text-cyber-blue group-hover:drop-shadow-[0_0_5px_#1E40AF] group-hover:scale-110 transition-all duration-300" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-medium text-content-primary text-sm group-hover:text-cyber-blue group-hover:drop-shadow-[0_0_3px_#1E40AF] transition-all duration-300">г. Краснодар</p>
+                    <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">Выезд по всему региону</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

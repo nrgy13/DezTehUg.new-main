@@ -176,11 +176,11 @@ export function CTASection({ data }: CTASectionComponentProps) {
                   }}
                 />
                 <div className="relative z-10">
-                  <div 
-                    className="w-6 h-6 rounded-full mx-auto mb-4 cyber-glow"
-                    style={{ backgroundColor: markerColor }}
-                  />
-                  <p className="text-gray-800 font-medium text-sm">{feature}</p>
+                <div 
+                  className="w-6 h-6 rounded-full mx-auto mb-4 cyber-glow"
+                  style={{ backgroundColor: markerColor }}
+                />
+                <p className="text-gray-800 font-medium text-sm">{feature}</p>
                 </div>
               </div>
               );
@@ -214,17 +214,17 @@ export function CTASection({ data }: CTASectionComponentProps) {
                   }}
                 />
                 <div className="relative z-10">
-                  <div className="flex items-center justify-center mb-4">
-                    <UrgentIcon accentColor={data.accentColor} />
-                    <span
-                      className="text-xl font-bold cyber-glow font-orbitron"
-                      style={{ color: data.accentColor }}
-                    >
-                      СРОЧНО!
-                    </span>
-                  </div>
-                  <p className="text-gray-800 font-medium">{data.urgencyText}</p>
+                <div className="flex items-center justify-center mb-4">
+                  <UrgentIcon accentColor={data.accentColor} />
+                  <span
+                    className="text-xl font-bold cyber-glow font-orbitron"
+                    style={{ color: data.accentColor }}
+                  >
+                    СРОЧНО!
+                  </span>
                 </div>
+                <p className="text-gray-800 font-medium">{data.urgencyText}</p>
+              </div>
               </motion.div>
             </div>
           )}

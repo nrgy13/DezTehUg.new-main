@@ -220,17 +220,17 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
                     className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
                     style={{
                       background: `linear-gradient(135deg, ${markerColor}05 0%, transparent 100%)`,
-                    }}
+                  }}
                   />
                   <div className="relative z-10">
-                    <div className="mb-4">
-                      <WhyChooseUsIconDynamic
-                        iconPath={item.icon}
-                        className="mx-auto h-12 w-12"
-                        accentColor={data.accentColor}
-                      />
-                    </div>
-                    <p className="text-gray-800 font-medium tracking-tight leading-relaxed">{item.title}</p>
+                  <div className="mb-4">
+                    <WhyChooseUsIconDynamic
+                      iconPath={item.icon}
+                      className="mx-auto h-12 w-12"
+                      accentColor={data.accentColor}
+                    />
+                  </div>
+                  <p className="text-gray-800 font-medium tracking-tight leading-relaxed">{item.title}</p>
                   </div>
                 </motion.div>
                 );

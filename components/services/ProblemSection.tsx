@@ -96,51 +96,51 @@ export function ProblemSection({ data }: ProblemSectionComponentProps) {
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
                 style={{
                   background: `linear-gradient(135deg, ${markerColor}05 0%, transparent 100%)`,
-                }}
+              }}
               />
               
               {/* Content Wrapper */}
               <div className="relative z-10">
-                {/* Problem Icon */}
-                <div className="flex items-center mb-6">
-                  <div className="mr-4">
-                    <ProblemIcon
-                      src={problem.icon}
-                      alt={problem.title}
-                      color={data.accentColor}
-                    />
-                  </div>
-                  <h4
-                    className="text-xl font-bold font-orbitron tracking-tight"
-                    style={{
-                      color: data.accentColor,
-                      textShadow: `0 0 8px ${data.accentColor}80, 0 0 10px rgba(255, 107, 53, 0.5)`
-                    }}
-                  >
-                    {problem.title}
-                  </h4>
+              {/* Problem Icon */}
+              <div className="flex items-center mb-6">
+                <div className="mr-4">
+                  <ProblemIcon
+                    src={problem.icon}
+                    alt={problem.title}
+                    color={data.accentColor}
+                  />
                 </div>
-
-                {/* Problem Description */}
-                <p className="text-gray-800 mb-6 font-medium leading-relaxed tracking-tight">
-                  {problem.description}
-                </p>
-
-                {/* Impact */}
-                <div 
-                  className="border-l-4 pl-4 py-2"
-                  style={{ borderColor: markerColor }}
+                <h4
+                  className="text-xl font-bold font-orbitron tracking-tight"
+                  style={{
+                    color: data.accentColor,
+                    textShadow: `0 0 8px ${data.accentColor}80, 0 0 10px rgba(255, 107, 53, 0.5)`
+                  }}
                 >
-                  <p className="text-sm text-gray-800 mb-1 uppercase tracking-wider font-medium">
-                    Последствия:
-                  </p>
-                  <p 
-                    className="font-semibold"
-                    style={{ color: data.accentColor }}
-                  >
-                    {problem.impact}
-                  </p>
-                </div>
+                  {problem.title}
+                </h4>
+              </div>
+
+              {/* Problem Description */}
+              <p className="text-gray-800 mb-6 font-medium leading-relaxed tracking-tight">
+                {problem.description}
+              </p>
+
+              {/* Impact */}
+              <div 
+                className="border-l-4 pl-4 py-2"
+                style={{ borderColor: markerColor }}
+              >
+                <p className="text-sm text-gray-800 mb-1 uppercase tracking-wider font-medium">
+                  Последствия:
+                </p>
+                <p 
+                  className="font-semibold"
+                  style={{ color: data.accentColor }}
+                >
+                  {problem.impact}
+                </p>
+              </div>
               </div>
             </motion.div>
             );

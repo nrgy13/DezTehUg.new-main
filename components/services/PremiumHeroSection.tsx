@@ -25,6 +25,18 @@ export function PremiumHeroSection({
   accentColor
 }: PremiumHeroSectionProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  
+  // Обработчики для touch событий
+  const handleTouchStart = () => {
+    setHoveredIndex(0);
+  };
+  
+  const handleTouchEnd = () => {
+    // Не останавливаем анимацию сразу - даем доиграть до конца цикла
+    // Анимация остановится автоматически через useEffect в AnimatedIcon
+    // Используем стандартную длительность анимации (обычно 2 секунды)
+    setTimeout(() => setHoveredIndex(null), 2000);
+  };
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50">
@@ -228,6 +240,8 @@ export function PremiumHeroSection({
                 transition={{ type: "spring", stiffness: 300 }}
                 onMouseEnter={() => setHoveredIndex(0)}
                 onMouseLeave={() => setHoveredIndex(null)}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
               >
                 <div className="w-64 h-64 md:w-80 md:h-80">
                   <AnimatedIcon

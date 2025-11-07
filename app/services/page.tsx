@@ -94,6 +94,29 @@ const services = [
 export default function ServicesPage() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [whyChooseUsHoveredIndex, setWhyChooseUsHoveredIndex] = useState<number | null>(null);
+  
+  // Обработчики для touch событий
+  const handleServiceTouchStart = (index: number) => {
+    setHoveredIndex(index);
+  };
+  
+  const handleServiceTouchEnd = () => {
+    // Не останавливаем анимацию сразу - даем доиграть до конца цикла
+    // Анимация остановится автоматически через useEffect в AnimatedIcon
+    // Используем стандартную длительность анимации (обычно 2 секунды)
+    setTimeout(() => setHoveredIndex(null), 2000);
+  };
+  
+  const handleWhyChooseUsTouchStart = (index: number) => {
+    setWhyChooseUsHoveredIndex(index);
+  };
+  
+  const handleWhyChooseUsTouchEnd = () => {
+    // Не останавливаем анимацию сразу - даем доиграть до конца цикла
+    // Анимация остановится автоматически через useEffect в AnimatedIcon
+    // Используем стандартную длительность анимации (обычно 2 секунды)
+    setTimeout(() => setWhyChooseUsHoveredIndex(null), 2000);
+  };
 
   return (
     <div className="min-h-screen pt-24">
@@ -135,6 +158,8 @@ export default function ServicesPage() {
                     className={`${service.bgColor} ${service.borderColor} border-l-4 p-8 flex flex-col h-full`}
                     onMouseEnter={() => setHoveredIndex(index)}
                     onMouseLeave={() => setHoveredIndex(null)}
+                    onTouchStart={() => handleServiceTouchStart(index)}
+                    onTouchEnd={handleServiceTouchEnd}
                   >
                     <div className="flex-1 flex flex-col">
                       <div className="flex items-start space-x-4 mb-6">
@@ -309,6 +334,8 @@ export default function ServicesPage() {
                   className="text-center p-6 h-full"
                   onMouseEnter={() => setWhyChooseUsHoveredIndex(index)}
                   onMouseLeave={() => setWhyChooseUsHoveredIndex(null)}
+                  onTouchStart={() => handleWhyChooseUsTouchStart(index)}
+                  onTouchEnd={handleWhyChooseUsTouchEnd}
                 >
                   <AnimatedIcon
                     animationName={item.animationName}

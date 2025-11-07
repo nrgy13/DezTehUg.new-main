@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { ArrowRight, CheckCircle, Star, Phone, Calculator, Shield } from 'lucide-react';
 import { ServiceIcon } from '@/components/ServiceIcon';
 import { TrustFactorIcon } from '@/components/TrustFactorIcon';
@@ -65,6 +66,29 @@ const trustFactors = [
 export default function Home() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [hoveredTrustIndex, setHoveredTrustIndex] = useState<number | null>(null);
+  
+  // Обработчики для touch событий
+  const handleServiceTouchStart = (index: number) => {
+    setHoveredIndex(index);
+  };
+  
+  const handleServiceTouchEnd = () => {
+    // Не останавливаем анимацию сразу - даем доиграть до конца цикла
+    // Анимация остановится автоматически через useEffect в AnimatedIcon
+    // Используем стандартную длительность анимации (обычно 2 секунды)
+    setTimeout(() => setHoveredIndex(null), 2000);
+  };
+  
+  const handleTrustTouchStart = (index: number) => {
+    setHoveredTrustIndex(index);
+  };
+  
+  const handleTrustTouchEnd = () => {
+    // Не останавливаем анимацию сразу - даем доиграть до конца цикла
+    // Анимация остановится автоматически через useEffect в AnimatedIcon
+    // Используем стандартную длительность анимации (обычно 2 секунды)
+    setTimeout(() => setHoveredTrustIndex(null), 2000);
+  };
 
   return (
     <div className="min-h-screen">
@@ -96,7 +120,7 @@ export default function Home() {
             >
               <div className="relative rounded-2xl overflow-hidden">
                 <img
-                  src="https://images.pexels.com/photos/4167541/pexels-photo-4167541.jpeg?auto=compress&cs=tinysrgb&w=800"
+                  src="/images/hero-image.jpeg"
                   alt="Специалист DEZTECHYUG в современной защитной экипировке"
                   className="w-full h-[500px] object-cover"
                 />
@@ -248,6 +272,8 @@ export default function Home() {
                   className="h-full p-6 group cursor-default"
                   onMouseEnter={() => setHoveredIndex(index)}
                   onMouseLeave={() => setHoveredIndex(null)}
+                  onTouchStart={() => handleServiceTouchStart(index)}
+                  onTouchEnd={handleServiceTouchEnd}
                 >
                   <div className="flex flex-col h-full">
                     <div className="mb-4">
@@ -288,10 +314,13 @@ export default function Home() {
                       {service.description}
                     </p>
                     
-                    <div className="flex items-center text-sm font-medium text-poison-green group-hover:text-neon-orange transition-colors">
+                    <Link 
+                      href="/services"
+                      className="flex items-center text-sm font-medium text-poison-green group-hover:text-neon-orange transition-colors"
+                    >
                       Подробнее
                       <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                    </div>
+                    </Link>
                   </div>
                 </CyberpunkCard>
               </motion.div>
@@ -332,6 +361,8 @@ export default function Home() {
                   className="text-center p-8 group"
                   onMouseEnter={() => setHoveredTrustIndex(index)}
                   onMouseLeave={() => setHoveredTrustIndex(null)}
+                  onTouchStart={() => handleTrustTouchStart(index)}
+                  onTouchEnd={handleTrustTouchEnd}
                 >
                   <div className="mb-6">
                     {index === 0 ? (

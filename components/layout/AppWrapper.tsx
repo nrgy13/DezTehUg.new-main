@@ -6,6 +6,7 @@ import { LoadingScreen } from './LoadingScreen';
 import { Header } from './Header';
 import { Footer } from './Footer';
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 // Компонент для установки масштаба страницы
 const ViewportScale = () => {
@@ -19,6 +20,35 @@ const ViewportScale = () => {
       meta.content = 'width=device-width, initial-scale=0.9, maximum-scale=5, user-scalable=yes';
       document.getElementsByTagName('head')[0].appendChild(meta);
     }
+  }, []);
+
+  return null;
+};
+
+// Компонент для скролла наверх при изменении пути и обновлении страницы
+const ScrollToTop = () => {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    // Скроллим наверх при изменении пути
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  useEffect(() => {
+    // Скроллим наверх при обновлении страницы
+    const handleBeforeUnload = () => {
+      window.scrollTo(0, 0);
+    };
+
+    // Скроллим наверх при загрузке страницы
+    window.scrollTo(0, 0);
+
+    // Обработчик для обновления страницы
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   return null;
@@ -169,6 +199,7 @@ export const AppWrapper = ({ children }: { children: React.ReactNode }) => {
   return (
     <LoadingProvider>
       <ViewportScale />
+      <ScrollToTop />
       <MainContent>{children}</MainContent>
     </LoadingProvider>
   );

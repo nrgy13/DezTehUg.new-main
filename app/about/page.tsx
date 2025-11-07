@@ -186,7 +186,7 @@ export default function AboutPage() {
               className="relative"
             >
               <img
-                src="https://images.pexels.com/photos/4167541/pexels-photo-4167541.jpeg?auto=compress&cs=tinysrgb&w=800"
+                src="/images/hero-image.jpeg"
                 alt="Команда DEZTECHYUG за работой"
                 className="w-full h-[400px] object-cover rounded-lg"
               />
