@@ -10,7 +10,7 @@ import { CyberpunkProgressBar } from '@/components/cyberpunk/CyberpunkProgressBa
 import AnimatedIcon from '@/components/AnimatedIcon';
 
 type ObjectType = 'residential' | 'office' | 'medical' | 'food' | 'warehouse';
-type ServiceType = 'disinfection' | 'pest-control' | 'deratization' | 'water-analysis';
+type ServiceType = 'disinfection' | 'pest-control' | 'deratization' | 'water-analysis' | 'fumigation' | 'deserpentation' | 'deodorization' | 'herbicide-treatment';
 
 interface CalculatorState {
   step: number;
@@ -102,6 +102,30 @@ const services = [
     title: 'Анализ воды',
     description: 'Лабораторные исследования',
     duration: '24-48 часов',
+  },
+  {
+    id: 'fumigation' as ServiceType,
+    title: 'Фумигация',
+    description: 'Газовая обработка',
+    duration: '4-8 часов',
+  },
+  {
+    id: 'deserpentation' as ServiceType,
+    title: 'Десерпентация',
+    description: 'Уничтожение змей',
+    duration: '2-4 часа',
+  },
+  {
+    id: 'deodorization' as ServiceType,
+    title: 'Дезодорация',
+    description: 'Устранение запахов',
+    duration: '1-3 часа',
+  },
+  {
+    id: 'herbicide-treatment' as ServiceType,
+    title: 'Гербицидная обработка',
+    description: 'Уничтожение сорняков',
+    duration: '2-4 часа',
   },
 ];
 
@@ -234,6 +258,20 @@ export default function CalculatorPage() {
       return 2500;
     }
     
+    // Фиксированные цены для новых услуг
+    if (serviceId === 'fumigation') {
+      return Math.round(state.area * 300); // 300 руб/м²
+    }
+    if (serviceId === 'deserpentation') {
+      return 5000; // Фиксированная цена
+    }
+    if (serviceId === 'deodorization') {
+      return Math.round(state.area * 200); // 200 руб/м²
+    }
+    if (serviceId === 'herbicide-treatment') {
+      return Math.round((state.area / 100) * 150); // 150 руб/сотка
+    }
+    
     const pricing = pricingMatrix[state.objectType]?.[serviceId];
     if (!pricing) return 0;
     
@@ -290,7 +328,10 @@ export default function CalculatorPage() {
     
     const total = baseTotal * collectiveDiscount * packageDiscount * urgencyMultiplier;
     
-    return Math.round(total);
+    // Скидка 6% после ввода данных клиента (шаг 5)
+    const finalPrice = total * 0.94;
+    
+    return Math.round(finalPrice);
   };
 
   const nextStep = () => {

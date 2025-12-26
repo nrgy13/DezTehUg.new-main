@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Phone, Mail, MapPin, Clock, Award, Instagram, Facebook, MessageCircle, Youtube } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Award, Instagram, Send, MessageCircle } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
 export function Footer() {
@@ -69,12 +69,24 @@ export function Footer() {
                     Онлайн 24/7
                   </span>
                 </div>
-                <div className="flex items-center gap-3 group cursor-pointer">
-                  <Award className="w-4 h-4 text-neon-orange group-hover:drop-shadow-[0_0_8px_#FF6B35] transition-all duration-300" />
-                  <span className="text-xs font-medium text-content-muted group-hover:text-neon-orange group-hover:drop-shadow-[0_0_5px_#FF6B35] transition-all duration-300">
-                    15+ лицензий
-                  </span>
-                </div>
+                {/* QR Code and License */}
+                <Link 
+                  href="/license" 
+                  className="flex flex-col items-center gap-2 group cursor-pointer"
+                >
+                  <div className="w-20 h-20 bg-white border-2 border-neon-orange rounded-lg flex items-center justify-center group-hover:border-poison-green transition-all duration-300 shadow-[0_0_8px_rgba(255,107,53,0.3)] group-hover:shadow-[0_0_15px_rgba(57,255,20,0.5)]">
+                    {/* Placeholder for QR code image - will be added later */}
+                    <Award className="w-10 h-10 text-neon-orange group-hover:text-poison-green transition-colors" />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-medium text-content-muted group-hover:text-neon-orange group-hover:drop-shadow-[0_0_5px_#FF6B35] transition-all duration-300">
+                      Лицензия №23.КК.08.003.Л.000016.02.25
+                    </div>
+                    <div className="text-xs text-content-muted mt-1">
+                      от 13.02.2025 г.
+                    </div>
+                  </div>
+                </Link>
               </div>
             </div>
 
@@ -124,7 +136,7 @@ export function Footer() {
                     <Phone className="w-4 h-4 text-poison-green group-hover:drop-shadow-[0_0_5px_#39FF14] group-hover:scale-110 transition-all duration-300" />
                   </div>
                   <div className="text-center">
-                    <p className="font-medium text-content-primary text-sm group-hover:text-poison-green group-hover:drop-shadow-[0_0_3px_#39FF14] transition-all duration-300">+7 (XXX) XXX-XX-XX</p>
+                    <p className="font-medium text-content-primary text-sm group-hover:text-poison-green group-hover:drop-shadow-[0_0_3px_#39FF14] transition-all duration-300">8-988-319-43-52</p>
                     <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">Круглосуточно</p>
                   </div>
                 </div>
@@ -134,7 +146,7 @@ export function Footer() {
                     <Mail className="w-4 h-4 text-neon-orange group-hover:drop-shadow-[0_0_5px_#FF6B35] group-hover:scale-110 transition-all duration-300" />
                   </div>
                   <div className="text-center">
-                    <p className="font-medium text-content-primary text-sm group-hover:text-neon-orange group-hover:drop-shadow-[0_0_3px_#FF6B35] transition-all duration-300">info@deztechyug.ru</p>
+                    <p className="font-medium text-content-primary text-sm group-hover:text-neon-orange group-hover:drop-shadow-[0_0_3px_#FF6B35] transition-all duration-300">deztexug@yandex.ru</p>
                     <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">
                       <span className="">Ответ в течение 30 мин</span>
                     </p>
@@ -146,8 +158,8 @@ export function Footer() {
                     <MapPin className="w-4 h-4 text-cyber-blue group-hover:drop-shadow-[0_0_5px_#1E40AF] group-hover:scale-110 transition-all duration-300" />
                   </div>
                   <div className="text-center">
-                    <p className="font-medium text-content-primary text-sm group-hover:text-cyber-blue group-hover:drop-shadow-[0_0_3px_#1E40AF] transition-all duration-300">г. Краснодар</p>
-                    <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">Выезд по всему региону</p>
+                    <p className="font-medium text-content-primary text-sm group-hover:text-cyber-blue group-hover:drop-shadow-[0_0_3px_#1E40AF] transition-all duration-300">г. Новороссийск</p>
+                    <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">Выезд по всему Краснодарскому краю</p>
                   </div>
                 </div>
               </div>
@@ -174,7 +186,7 @@ export function Footer() {
             {/* Copyright */}
             <div className="flex flex-col sm:flex-row items-center gap-4 text-sm text-content-muted">
               <p>
-                © 2024 <span className="font-orbitron font-semibold text-content-primary">ДЕЗТЕХЮГ</span>
+                © <span className="font-orbitron font-semibold text-content-primary">ДЕЗТЕХЮГ</span>
               </p>
               <div className="hidden sm:block w-1 h-1 bg-content-muted rounded-full" />
               <p>Лицензия № XXXX от XX.XX.XXXX</p>
@@ -185,10 +197,9 @@ export function Footer() {
               <span className="text-sm text-content-muted font-medium">Мы в соцсетях:</span>
               <div className="flex items-center gap-3">
                 {[
-                  { icon: MessageCircle, href: '#', color: 'hover:text-blue-500' },
-                  { icon: Instagram, href: '#', color: 'hover:text-pink-500' },
-                  { icon: Facebook, href: '#', color: 'hover:text-blue-600' },
-                  { icon: Youtube, href: '#', color: 'hover:text-red-500' }
+                  { icon: MessageCircle, href: 'https://wa.me/79883194352', color: 'hover:text-green-500', label: 'WhatsApp' },
+                  { icon: Send, href: '#', color: 'hover:text-blue-400', label: 'Telegram' },
+                  { icon: Instagram, href: '#', color: 'hover:text-pink-500', label: 'Instagram' }
                 ].map((social, index) => (
                   <Link
                     key={index}

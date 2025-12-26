@@ -67,7 +67,7 @@ export function Header() {
           <div className="hidden lg:flex items-center space-x-4">
             <div className="flex items-center space-x-2 text-sm text-content-secondary">
               <Phone className="h-4 w-4 text-poison-green" />
-              <span className="font-medium">+7 (XXX) XXX-XX-XX</span>
+              <span className="font-medium">8-988-319-43-52</span>
             </div>
             <CyberpunkButton 
               href="/calculator"
@@ -122,7 +122,7 @@ export function Header() {
                 <div className="px-3 py-2">
                   <div className="flex items-center space-x-2 text-sm text-content-secondary mb-3">
                     <Phone className="h-4 w-4 text-poison-green" />
-                    <span className="font-medium">+7 (XXX) XXX-XX-XX</span>
+                    <span className="font-medium">8-988-319-43-52</span>
                   </div>
                   <CyberpunkButton 
                     href="/calculator"

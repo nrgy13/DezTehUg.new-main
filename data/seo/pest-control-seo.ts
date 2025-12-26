@@ -53,8 +53,8 @@ export const pestControlSEO: EnhancedServiceMetadata = {
         "@type": "LocalBusiness",
         "name": "ДЕЗТЕХЮГ",
         "url": "https://deztehug.ru",
-        "telephone": "+7 (861) 123-45-67",
-        "email": "info@deztehug.ru",
+        "telephone": "8-988-319-43-52",
+        "email": "deztexug@yandex.ru",
         "address": {
           "@type": "PostalAddress",
           "addressLocality": "Новороссийск",

@@ -25,7 +25,7 @@ const teamMembers = [
   {
     name: 'Дмитрий Козлов',
     role: 'Старший дезинфектор',
-    experience: '10 лет опыта',
+    experience: '5 лет опыта',
     specialization: 'Дератизация и комплексная обработка',
     icon: Target,
   },
@@ -47,7 +47,7 @@ const achievements = [
     color: 'text-poison-green',
   },
   {
-    title: '15 действующих лицензий',
+    title: 'Лицензированная деятельность',
     description: 'Полное соответствие требованиям Роспотребнадзора',
     icon: Award,
     animationName: 'patent.json',
@@ -132,7 +132,7 @@ export default function AboutPage() {
             className="text-center space-y-6"
           >
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-orbitron font-bold text-content-primary">
-              10 лет защищаем ваше{' '}
+              5 лет защищаем ваше{' '}
               <span className="text-poison-green">здоровье и бизнес</span>
             </h1>
             <p className="text-xl text-content-secondary max-w-3xl mx-auto">
@@ -211,7 +211,7 @@ export default function AboutPage() {
               <span className="text-poison-green">сами за себя</span>
             </h2>
             <p className="text-xl text-content-secondary max-w-3xl mx-auto">
-              За 10 лет работы мы накопили впечатляющую статистику успешных проектов
+              За 5 лет работы мы накопили впечатляющую статистику успешных проектов
             </p>
           </motion.div>
 

@@ -88,6 +88,82 @@ const services = [
     href: '/services/water-analysis',
     price: 'от 2500 ₽',
     duration: '24-48 часов'
+  },
+  {
+    id: 'fumigation',
+    title: 'Фумигация',
+    subtitle: 'Газовая обработка для полного уничтожения вредителей',
+    description: 'Профессиональная фумигация газообразными препаратами. Идеально для складских помещений, зернохранилищ и производственных объектов.',
+    icon: 'spray',
+    color: 'text-purple-500',
+    bgColor: 'bg-purple-500/10',
+    borderColor: 'border-purple-500/30',
+    features: [
+      'Уничтожение всех видов вредителей',
+      'Проникновение в труднодоступные места',
+      'Безопасная технология обработки',
+      'Эффективность 100%'
+    ],
+    href: '/services/fumigation',
+    price: 'от 300 ₽/м²',
+    duration: '4-8 часов'
+  },
+  {
+    id: 'deserpentation',
+    title: 'Десерпентация',
+    subtitle: 'Уничтожение змей и пресмыкающихся',
+    description: 'Безопасное и эффективное удаление змей и других пресмыкающихся с территории. Защита людей и животных от опасных рептилий.',
+    icon: 'bug',
+    color: 'text-green-500',
+    bgColor: 'bg-green-500/10',
+    borderColor: 'border-green-500/30',
+    features: [
+      'Безопасное удаление змей',
+      'Защита территории',
+      'Профилактические меры',
+      'Профессиональный подход'
+    ],
+    href: '/services/deserpentation',
+    price: 'от 5000 ₽',
+    duration: '2-4 часа'
+  },
+  {
+    id: 'deodorization',
+    title: 'Дезодорация',
+    subtitle: 'Устранение неприятных запахов',
+    description: 'Эффективное устранение любых неприятных запахов в помещениях. Используем современные технологии нейтрализации запахов.',
+    icon: 'spray',
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/30',
+    features: [
+      'Устранение любых запахов',
+      'Долговременный эффект',
+      'Безопасные препараты',
+      'Быстрый результат'
+    ],
+    href: '/services/deodorization',
+    price: 'от 200 ₽/м²',
+    duration: '1-3 часа'
+  },
+  {
+    id: 'herbicide-treatment',
+    title: 'Гербицидная обработка',
+    subtitle: 'Уничтожение сорняков и нежелательной растительности',
+    description: 'Эффективное уничтожение сорняков и нежелательной растительности на участках. Используем сертифицированные гербициды.',
+    icon: 'bug',
+    color: 'text-emerald-500',
+    bgColor: 'bg-emerald-500/10',
+    borderColor: 'border-emerald-500/30',
+    features: [
+      'Уничтожение всех видов сорняков',
+      'Долговременный эффект',
+      'Безопасные препараты',
+      'Защита культурных растений'
+    ],
+    href: '/services/herbicide-treatment',
+    price: 'от 150 ₽/сотка',
+    duration: '2-4 часа'
   }
 ];
 
@@ -280,7 +356,7 @@ export default function ServicesPage() {
               </span>
             </h2>
             <p className="text-xl text-content-secondary max-w-3xl mx-auto">
-              Комплексный подход к решению проблем, современное оборудование и опыт более 10 лет
+              Комплексный подход к решению проблем, современное оборудование и опыт более 5 лет
             </p>
           </motion.div>
 
@@ -288,7 +364,7 @@ export default function ServicesPage() {
             {[
               {
                 title: 'Лицензированные специалисты',
-                description: '15 действующих лицензий, регулярное повышение квалификации',
+                description: 'Лицензированные специалисты, регулярное повышение квалификации',
                 animationName: 'teamwork.json',
                 color: 'text-cyber-blue'
               },

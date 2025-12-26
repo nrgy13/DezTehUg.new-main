@@ -176,7 +176,7 @@ export default function Home() {
                   transition={{ duration: 0.8, delay: 0.4 }}
                   className="text-xl text-content-secondary font-medium"
                 >
-                  Элитная команда технологичных специалистов. 10 лет безупречной работы.
+                  Элитная команда технологичных специалистов. 5 лет безупречной работы.
                   Полное уничтожение угроз за 24 часа.
                 </motion.p>
                 
@@ -209,7 +209,7 @@ export default function Home() {
                 </CyberpunkButton>
                 
                 <CyberpunkButton
-                  href="/contact"
+                  href="tel:+79883194352"
                   variant="secondary"
                   size="lg"
                   className="group"
@@ -226,7 +226,7 @@ export default function Home() {
                 transition={{ duration: 0.8, delay: 1 }}
                 className="flex flex-wrap gap-6 pt-4"
               >
-                {['10 лет опыта', 'Инновационные технологии', 'Лицензированные специалисты'].map((item, index) => (
+                {['5 лет опыта', 'Инновационные технологии', 'Лицензированные специалисты'].map((item, index) => (
                   <div key={index} className="flex items-center space-x-2">
                     <CheckCircle className="h-5 w-5 text-poison-green" />
                     <span className="text-sm font-medium text-content-primary">{item}</span>
@@ -340,7 +340,7 @@ export default function Home() {
             className="text-center mb-16"
           >
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-orbitron font-bold text-content-primary mb-6">
-              10 лет защищаем ваше{' '}
+              5 лет защищаем ваше{' '}
               <span className="text-poison-green">здоровье и бизнес</span>
             </h2>
             <p className="text-xl text-content-secondary max-w-3xl mx-auto">
@@ -433,7 +433,7 @@ export default function Home() {
               </CyberpunkButton>
               
               <CyberpunkButton 
-                href="tel:+7XXXXXXXXXX"
+                href="tel:+79883194352"
                 variant="secondary"
                 size="xl"
               >

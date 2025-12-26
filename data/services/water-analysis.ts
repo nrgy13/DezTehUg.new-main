@@ -162,8 +162,8 @@ export const waterAnalysisData: ServicePageData = {
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
     ctaLink: "/calculator",
     contactInfo: {
-      phone: "+7 (495) 123-45-67",
-      email: "lab@deztehug.ru",
+      phone: "8-988-319-43-52",
+      email: "deztexug@yandex.ru",
       workingHours: "Пн-Пт: 8:00-20:00, Сб: 9:00-15:00"
     },
     guarantees: [

@@ -86,7 +86,7 @@ export interface ServicePageData {
   };
 }
 
-export type ServiceType = 'deratization' | 'pest-control' | 'disinfection' | 'water-analysis';
+export type ServiceType = 'deratization' | 'pest-control' | 'disinfection' | 'water-analysis' | 'fumigation' | 'deserpentation' | 'deodorization' | 'herbicide-treatment';
 
 export interface ServiceConfig {
   name: string;

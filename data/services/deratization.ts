@@ -162,8 +162,8 @@ export const deratizationData: ServicePageData = {
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
     ctaLink: "/calculator",
     contactInfo: {
-      phone: "+7 (495) 123-45-67",
-      email: "info@deztehug.ru",
+      phone: "8-988-319-43-52",
+      email: "deztexug@yandex.ru",
       workingHours: "Круглосуточно, без выходных"
     },
     guarantees: [
