@@ -187,7 +187,7 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                     <ContactIcon type="phone" accentColor={data.accentColor} />
                   </div>
                   <div>
-                    <p className="text-gray-800 text-sm font-medium">Телефон</p>
+                    <p className="text-gray-800 text-sm font-medium leading-relaxed">Телефон</p>
                     <p 
                       className="text-xl font-bold group-hover:cyber-glow transition-all duration-300"
                       style={{ color: data.accentColor }}
@@ -210,7 +210,7 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                     <ContactIcon type="email" accentColor={data.accentColor} />
                   </div>
                   <div>
-                    <p className="text-gray-800 text-sm font-medium">Email</p>
+                    <p className="text-gray-800 text-sm font-medium leading-relaxed">Email</p>
                     <p 
                       className="text-lg font-medium group-hover:cyber-glow transition-all duration-300"
                       style={{ color: data.accentColor }}
@@ -233,8 +233,8 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                     <ContactIcon type="hours" accentColor={data.accentColor} />
                   </div>
                   <div>
-                    <p className="text-gray-800 text-sm font-medium">Режим работы</p>
-                    <p className="text-lg font-medium text-gray-800">
+                    <p className="text-gray-800 text-sm font-medium leading-relaxed">Режим работы</p>
+                    <p className="text-lg font-medium text-gray-800 leading-relaxed">
                       {data.contactInfo.workingHours}
                     </p>
                   </div>
@@ -271,7 +271,7 @@ export function FinalCTASection({ data }: FinalCTASectionComponentProps) {
                         className="w-3 h-3 rounded-full mt-1.5 mr-3 flex-shrink-0 cyber-glow"
                         style={{ backgroundColor: data.accentColor }}
                       />
-                      <p className="text-gray-800 font-medium tracking-normal" style={{ lineHeight: '1.6', fontWeight: '500' }}>{guarantee}</p>
+                      <p className="text-gray-800 font-medium tracking-normal leading-relaxed" style={{ fontWeight: '500' }}>{guarantee}</p>
                     </motion.div>
                   ))}
                 </div>

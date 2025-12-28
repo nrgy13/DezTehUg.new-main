@@ -383,7 +383,7 @@ export default function CalculatorPage() {
                 <span className="text-poison-green">3 минуты</span>
               </h1>
             </div>
-            <p className="text-xl text-content-secondary max-w-2xl mx-auto">
+            <p className="text-xl text-content-secondary max-w-2xl mx-auto leading-relaxed">
               Честные цены без накруток. Получите детальную смету с расшифровкой каждой позиции 
               и возможностью сэкономить до 25% при комплексных заказах.
             </p>
@@ -451,7 +451,7 @@ export default function CalculatorPage() {
                           <h3 className="font-orbitron font-semibold text-content-primary mb-2">
                             {type.title}
                           </h3>
-                          <p className="text-sm text-content-muted">
+                          <p className="text-sm text-content-muted leading-relaxed">
                             {type.description}
                           </p>
                           {state.objectType === type.id && (
@@ -611,7 +611,7 @@ export default function CalculatorPage() {
                           )}
                         </div>
                         
-                        <p className="text-sm text-content-muted mb-4">
+                        <p className="text-sm text-content-muted mb-4 leading-relaxed">
                           {service.description}
                         </p>
                         
@@ -637,7 +637,7 @@ export default function CalculatorPage() {
                                       : 'Цена по запросу'
                               }
                             </div>
-                            <div className="text-content-muted">
+                            <div className="text-content-muted leading-relaxed">
                               {service.duration}
                             </div>
                           </div>
@@ -659,7 +659,7 @@ export default function CalculatorPage() {
                         <div className="text-lg font-orbitron font-bold text-neon-orange mb-2">
                           🎉 Комплексная скидка!
                         </div>
-                        <div className="text-content-secondary">
+                        <div className="text-content-secondary leading-relaxed">
                           Скидка 15% за заказ от 3 услуг
                         </div>
                       </div>
@@ -680,7 +680,7 @@ export default function CalculatorPage() {
                         <h3 className="font-orbitron font-semibold text-content-primary">
                           Срочный выезд (в течение 2 часов)
                         </h3>
-                        <p className="text-sm text-content-muted">
+                        <p className="text-sm text-content-muted leading-relaxed">
                           Доплата 50% к стоимости услуг
                         </p>
                       </div>
@@ -841,7 +841,7 @@ export default function CalculatorPage() {
                   <div className="text-4xl font-orbitron font-bold text-poison-green mb-2">
                     {calculateTotal().toLocaleString()} ₽
                   </div>
-                  <p className="text-content-secondary">
+                  <p className="text-content-secondary leading-relaxed">
                     Итоговая стоимость услуг
                   </p>
                 </div>
@@ -882,7 +882,7 @@ export default function CalculatorPage() {
                       <div key={serviceId} className="flex justify-between items-center p-4 bg-bg-secondary rounded-lg">
                         <div>
                           <div className="font-medium text-content-primary">{service.title}</div>
-                          <div className="text-sm text-content-muted">
+                          <div className="text-sm text-content-muted leading-relaxed">
                             {description}
                           </div>
                         </div>
@@ -952,7 +952,7 @@ export default function CalculatorPage() {
                   <div className="text-2xl font-orbitron font-bold text-cyber-blue">
                     {state.urgency ? '2 часа' : '24 часа'}
                   </div>
-                  <div className="text-sm text-content-muted">
+                  <div className="text-sm text-content-muted leading-relaxed">
                     {state.urgency ? 'Экстренный выезд' : 'Стандартный выезд'}
                   </div>
                 </div>

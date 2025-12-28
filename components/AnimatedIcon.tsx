@@ -9,6 +9,7 @@ interface AnimatedIconProps {
   autoplay?: boolean;
   loop?: boolean;
   isHovered?: boolean; // Внешнее управление анимацией
+  color?: string; // Цвет для фильтрации иконки
 }
 
 const AnimatedIcon: React.FC<AnimatedIconProps> = ({ 
@@ -16,7 +17,8 @@ const AnimatedIcon: React.FC<AnimatedIconProps> = ({
   className, 
   autoplay = false, 
   loop = false,
-  isHovered: externalIsHovered
+  isHovered: externalIsHovered,
+  color
 }) => {
   const [animationData, setAnimationData] = useState<any>(null);
   const [internalIsHovered, setInternalIsHovered] = useState(false);
@@ -122,6 +124,7 @@ const AnimatedIcon: React.FC<AnimatedIconProps> = ({
     return null; // Or some fallback
   }
 
+  // Цвета уже изменены напрямую в JSON файлах, поэтому CSS фильтры не нужны
   return (
     <div 
       className={className}

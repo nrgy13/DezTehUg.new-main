@@ -152,9 +152,9 @@ const services = [
     subtitle: 'Уничтожение сорняков и нежелательной растительности',
     description: 'Эффективное уничтожение сорняков и нежелательной растительности на участках. Используем сертифицированные гербициды.',
     icon: 'bug',
-    color: 'text-emerald-500',
-    bgColor: 'bg-emerald-500/10',
-    borderColor: 'border-emerald-500/30',
+    color: 'text-lime-500',
+    bgColor: 'bg-lime-500/10',
+    borderColor: 'border-lime-500/30',
     features: [
       'Уничтожение всех видов сорняков',
       'Долговременный эффект',
@@ -209,8 +209,9 @@ export default function ServicesPage() {
               Полный спектр{' '}
               <span className="text-poison-green">профессиональных услуг</span>
             </h1>
-            <p className="text-xl text-content-secondary max-w-3xl mx-auto">
-              Комплексные решения для защиты вашего здоровья, бизнеса и имущества. 
+            <p className="text-xl text-content-secondary max-w-3xl mx-auto leading-relaxed">
+              Комплексные решения для защиты вашего здоровья, бизнеса и имущества.
+              <br className="hidden sm:block" />
               Современные технологии, проверенные методы, гарантированный результат.
             </p>
           </motion.div>
@@ -264,6 +265,34 @@ export default function ServicesPage() {
                               className="h-12 w-12"
                               isHovered={hoveredIndex === index}
                             />
+                          ) : service.id === 'fumigation' ? (
+                            <AnimatedIcon 
+                              animationName="spray-bottle.json" 
+                              className="h-12 w-12"
+                              isHovered={hoveredIndex === index}
+                              color="purple-500"
+                            />
+                          ) : service.id === 'deserpentation' ? (
+                            <AnimatedIcon 
+                              animationName="snake.json" 
+                              className="h-12 w-12"
+                              isHovered={hoveredIndex === index}
+                              color="green-500"
+                            />
+                          ) : service.id === 'deodorization' ? (
+                            <AnimatedIcon 
+                              animationName="fresh.json" 
+                              className="h-12 w-12"
+                              isHovered={hoveredIndex === index}
+                              color="amber-500"
+                            />
+                          ) : service.id === 'herbicide-treatment' ? (
+                            <AnimatedIcon 
+                              animationName="grass.json" 
+                              className="h-12 w-12"
+                              isHovered={hoveredIndex === index}
+                              color="lime-500"
+                            />
                           ) : (
                             <ServiceIcon name={service.icon as 'bug' | 'spray' | 'rat' | 'beaker'} className={`h-8 w-8 ${service.color}`} />
                           )}
@@ -275,7 +304,7 @@ export default function ServicesPage() {
                           <h3 className="text-lg font-medium text-content-secondary mb-3">
                             {service.subtitle}
                           </h3>
-                          <p className="text-content-muted">
+                          <p className="text-content-muted leading-relaxed">
                             {service.description}
                           </p>
                         </div>
@@ -286,7 +315,7 @@ export default function ServicesPage() {
                         {service.features.map((feature, featureIndex) => (
                           <div key={featureIndex} className="flex items-center space-x-3">
                             <CheckCircle className={`h-5 w-5 ${service.color} flex-shrink-0`} />
-                            <span className="text-sm text-content-secondary">{feature}</span>
+                            <span className="text-sm text-content-secondary leading-relaxed">{feature}</span>
                           </div>
                         ))}
                       </div>
@@ -355,7 +384,7 @@ export default function ServicesPage() {
                 <span style={{ color: '#e20819' }}>ЮГ</span>
               </span>
             </h2>
-            <p className="text-xl text-content-secondary max-w-3xl mx-auto">
+            <p className="text-xl text-content-secondary max-w-3xl mx-auto leading-relaxed">
               Комплексный подход к решению проблем, современное оборудование и опыт более 5 лет
             </p>
           </motion.div>
@@ -421,7 +450,7 @@ export default function ServicesPage() {
                   <h3 className="text-lg font-orbitron font-semibold text-content-primary mb-3">
                     {item.title}
                   </h3>
-                  <p className="text-content-secondary text-sm">
+                  <p className="text-content-secondary text-sm leading-relaxed">
                     {item.description}
                   </p>
                 </CyberpunkCard>
@@ -444,7 +473,7 @@ export default function ServicesPage() {
             <h2 className="text-3xl md:text-4xl font-orbitron font-bold text-content-primary">
               Нужна помощь в выборе услуги?
             </h2>
-            <p className="text-xl text-content-secondary">
+            <p className="text-xl text-content-secondary leading-relaxed">
               Получите бесплатную консультацию специалиста и персональный расчет стоимости
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">

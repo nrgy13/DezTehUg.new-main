@@ -174,9 +174,12 @@ export default function Home() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.8, delay: 0.4 }}
-                  className="text-xl text-content-secondary font-medium"
+                  className="text-xl text-content-secondary font-medium leading-relaxed"
                 >
-                  Элитная команда технологичных специалистов. 5 лет безупречной работы.
+                  Элитная команда технологичных специалистов.
+                  <br />
+                  5 лет безупречной работы.
+                  <br className="hidden sm:block" />
                   Полное уничтожение угроз за 24 часа.
                 </motion.p>
                 
@@ -184,11 +187,13 @@ export default function Home() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.8, delay: 0.6 }}
-                  className="text-lg text-content-muted"
+                  className="text-lg text-content-muted leading-relaxed"
                 >
-                  Мы не просто санитарная служба. Мы — профессионалы будущего, использующие
-                  передовые технологии для защиты вашего здоровья и бизнеса. Лицензированные
-                  специалисты, инновационное оборудование, гарантированный результат.
+                  Мы не просто санитарная служба.
+                  <br />
+                  Мы — профессионалы будущего, использующие передовые технологии для защиты вашего здоровья и бизнеса.
+                  <br className="hidden sm:block" />
+                  Лицензированные специалисты, инновационное оборудование, гарантированный результат.
                 </motion.p>
               </div>
 
@@ -252,9 +257,10 @@ export default function Home() {
               Арсенал технологий против{' '}
               <span className="text-poison-green">любых угроз</span>
             </h2>
-            <p className="text-xl text-content-secondary max-w-3xl mx-auto">
-              Каждая проблема требует точного решения. Наша команда использует 4 базовые 
-              технологии для полного уничтожения биологических и химических угроз.
+            <p className="text-xl text-content-secondary max-w-3xl mx-auto leading-relaxed">
+              Каждая проблема требует точного решения.
+              <br />
+              Наша команда использует 4 базовые технологии для полного уничтожения биологических и химических угроз.
             </p>
           </motion.div>
 
@@ -310,7 +316,7 @@ export default function Home() {
                       {service.title}
                     </h3>
                     
-                    <p className="text-content-secondary flex-1 mb-4">
+                    <p className="text-content-secondary flex-1 mb-4 leading-relaxed">
                       {service.description}
                     </p>
                     
@@ -343,8 +349,10 @@ export default function Home() {
               5 лет защищаем ваше{' '}
               <span className="text-poison-green">здоровье и бизнес</span>
             </h2>
-            <p className="text-xl text-content-secondary max-w-3xl mx-auto">
-              Нас выбирают за результат, которому можно доверять. Каждый проект — это наша репутация.
+            <p className="text-xl text-content-secondary max-w-3xl mx-auto leading-relaxed">
+              Нас выбирают за результат, которому можно доверять.
+              <br />
+              Каждый проект — это наша репутация.
             </p>
           </motion.div>
 
@@ -417,8 +425,10 @@ export default function Home() {
               <span className="text-poison-green">прямо сейчас</span>?
             </h2>
             
-            <p className="text-xl text-content-secondary">
-              Получите бесплатную консультацию и точный расчет стоимости за 3 минуты
+            <p className="text-xl text-content-secondary leading-relaxed">
+              Получите бесплатную консультацию и точный расчет стоимости
+              <br />
+              за 3 минуты
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">

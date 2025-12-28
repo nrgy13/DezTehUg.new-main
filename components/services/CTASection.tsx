@@ -180,7 +180,7 @@ export function CTASection({ data }: CTASectionComponentProps) {
                   className="w-6 h-6 rounded-full mx-auto mb-4 cyber-glow"
                   style={{ backgroundColor: markerColor }}
                 />
-                <p className="text-gray-800 font-medium text-sm">{feature}</p>
+                <p className="text-gray-800 font-medium text-sm leading-relaxed">{feature}</p>
                 </div>
               </div>
               );
@@ -223,7 +223,7 @@ export function CTASection({ data }: CTASectionComponentProps) {
                     СРОЧНО!
                   </span>
                 </div>
-                <p className="text-gray-800 font-medium">{data.urgencyText}</p>
+                <p className="text-gray-800 font-medium leading-relaxed">{data.urgencyText}</p>
               </div>
               </motion.div>
             </div>

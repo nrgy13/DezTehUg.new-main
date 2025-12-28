@@ -139,7 +139,7 @@ export function PremiumHeroSection({
 
               {/* Subtitle */}
               <motion.h2
-                className="text-2xl md:text-3xl mb-6 font-medium text-gray-800 font-orbitron"
+                className="text-2xl md:text-3xl mb-6 font-medium text-gray-800 font-orbitron leading-relaxed"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
@@ -189,7 +189,7 @@ export function PremiumHeroSection({
                         delay: index * 0.2,
                       }}
                     />
-                    <span className="text-gray-800 font-medium">{feature}</span>
+                    <span className="text-gray-800 font-medium leading-relaxed">{feature}</span>
                   </motion.div>
                 ))}
               </motion.div>

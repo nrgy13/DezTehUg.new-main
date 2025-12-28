@@ -122,27 +122,6 @@ export default function AboutPage() {
 
   return (
     <div className="min-h-screen pt-24">
-      {/* Hero Section */}
-      <section className="py-20 bg-gradient-to-br from-bg-primary via-bg-secondary to-bg-primary">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center space-y-6"
-          >
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-orbitron font-bold text-content-primary">
-              5 лет защищаем ваше{' '}
-              <span className="text-poison-green">здоровье и бизнес</span>
-            </h1>
-            <p className="text-xl text-content-secondary max-w-3xl mx-auto">
-              Мы превратили обычную санитарную службу в команду технологичных специалистов, 
-              которые решают задачи, недоступные другим.
-            </p>
-          </motion.div>
-        </div>
-      </section>
-
       {/* Mission Section */}
       <section className="py-20 bg-bg-secondary">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -152,29 +131,92 @@ export default function AboutPage() {
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
               viewport={{ once: true }}
-              className="space-y-6"
+              className="space-y-8"
             >
-              <h2 className="text-3xl md:text-4xl font-orbitron font-bold text-content-primary">
-                Технологии будущего для{' '}
-                <span className="text-poison-green">здоровья сегодня</span>
-              </h2>
-              <p className="text-lg text-content-secondary">
-                Мы создаем мир, где биологические угрозы не могут навредить людям и бизнесу. 
-                Каждый день наша команда использует передовые технологии для защиты того, 
-                что важно для вас — здоровья семьи, успеха компании, чистоты производства.
-              </p>
-              <p className="text-content-muted">
-                Наша миссия — не просто уничтожить вредителей, а создать долгосрочную защиту 
-                с использованием инновационных методов и экологически безопасных препаратов.
-              </p>
+              {/* Enhanced Title */}
+              <div className="space-y-4">
+                <h2 className="text-4xl md:text-5xl lg:text-6xl font-orbitron font-bold text-content-primary leading-tight whitespace-nowrap">
+                  <span className="relative inline-block">
+                    <span className="text-poison-green">Эксперт по санитарной</span>
+                    <span className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-poison-green via-neon-orange to-poison-green opacity-50 rounded-full" />
+                  </span>{' '}
+                  <span className="text-neon-orange">безопасности</span>
+                </h2>
+              </div>
+
+              {/* Enhanced Text Content */}
+              <div className="space-y-6">
+                <div className="relative pl-6 border-l-4 border-poison-green/30">
+                  <p className="text-xl text-content-primary leading-relaxed font-medium">
+                    <span className="text-poison-green font-bold">ДезТех-Юг</span> — эксперт по санитарной безопасности с 5-летним опытом.
+                  </p>
+                  <p className="text-lg text-content-secondary leading-relaxed mt-3">
+                    Мы выполняем полный цикл работ по дезинфекции, дератизации, дезинсекции и анализу воды для объектов любой сложности.
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-r from-neon-orange/5 to-poison-green/5 rounded-xl p-6 border border-neon-orange/20">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-6 h-6 rounded-full bg-neon-orange/20 flex items-center justify-center flex-shrink-0 mt-1">
+                      <span className="text-neon-orange font-bold text-sm">→</span>
+                    </div>
+                    <div>
+                      <p className="text-lg text-content-primary font-semibold mb-2">
+                        От морских судов до суши
+                      </p>
+                      <p className="text-content-secondary leading-relaxed">
+                        Рестораны, квартиры, складские комплексы, бизнес-центры и нефтеперерабатывающие заводы.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-5 bg-bg-secondary rounded-lg border border-gray-200 hover:border-poison-green/50 transition-all">
+                    <div className="flex items-center mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-poison-green/10 flex items-center justify-center mr-3">
+                        <Shield className="w-4 h-4 text-poison-green" />
+                      </div>
+                      <h3 className="font-semibold text-content-primary">Высокие стандарты</h3>
+                    </div>
+                    <p className="text-content-secondary leading-relaxed text-sm">
+                      Наши команды долгое время обслуживали флот и работали со всеми портами юга России, что сформировало высокие стандарты оперативности и надежности.
+                    </p>
+                  </div>
+
+                  <div className="p-5 bg-bg-secondary rounded-lg border border-gray-200 hover:border-neon-orange/50 transition-all">
+                    <div className="flex items-center mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-neon-orange/10 flex items-center justify-center mr-3">
+                        <Award className="w-4 h-4 text-neon-orange" />
+                      </div>
+                      <h3 className="font-semibold text-content-primary">Лицензированная работа</h3>
+                    </div>
+                    <p className="text-content-secondary leading-relaxed text-sm">
+                      Все работы проводим на основании действующих лицензий и регламентов, с использованием профессиональных препаратов и оборудования.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-poison-green/10 via-transparent to-neon-orange/10 rounded-xl p-6 border-2 border-dashed border-poison-green/20">
+                  <p className="text-lg text-content-primary leading-relaxed font-medium text-center">
+                    Ценим <span className="text-poison-green font-bold">аккуратность</span>,{' '}
+                    <span className="text-neon-orange font-bold">конфиденциальность</span> и{' '}
+                    <span className="text-poison-green font-bold">предсказуемый результат</span>
+                  </p>
+                  <p className="text-content-secondary text-center mt-3 leading-relaxed">
+                    Чтобы вы могли спокойно работать в чистой и безопасной среде.
+                  </p>
+                </div>
+              </div>
+
               <CyberpunkButton 
                 href="/services"
                 variant="primary"
                 size="lg"
-                className="group"
+                className="group mt-6"
               >
                 Наши технологии
-                <Zap className="h-5 w-5 ml-2 " />
+                <Zap className="h-5 w-5 ml-2 group-hover:rotate-12 transition-transform" />
               </CyberpunkButton>
             </motion.div>
 
@@ -188,7 +230,7 @@ export default function AboutPage() {
               <img
                 src="/images/hero-image.jpeg"
                 alt="Команда DEZTECHYUG за работой"
-                className="w-full h-[400px] object-cover rounded-lg"
+                className="w-full h-[500px] lg:h-[600px] object-cover rounded-lg shadow-2xl"
               />
               <div className="absolute inset-0 bg-gradient-to-tr from-poison-green/20 via-transparent to-neon-orange/20 rounded-lg" />
             </motion.div>
@@ -210,7 +252,7 @@ export default function AboutPage() {
               Наши достижения говорят{' '}
               <span className="text-poison-green">сами за себя</span>
             </h2>
-            <p className="text-xl text-content-secondary max-w-3xl mx-auto">
+            <p className="text-xl text-content-secondary max-w-3xl mx-auto leading-relaxed">
               За 5 лет работы мы накопили впечатляющую статистику успешных проектов
             </p>
           </motion.div>
@@ -263,7 +305,7 @@ export default function AboutPage() {
               Команда{' '}
               <span className="text-poison-green">профессионалов</span>
             </h2>
-            <p className="text-xl text-content-secondary max-w-3xl mx-auto">
+            <p className="text-xl text-content-secondary max-w-3xl mx-auto leading-relaxed">
               Каждый специалист нашей команды — эксперт в своей области с многолетним опытом
             </p>
           </motion.div>
@@ -311,7 +353,7 @@ export default function AboutPage() {
               Наши{' '}
               <span className="text-poison-green">принципы работы</span>
             </h2>
-            <p className="text-xl text-content-secondary max-w-3xl mx-auto">
+            <p className="text-xl text-content-secondary max-w-3xl mx-auto leading-relaxed">
               Четыре основных принципа, которые определяют качество наших услуг
             </p>
           </motion.div>
@@ -344,7 +386,7 @@ export default function AboutPage() {
                       <h3 className="text-xl font-orbitron font-semibold text-content-primary mb-3">
                         {value.title}
                       </h3>
-                      <p className="text-content-secondary">
+                      <p className="text-content-secondary leading-relaxed">
                         {value.description}
                       </p>
                     </div>
@@ -370,7 +412,7 @@ export default function AboutPage() {
               Готовы стать частью нашей{' '}
               <span className="text-poison-green">истории успеха</span>?
             </h2>
-            <p className="text-xl text-content-secondary">
+            <p className="text-xl text-content-secondary leading-relaxed">
               Присоединяйтесь к тысячам довольных клиентов, которые доверили нам защиту своего здоровья и бизнеса
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">

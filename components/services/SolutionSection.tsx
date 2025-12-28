@@ -135,7 +135,7 @@ export function SolutionSection({ data }: SolutionSectionComponentProps) {
                   {step.title}
                 </h4>
                 
-                <p className="text-gray-800 text-lg mb-6 font-medium tracking-normal leading-snug">
+                <p className="text-gray-800 text-lg mb-6 font-medium tracking-normal leading-relaxed">
                   {step.description}
                 </p>
 
