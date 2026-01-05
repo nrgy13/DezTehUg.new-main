@@ -44,6 +44,11 @@
   to = "/about.html"
   status = 200
 
+[[redirects]]
+  from = "/booking"
+  to = "/booking.html"
+  status = 200
+
 # Обработка 404 ошибок
 [[redirects]]
   from = "/*"

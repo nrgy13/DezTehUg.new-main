@@ -129,12 +129,3 @@ export const fumigationData: ServicePageData = {
     ]
   }
 };
-
-
-
-
-
-<<<<<<< Current (Your changes)
-
-=======
->>>>>>> Incoming (Background Agent changes)

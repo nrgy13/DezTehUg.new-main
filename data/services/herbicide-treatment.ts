@@ -129,12 +129,3 @@ export const herbicideTreatmentData: ServicePageData = {
     ]
   }
 };
-
-
-
-
-
-<<<<<<< Current (Your changes)
-
-=======
->>>>>>> Incoming (Background Agent changes)

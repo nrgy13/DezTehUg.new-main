@@ -68,14 +68,3 @@ export default function FumigationPage() {
   );
 }
 
-
-
-
-
-<<<<<<< Current (Your changes)
-
-=======
->>>>>>> Incoming (Background Agent changes)
-
-
-

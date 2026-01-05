@@ -129,12 +129,3 @@ export const deserpentationData: ServicePageData = {
     ]
   }
 };
-
-
-
-
-
-<<<<<<< Current (Your changes)
-
-=======
->>>>>>> Incoming (Background Agent changes)

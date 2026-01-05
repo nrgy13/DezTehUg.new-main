@@ -113,11 +113,7 @@ const services = [
     id: 'deserpentation' as ServiceType,
     title: 'Десерпентация',
     description: 'Уничтожение змей',
-<<<<<<< Current (Your changes)
     duration: '1 час - 2,5 часа',
-=======
-    duration: '1-2,5 часа',
->>>>>>> Incoming (Background Agent changes)
   },
   {
     id: 'deodorization' as ServiceType,
