@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, ArrowLeft, Check, Building, Home, Factory, Warehouse, Building2, Send } from 'lucide-react';
@@ -140,7 +140,7 @@ const serviceIdToSlug: Record<ServiceType, string> = {
   'herbicide-treatment': 'herbicide-treatment',
 };
 
-export default function BookingPage() {
+function BookingContent() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<BookingState>({
     step: 1,
@@ -683,6 +683,23 @@ export default function BookingPage() {
         </AnimatePresence>
       </div>
     </div>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen pt-24 bg-bg-secondary flex items-center justify-center">
+        <CyberpunkCard className="p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-poison-green mx-auto mb-4"></div>
+            <p className="text-content-secondary">Загрузка...</p>
+          </div>
+        </CyberpunkCard>
+      </div>
+    }>
+      <BookingContent />
+    </Suspense>
   );
 }
 
