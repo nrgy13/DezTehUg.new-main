@@ -4,6 +4,7 @@ import { ProblemSection } from '@/components/services/ProblemSection';
 import { SolutionSection } from '@/components/services/SolutionSection';
 import { CTASection } from '@/components/services/CTASection';
 import { FinalCTASection } from '@/components/services/FinalCTASection';
+import { ServiceOrderSection } from '@/components/services/ServiceOrderSection';
 import { fumigationData } from '@/data/services/fumigation';
 
 export const metadata: Metadata = {
@@ -58,10 +59,23 @@ export default function FumigationPage() {
       <CTASection data={fumigationData.cta} />
 
       <FinalCTASection data={fumigationData.finalCta} />
+
+      <ServiceOrderSection 
+        serviceName="Фумигация" 
+        accentColor={fumigationData.hero.accentColor}
+      />
     </div>
   );
 }
 
+
+
+
+
+<<<<<<< Current (Your changes)
+
+=======
+>>>>>>> Incoming (Background Agent changes)
 
 
 

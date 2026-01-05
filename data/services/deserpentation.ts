@@ -11,7 +11,7 @@ export const deserpentationData: ServicePageData = {
       "Профилактические меры"
     ],
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#10B981"
   },
 
@@ -94,7 +94,7 @@ export const deserpentationData: ServicePageData = {
       "Полный пакет документов"
     ],
     ctaText: "ПОЛУЧИТЬ РАСЧЕТ СТОИМОСТИ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#10B981"
   },
 
@@ -103,7 +103,7 @@ export const deserpentationData: ServicePageData = {
     subtitle: "Получите консультацию по десерпентации",
     description: "Наши специалисты помогут безопасно удалить змей с вашей территории.",
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     contactInfo: {
       phone: "8-988-319-43-52",
       email: "deztexug@yandex.ru",
@@ -133,3 +133,8 @@ export const deserpentationData: ServicePageData = {
 
 
 
+
+<<<<<<< Current (Your changes)
+
+=======
+>>>>>>> Incoming (Background Agent changes)

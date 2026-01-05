@@ -11,7 +11,7 @@ export const pestControlData: ServicePageData = {
       "Гарантия отсутствия насекомых до 1 года"
     ],
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#39FF14"
   },
 
@@ -132,7 +132,7 @@ export const pestControlData: ServicePageData = {
       "Безопасные технологии"
     ],
     ctaText: "ПОЛУЧИТЬ РАСЧЕТ СТОИМОСТИ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     urgencyText: "Специальное предложение: при заказе в течение 24 часов - скидка 20%!",
     accentColor: "#39FF14"
   },
@@ -142,7 +142,7 @@ export const pestControlData: ServicePageData = {
     subtitle: "Наши эксперты помогут решить любую проблему с насекомыми",
     description: "Свяжитесь с нашими специалистами для получения бесплатной консультации и точного расчета стоимости дезинсекции вашего объекта.",
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     contactInfo: {
       phone: "8-988-319-43-52",
       email: "deztexug@yandex.ru",

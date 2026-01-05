@@ -11,7 +11,7 @@ export const deodorizationData: ServicePageData = {
       "Безопасные препараты"
     ],
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#F59E0B"
   },
 
@@ -94,7 +94,7 @@ export const deodorizationData: ServicePageData = {
       "Гарантия результата"
     ],
     ctaText: "ПОЛУЧИТЬ РАСЧЕТ СТОИМОСТИ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#F59E0B"
   },
 
@@ -103,7 +103,7 @@ export const deodorizationData: ServicePageData = {
     subtitle: "Получите консультацию по дезодорации",
     description: "Наши специалисты помогут устранить любые неприятные запахи.",
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     contactInfo: {
       phone: "8-988-319-43-52",
       email: "deztexug@yandex.ru",
@@ -133,3 +133,8 @@ export const deodorizationData: ServicePageData = {
 
 
 
+
+<<<<<<< Current (Your changes)
+
+=======
+>>>>>>> Incoming (Background Agent changes)

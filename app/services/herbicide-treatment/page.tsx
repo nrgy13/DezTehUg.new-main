@@ -4,6 +4,7 @@ import { ProblemSection } from '@/components/services/ProblemSection';
 import { SolutionSection } from '@/components/services/SolutionSection';
 import { CTASection } from '@/components/services/CTASection';
 import { FinalCTASection } from '@/components/services/FinalCTASection';
+import { ServiceOrderSection } from '@/components/services/ServiceOrderSection';
 import { herbicideTreatmentData } from '@/data/services/herbicide-treatment';
 
 export const metadata: Metadata = {
@@ -58,10 +59,23 @@ export default function HerbicideTreatmentPage() {
       <CTASection data={herbicideTreatmentData.cta} />
 
       <FinalCTASection data={herbicideTreatmentData.finalCta} />
+
+      <ServiceOrderSection 
+        serviceName="Гербицидная обработка" 
+        accentColor={herbicideTreatmentData.hero.accentColor}
+      />
     </div>
   );
 }
 
+
+
+
+
+<<<<<<< Current (Your changes)
+
+=======
+>>>>>>> Incoming (Background Agent changes)
 
 
 

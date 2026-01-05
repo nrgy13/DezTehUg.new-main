@@ -11,7 +11,7 @@ export const herbicideTreatmentData: ServicePageData = {
       "Безопасные препараты"
     ],
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#22C55E"
   },
 
@@ -94,7 +94,7 @@ export const herbicideTreatmentData: ServicePageData = {
       "Гарантия результата"
     ],
     ctaText: "ПОЛУЧИТЬ РАСЧЕТ СТОИМОСТИ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#22C55E"
   },
 
@@ -103,7 +103,7 @@ export const herbicideTreatmentData: ServicePageData = {
     subtitle: "Получите консультацию по гербицидной обработке",
     description: "Наши специалисты помогут эффективно уничтожить сорняки на вашем участке.",
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     contactInfo: {
       phone: "8-988-319-43-52",
       email: "deztexug@yandex.ru",
@@ -133,3 +133,8 @@ export const herbicideTreatmentData: ServicePageData = {
 
 
 
+
+<<<<<<< Current (Your changes)
+
+=======
+>>>>>>> Incoming (Background Agent changes)

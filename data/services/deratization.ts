@@ -11,7 +11,7 @@ export const deratizationData: ServicePageData = {
       "Выезд специалиста в день обращения"
     ],
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#1E40AF"
   },
 
@@ -150,7 +150,7 @@ export const deratizationData: ServicePageData = {
       "Доступные цены"
     ],
     ctaText: "ПОЛУЧИТЬ РАСЧЕТ СТОИМОСТИ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     urgencyText: "При заказе сегодня - скидка 15% на все виды работ!",
     accentColor: "#1E40AF"
   },
@@ -160,7 +160,7 @@ export const deratizationData: ServicePageData = {
     subtitle: "Получите бесплатную консультацию специалиста",
     description: "Наши эксперты помогут выбрать оптимальную программу дератизации для вашего объекта и рассчитают точную стоимость услуг.",
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     contactInfo: {
       phone: "8-988-319-43-52",
       email: "deztexug@yandex.ru",

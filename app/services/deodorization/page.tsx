@@ -4,6 +4,7 @@ import { ProblemSection } from '@/components/services/ProblemSection';
 import { SolutionSection } from '@/components/services/SolutionSection';
 import { CTASection } from '@/components/services/CTASection';
 import { FinalCTASection } from '@/components/services/FinalCTASection';
+import { ServiceOrderSection } from '@/components/services/ServiceOrderSection';
 import { deodorizationData } from '@/data/services/deodorization';
 
 export const metadata: Metadata = {
@@ -58,10 +59,23 @@ export default function DeodorizationPage() {
       <CTASection data={deodorizationData.cta} />
 
       <FinalCTASection data={deodorizationData.finalCta} />
+
+      <ServiceOrderSection 
+        serviceName="Дезодорация" 
+        accentColor={deodorizationData.hero.accentColor}
+      />
     </div>
   );
 }
 
+
+
+
+
+<<<<<<< Current (Your changes)
+
+=======
+>>>>>>> Incoming (Background Agent changes)
 
 
 

@@ -4,6 +4,7 @@ import { ProblemSection } from '@/components/services/ProblemSection';
 import { SolutionSection } from '@/components/services/SolutionSection';
 import { CTASection } from '@/components/services/CTASection';
 import { FinalCTASection } from '@/components/services/FinalCTASection';
+import { ServiceOrderSection } from '@/components/services/ServiceOrderSection';
 import { deserpentationData } from '@/data/services/deserpentation';
 
 export const metadata: Metadata = {
@@ -58,10 +59,23 @@ export default function DeserpentationPage() {
       <CTASection data={deserpentationData.cta} />
 
       <FinalCTASection data={deserpentationData.finalCta} />
+
+      <ServiceOrderSection 
+        serviceName="Десерпентация" 
+        accentColor={deserpentationData.hero.accentColor}
+      />
     </div>
   );
 }
 
+
+
+
+
+<<<<<<< Current (Your changes)
+
+=======
+>>>>>>> Incoming (Background Agent changes)
 
 
 

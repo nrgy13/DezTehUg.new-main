@@ -11,7 +11,7 @@ export const waterAnalysisData: ServicePageData = {
       "Официальные протоколы исследований"
     ],
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#0EA5E9"
   },
 
@@ -150,7 +150,7 @@ export const waterAnalysisData: ServicePageData = {
       "Экспертные рекомендации"
     ],
     ctaText: "ПОЛУЧИТЬ РАСЧЕТ СТОИМОСТИ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     urgencyText: "Специальное предложение: комплексный анализ воды со скидкой 30% при заказе до конца месяца!",
     accentColor: "#0EA5E9"
   },
@@ -160,7 +160,7 @@ export const waterAnalysisData: ServicePageData = {
     subtitle: "Получите консультацию по анализу воды",
     description: "Наши эксперты помогут выбрать необходимый перечень исследований и расскажут о всех особенностях анализа воды для вашего объекта.",
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     contactInfo: {
       phone: "8-988-319-43-52",
       email: "deztexug@yandex.ru",

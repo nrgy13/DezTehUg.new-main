@@ -11,7 +11,7 @@ export const fumigationData: ServicePageData = {
       "Безопасная технология обработки"
     ],
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#8B5CF6"
   },
 
@@ -94,7 +94,7 @@ export const fumigationData: ServicePageData = {
       "Полный пакет документов"
     ],
     ctaText: "ПОЛУЧИТЬ РАСЧЕТ СТОИМОСТИ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#8B5CF6"
   },
 
@@ -103,7 +103,7 @@ export const fumigationData: ServicePageData = {
     subtitle: "Получите консультацию по фумигации",
     description: "Наши специалисты помогут выбрать оптимальный метод фумигации для вашего объекта.",
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     contactInfo: {
       phone: "8-988-319-43-52",
       email: "deztexug@yandex.ru",
@@ -133,3 +133,8 @@ export const fumigationData: ServicePageData = {
 
 
 
+
+<<<<<<< Current (Your changes)
+
+=======
+>>>>>>> Incoming (Background Agent changes)

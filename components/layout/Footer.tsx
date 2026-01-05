@@ -1,8 +1,13 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import { Phone, Mail, MapPin, Clock, Award, Send, MessageCircle, MessageSquare } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
+import { PrivacyModal } from '@/components/PrivacyModal';
 
 export function Footer() {
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   return (
     <footer className="relative bg-white overflow-hidden">
       {/* Enhanced Cyber Grid Background Pattern */}
@@ -102,9 +107,8 @@ export function Footer() {
               <nav className="space-y-2.5 flex flex-col items-center w-full">
                 {[
                   { href: '/about', label: 'О нас' },
-                  { href: '/calculator', label: 'Калькулятор' },
-                  { href: '/contact', label: 'Контакты' },
-                  { href: '/privacy', label: 'Конфиденциальность' }
+                  { href: '/booking', label: 'Оформить заявку' },
+                  { href: '/contact', label: 'Контакты' }
                 ].map((item) => (
                   <Link
                     key={item.href}
@@ -118,6 +122,16 @@ export function Footer() {
                     </span>
                   </Link>
                 ))}
+                <button
+                  onClick={() => setIsPrivacyModalOpen(true)}
+                  className="group flex items-center justify-center text-content-muted hover:text-neon-orange transition-all duration-300 relative"
+                >
+                  <div className="w-1 h-1 bg-current rounded-full mr-3 opacity-0 group-hover:opacity-100 group-hover:shadow-[0_0_5px_#FF6B35] transition-all duration-300" />
+                  <span className="group-hover:translate-x-1 group-hover:drop-shadow-[0_0_3px_#FF6B35] transition-all duration-300 relative">
+                    Конфиденциальность
+                    <div className="absolute bottom-0 left-0 w-0 h-px bg-neon-orange group-hover:w-full transition-all duration-300 shadow-[0_0_3px_#FF6B35]" />
+                  </span>
+                </button>
               </nav>
             </div>
 
@@ -197,21 +211,50 @@ export function Footer() {
                 {[
                   { icon: MessageCircle, href: 'https://wa.me/79883194352', color: 'hover:text-green-500', label: 'WhatsApp' },
                   { icon: Send, href: 'https://t.me/deztexugrf', color: 'hover:text-blue-400', label: 'Telegram' },
-                  { icon: MessageSquare, href: 'tel:+79883194352', color: 'hover:text-purple-500', label: 'MAX' }
-                ].map((social, index) => (
-                  <Link
-                    key={index}
-                    href={social.href}
-                    className={`w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-content-muted transition-all duration-300 hover:scale-110 hover:bg-white hover:shadow-lg ${social.color}`}
-                  >
-                    <social.icon className="w-4 h-4" />
-                  </Link>
-                ))}
+                  { 
+                    icon: MessageSquare, 
+                    href: 'max://chat?phone=79883194352', 
+                    color: 'hover:text-purple-500', 
+                    label: 'MAX'
+                  }
+                ].map((social, index) => {
+                  const isMax = social.label === 'MAX';
+                  return (
+                    <a
+                      key={index}
+                      href={social.href}
+                      onClick={isMax ? (e) => {
+                        // Попытка открыть MAX мессенджер
+                        const maxLink = 'max://chat?phone=79883194352';
+                        const telLink = 'tel:+79883194352';
+                        
+                        // Пытаемся открыть MAX
+                        window.location.href = maxLink;
+                        
+                        // Если через 500мс не открылось, открываем tel:
+                        setTimeout(() => {
+                          window.location.href = telLink;
+                        }, 500);
+                        
+                        e.preventDefault();
+                      } : undefined}
+                      className={`w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-content-muted transition-all duration-300 hover:scale-110 hover:bg-white hover:shadow-lg ${social.color}`}
+                    >
+                      <social.icon className="w-4 h-4" />
+                    </a>
+                  );
+                })}
               </div>
             </div>
           </div>
         </div>
       </div>
+      
+      {/* Privacy Modal */}
+      <PrivacyModal 
+        isOpen={isPrivacyModalOpen} 
+        onClose={() => setIsPrivacyModalOpen(false)} 
+      />
     </footer>
   );
 }

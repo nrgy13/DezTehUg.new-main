@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 const navigation = [
   { name: 'Главная', href: '/' },
   { name: 'Услуги', href: '/services' },
-  { name: 'Калькулятор', href: '/calculator' },
+  { name: 'Оформить заявку', href: '/booking' },
   { name: 'О компании', href: '/about' },
   { name: 'Контакты', href: '/contact' },
 ];
@@ -70,13 +70,13 @@ export function Header() {
               <span className="font-medium">8-988-319-43-52</span>
             </div>
             <CyberpunkButton 
-              href="/calculator"
+              href="/booking"
               variant="primary"
               size="sm"
               className="pulse-cta"
             >
               <Calculator className="h-4 w-4 mr-2" />
-              Рассчитать стоимость
+              Оформить заявку
             </CyberpunkButton>
           </div>
 
@@ -125,13 +125,13 @@ export function Header() {
                     <span className="font-medium">8-988-319-43-52</span>
                   </div>
                   <CyberpunkButton 
-                    href="/calculator"
+                    href="/booking"
                     variant="primary"
                     size="sm"
                     className="w-full"
                   >
                     <Calculator className="h-4 w-4 mr-2" />
-                    Рассчитать стоимость
+                    Оформить заявку
                   </CyberpunkButton>
                 </div>
               </div>

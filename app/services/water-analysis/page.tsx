@@ -4,6 +4,7 @@ import { ProblemSection } from '@/components/services/ProblemSection';
 import { SolutionSection } from '@/components/services/SolutionSection';
 import { CTASection } from '@/components/services/CTASection';
 import { FinalCTASection } from '@/components/services/FinalCTASection';
+import { ServiceOrderSection } from '@/components/services/ServiceOrderSection';
 import { waterAnalysisData } from '@/data/services/water-analysis';
 
 export const metadata: Metadata = {
@@ -72,7 +73,7 @@ export default function WaterAnalysisPage() {
               "availability": "https://schema.org/InStock",
               "priceRange": "$$",
               "validFrom": new Date().toISOString(),
-              "url": "/calculator"
+              "url": "/booking"
             }
           })
         }}
@@ -92,6 +93,12 @@ export default function WaterAnalysisPage() {
 
       {/* Final CTA Section */}
       <FinalCTASection data={waterAnalysisData.finalCta} />
+
+      {/* Order Section */}
+      <ServiceOrderSection 
+        serviceName="Анализ воды" 
+        accentColor={waterAnalysisData.hero.accentColor}
+      />
     </div>
   );
 }

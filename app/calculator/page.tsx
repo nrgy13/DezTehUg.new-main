@@ -83,19 +83,19 @@ const services = [
     id: 'disinfection' as ServiceType,
     title: 'Дезинфекция',
     description: 'Уничтожение вирусов и бактерий',
-    duration: '1-3 часа',
+    duration: '30 минут - 1,5 часа',
   },
   {
     id: 'pest-control' as ServiceType,
     title: 'Дезинсекция',
     description: 'Уничтожение насекомых',
-    duration: '2-4 часа',
+    duration: '30 минут - 1,5 часа',
   },
   {
     id: 'deratization' as ServiceType,
     title: 'Дератизация',
     description: 'Уничтожение грызунов',
-    duration: '2-5 часов',
+    duration: '30 минут - 1,5 часа',
   },
   {
     id: 'water-analysis' as ServiceType,
@@ -107,19 +107,23 @@ const services = [
     id: 'fumigation' as ServiceType,
     title: 'Фумигация',
     description: 'Газовая обработка',
-    duration: '4-8 часов',
+    duration: '30 минут - 1,5 часа',
   },
   {
     id: 'deserpentation' as ServiceType,
     title: 'Десерпентация',
     description: 'Уничтожение змей',
-    duration: '2-4 часа',
+<<<<<<< Current (Your changes)
+    duration: '1 час - 2,5 часа',
+=======
+    duration: '1-2,5 часа',
+>>>>>>> Incoming (Background Agent changes)
   },
   {
     id: 'deodorization' as ServiceType,
     title: 'Дезодорация',
     description: 'Устранение запахов',
-    duration: '1-3 часа',
+    duration: '30 минут - 1,5 часа',
   },
   {
     id: 'herbicide-treatment' as ServiceType,

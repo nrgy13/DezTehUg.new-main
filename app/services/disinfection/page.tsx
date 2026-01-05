@@ -4,6 +4,7 @@ import { ProblemSection } from '@/components/services/ProblemSection';
 import { SolutionSection } from '@/components/services/SolutionSection';
 import { CTASection } from '@/components/services/CTASection';
 import { FinalCTASection } from '@/components/services/FinalCTASection';
+import { ServiceOrderSection } from '@/components/services/ServiceOrderSection';
 import { disinfectionData } from '@/data/services/disinfection';
 
 export const metadata: Metadata = {
@@ -72,7 +73,7 @@ export default function DisinfectionPage() {
               "availability": "https://schema.org/InStock",
               "priceRange": "$$",
               "validFrom": new Date().toISOString(),
-              "url": "/calculator"
+              "url": "/booking"
             }
           })
         }}
@@ -100,6 +101,12 @@ export default function DisinfectionPage() {
 
       {/* Final CTA Section */}
       <FinalCTASection data={disinfectionData.finalCta} />
+
+      {/* Order Section */}
+      <ServiceOrderSection 
+        serviceName="Дезинфекция" 
+        accentColor={disinfectionData.hero.accentColor}
+      />
     </div>
   );
 }

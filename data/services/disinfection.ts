@@ -11,7 +11,7 @@ export const disinfectionData: ServicePageData = {
       "Соответствие требованиям Роспотребнадзора"
     ],
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     accentColor: "#FF6B35"
   },
 
@@ -150,7 +150,7 @@ export const disinfectionData: ServicePageData = {
       "Полный пакет документов"
     ],
     ctaText: "ПОЛУЧИТЬ РАСЧЕТ СТОИМОСТИ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     urgencyText: "Акция: комплексная дезинфекция + лабораторный контроль со скидкой 25%!",
     accentColor: "#FF6B35"
   },
@@ -160,7 +160,7 @@ export const disinfectionData: ServicePageData = {
     subtitle: "Получите профессиональную консультацию по дезинфекции",
     description: "Наши специалисты помогут разработать оптимальную программу дезинфекции для вашего объекта с учетом всех особенностей и требований.",
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
-    ctaLink: "/calculator",
+    ctaLink: "/booking",
     contactInfo: {
       phone: "8-988-319-43-52",
       email: "deztexug@yandex.ru",

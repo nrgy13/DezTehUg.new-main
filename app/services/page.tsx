@@ -27,7 +27,7 @@ const services = [
     ],
     href: '/services/disinfection',
     price: 'от 150 ₽/м²',
-    duration: '1-3 часа'
+    duration: '30 минут - 1,5 часа'
   },
   {
     id: 'pest-control',
@@ -47,7 +47,7 @@ const services = [
     ],
     href: '/services/pest-control',
     price: 'от 200 ₽/м²',
-    duration: '2-4 часа'
+    duration: '30 минут - 1,5 часа'
   },
   {
     id: 'deratization',
@@ -67,7 +67,7 @@ const services = [
     ],
     href: '/services/deratization',
     price: 'от 250 ₽/м²',
-    duration: '2-5 часов'
+    duration: '30 минут - 1,5 часа'
   },
   {
     id: 'water-analysis',
@@ -106,7 +106,7 @@ const services = [
     ],
     href: '/services/fumigation',
     price: 'от 300 ₽/м²',
-    duration: '4-8 часов'
+    duration: '30 минут - 1,5 часа'
   },
   {
     id: 'deserpentation',
@@ -125,7 +125,7 @@ const services = [
     ],
     href: '/services/deserpentation',
     price: 'от 5000 ₽',
-    duration: '2-4 часа'
+    duration: '1 час - 2,5 часа'
   },
   {
     id: 'deodorization',
@@ -144,7 +144,7 @@ const services = [
     ],
     href: '/services/deodorization',
     price: 'от 200 ₽/м²',
-    duration: '1-3 часа'
+    duration: '30 минут - 1,5 часа'
   },
   {
     id: 'herbicide-treatment',
@@ -350,12 +350,12 @@ export default function ServicesPage() {
                         <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
                       </CyberpunkButton>
                       <CyberpunkButton
-                        href="/calculator"
+                        href="/booking"
                         variant="secondary"
                         size="default"
                         className="flex-1"
                       >
-                        Рассчитать стоимость
+                        Оформить заявку
                       </CyberpunkButton>
                     </div>
                   </div>
@@ -478,12 +478,12 @@ export default function ServicesPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <CyberpunkButton 
-                href="/calculator"
+                href="/booking"
                 variant="primary"
                 size="lg"
                 className="pulse-cta"
               >
-                Рассчитать стоимость
+                Оформить заявку
               </CyberpunkButton>
               <CyberpunkButton 
                 href="/contact"

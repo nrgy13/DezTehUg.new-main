@@ -204,7 +204,7 @@ export default function Home() {
                 className="flex flex-col sm:flex-row gap-4"
               >
                 <CyberpunkButton
-                  href="/calculator"
+                  href="/booking"
                   variant="primary"
                   size="lg"
                   className="pulse-cta group"
@@ -426,20 +426,19 @@ export default function Home() {
             </h2>
             
             <p className="text-xl text-content-secondary leading-relaxed">
-              Получите бесплатную консультацию и точный расчет стоимости
-              <br />
-              за 3 минуты
+              Получите бесплатную консультацию<br />
+              и точный расчет стоимости за 3 минуты
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <CyberpunkButton 
-                href="/calculator"
+                href="/booking"
                 variant="primary"
                 size="xl"
                 className="pulse-cta"
               >
                 <Calculator className="h-6 w-6 mr-3  group-hover:scale-110 transition-transform" />
-                <span className="inline-block">Рассчитать стоимость</span>
+                <span className="inline-block">Оформить заявку</span>
               </CyberpunkButton>
               
               <CyberpunkButton 

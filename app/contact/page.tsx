@@ -176,7 +176,7 @@ export default function ContactPage() {
               {/* MAX */}
               <CyberpunkCard className="p-6 group hover:border-purple-500 transition-all">
                 <Link 
-                  href="tel:+79883194352" 
+                  href="max://chat?phone=+79883194352" 
                   className="flex items-center space-x-6"
                 >
                   <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-purple-500/20 transition-colors">
@@ -194,12 +194,12 @@ export default function ContactPage() {
               {/* CTA Buttons */}
               <div className="pt-6 space-y-4">
                 <CyberpunkButton
-                  href="/calculator"
+                  href="/booking"
                   variant="primary"
                   size="lg"
                   className="w-full"
                 >
-                  Рассчитать стоимость
+                  Оформить заявку
                 </CyberpunkButton>
                 <CyberpunkButton
                   href="tel:+79883194352"

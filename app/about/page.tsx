@@ -417,7 +417,7 @@ export default function AboutPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <CyberpunkButton 
-                href="/calculator"
+                href="/booking"
                 variant="primary"
                 size="lg"
                 className="pulse-cta"
