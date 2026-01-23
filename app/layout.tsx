@@ -1,5 +1,5 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, Orbitron } from 'next/font/google';
 import { AppWrapper } from '@/components/layout/AppWrapper';
 
@@ -18,12 +18,6 @@ export const metadata: Metadata = {
   title: 'DEZTECHYUG - Дезинфекция будущего уже сегодня | Профессиональная санитарная служба',
   description: 'Элитная команда технологичных специалистов. 5 лет безупречной работы. Полное уничтожение угроз за 24 часа. Дезинфекция, дезинсекция, дератизация, анализ воды.',
   keywords: 'дезинфекция, дезинсекция, дератизация, анализ воды, санитарная служба, уничтожение насекомых, борьба с грызунами, профессиональная обработка',
-  viewport: {
-    width: 'device-width',
-    initialScale: 0.9,
-    maximumScale: 5,
-    userScalable: true,
-  },
   openGraph: {
     title: 'DEZTECHYUG - Дезинфекция будущего уже сегодня',
     description: 'Элитная команда технологичных специалистов. 5 лет безупречной работы.',
@@ -36,6 +30,11 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({
