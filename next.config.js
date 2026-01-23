@@ -1,15 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  optimizeFonts: false,
-  experimental: {
-    fontLoaders: [
-      { loader: '@next/font/google', options: { subsets: ['latin', 'cyrillic'] } },
-    ],
-  },
   output: 'standalone',
+  swcMinify: true,
   images: {
     unoptimized: true,
   },
+  compress: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
