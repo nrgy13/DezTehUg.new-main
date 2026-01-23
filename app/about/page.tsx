@@ -9,31 +9,31 @@ import AnimatedIcon from '@/components/AnimatedIcon';
 
 const teamMembers = [
   {
-    name: 'Алексей Петров',
-    role: 'Главный технолог',
-    experience: '12 лет опыта',
+    name: 'Денисов Юрий',
+    role: 'Старший дезинфектор',
+    experience: '8 лет опыта',
     specialization: 'Дезинфекция и дезинсекция',
     icon: Shield,
   },
   {
-    name: 'Мария Сидорова',
-    role: 'Ведущий специалист',
-    experience: '8 лет опыта',
-    specialization: 'Анализ воды и лабораторные исследования',
+    name: 'Ананьева Регина',
+    role: 'Руководитель отдела продаж',
+    experience: '6 лет опыта',
+    specialization: 'Дезинсекция и дератизация',
     icon: Award,
   },
   {
-    name: 'Дмитрий Козлов',
-    role: 'Старший дезинфектор',
-    experience: '5 лет опыта',
-    specialization: 'Дератизация и комплексная обработка',
+    name: 'Алексей Петров',
+    role: 'Главный технолог',
+    experience: '12 лет опыта',
+    specialization: 'Анализ воды и лабораторные исследования',
     icon: Target,
   },
 ];
 
 const achievements = [
   {
-    title: 'Более 5000 объектов обработано',
+    title: 'Более 1500 объектов обработано',
     description: 'Жилые дома, офисы, медучреждения, производства',
     icon: Users,
     animationName: 'city.json',
@@ -228,9 +228,9 @@ export default function AboutPage() {
               className="relative"
             >
               <img
-                src="/images/hero-image.jpeg"
+                src="/images/AboutCompany.jpg"
                 alt="Команда DEZTECHYUG за работой"
-                className="w-full h-[500px] lg:h-[600px] object-cover rounded-lg shadow-2xl"
+                className="w-full h-[500px] lg:h-[600px] object-cover object-right rounded-lg shadow-2xl"
               />
               <div className="absolute inset-0 bg-gradient-to-tr from-poison-green/20 via-transparent to-neon-orange/20 rounded-lg" />
             </motion.div>

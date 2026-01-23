@@ -63,6 +63,35 @@ async function sendToWhatsApp(data: BookingRequest): Promise<boolean> {
   return false;
 }
 
+async function sendToN8n(data: BookingRequest): Promise<boolean> {
+  const webhookUrl = 'https://n8n.lex1case.ru/webhook-test/ac_lead';
+  // Using the token from the screenshot (without Bearer prefix in variable, added in header)
+  const token = 'R3sFtTCpEPywoYYy1ph4MYhQYv4oWXfg8tuFmrttOdewcH7vCkUlIbUoZ11lj1uQ';
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Using 'Autorization' as per n8n screenshot configuration (typo in n8n)
+        'Autorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`N8n webhook returned status ${response.status}. Body: ${errorText}`);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error sending to N8n:', error);
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const data: BookingRequest = await request.json();
@@ -75,11 +104,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Try to send to both messengers
+    // Try to send to messengers and webhook
     const telegramSent = await sendToTelegram(data);
     const whatsappSent = await sendToWhatsApp(data);
+    const n8nSent = await sendToN8n(data);
 
-    if (telegramSent || whatsappSent) {
+    if (telegramSent || whatsappSent || n8nSent) {
       return NextResponse.json(
         { success: true, message: 'Booking request sent successfully' },
         { status: 200 }

@@ -120,9 +120,9 @@ export default function Home() {
             >
               <div className="relative rounded-2xl overflow-hidden">
                 <img
-                  src="/images/hero-image.jpeg"
+                  src="/images/hero-image-new.jpg"
                   alt="Специалист DEZTECHYUG в современной защитной экипировке"
-                  className="w-full h-[500px] object-cover"
+                  className="w-full h-[500px] object-cover object-right"
                 />
                 <div className="absolute inset-0 bg-gradient-to-tr from-poison-green/20 via-transparent to-neon-orange/20" />
                 
