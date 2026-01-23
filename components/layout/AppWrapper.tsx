@@ -77,20 +77,18 @@ const MainContent = ({ children }: { children: React.ReactNode }) => {
         {isLoading && <LoadingScreen />}
       </AnimatePresence>
 
-      <div style={{ transform: 'scale(0.9)', transformOrigin: 'top center', width: '111.11%', marginLeft: '-5.555%' }}>
-        <motion.div
-          className="flex flex-col flex-1"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Header />
-          <main className="flex-1">
-            {children}
-          </main>
-          <Footer />
-        </motion.div>
-      </div>
+      <motion.div
+        className="flex flex-col flex-1"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Header />
+        <main className="flex-1">
+          {children}
+        </main>
+        <Footer />
+      </motion.div>
     </div>
   );
 };
