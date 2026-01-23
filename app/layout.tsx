@@ -1,17 +1,7 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
-import { Inter, Orbitron } from 'next/font/google';
+import { inter, orbitron } from './fonts';
 import { AppWrapper } from '@/components/layout/AppWrapper';
-
-const inter = Inter({ 
-  subsets: ['latin'],
-  variable: '--font-inter'
-});
-
-const orbitron = Orbitron({ 
-  subsets: ['latin'],
-  variable: '--font-orbitron'
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://deztehug.netlify.app'),
