@@ -53,9 +53,10 @@ const LoadingScreenComponent: React.FC = () => {
   return (
     <motion.div
       key="loading-screen"
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg-primary"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 1 } }}
+      style={{ transform: 'none' }}
     >
       <FloatingParticles particleCount={25} isLoadingScreen={true} />
       
@@ -79,10 +80,9 @@ const LoadingScreenComponent: React.FC = () => {
           <Image
             src="/logo.png"
             alt="DezTechYug Logo"
-            width={120}
-            height={120}
-            className="rounded-full"
-            style={{ width: 'auto', height: 'auto' }}
+            width={185}
+            height={185}
+            className="rounded-full w-[185px] h-[185px]"
             priority
           />
         </motion.div>

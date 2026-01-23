@@ -210,7 +210,7 @@ export default function Home() {
                   className="pulse-cta group"
                 >
                   <Calculator className="h-6 w-6 mr-3  group-hover:scale-110 transition-transform" />
-                  <span className="inline-block">Рассчитать стоимость услуг</span>
+                  <span className="inline-block">Оформить заявку</span>
                 </CyberpunkButton>
                 
                 <CyberpunkButton
