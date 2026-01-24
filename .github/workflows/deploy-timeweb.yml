@@ -1,0 +1,114 @@
+name: Deploy to TimeWeb.cloud
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js application
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy
+          # Копируем standalone сборку (если используется output: 'standalone')
+          if [ -d ".next/standalone" ]; then
+            echo "Используется standalone режим"
+            cp -r .next/standalone/* deploy/
+            cp -r .next/static deploy/.next/static
+            cp -r public deploy/public
+          else
+            # Обычная сборка
+            echo "Используется обычная сборка"
+            cp -r .next deploy/
+            cp -r public deploy/
+            cp package.json deploy/
+            cp package-lock.json deploy/
+            cp next.config.js deploy/
+          fi
+
+      - name: Deploy to TimeWeb.cloud via SSH
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.TIMEWEB_HOST }}
+          username: ${{ secrets.TIMEWEB_USERNAME }}
+          key: ${{ secrets.TIMEWEB_SSH_KEY }}
+          port: ${{ secrets.TIMEWEB_SSH_PORT || 22 }}
+          source: "deploy/*"
+          target: ${{ secrets.TIMEWEB_DEPLOY_PATH }}
+          strip_components: 0
+
+      - name: Execute remote commands
+        uses: appleboy/ssh-action@v1.0.4
+        with:
+          host: ${{ secrets.TIMEWEB_HOST }}
+          username: ${{ secrets.TIMEWEB_USERNAME }}
+          key: ${{ secrets.TIMEWEB_SSH_KEY }}
+          port: ${{ secrets.TIMEWEB_SSH_PORT || 22 }}
+          script: |
+            cd ${{ secrets.TIMEWEB_DEPLOY_PATH }}
+            
+            # Проверяем режим сборки
+            if [ -f "server.js" ]; then
+              echo "Обнаружен standalone режим"
+              # Standalone режим - запускаем напрямую через node
+              if command -v pm2 &> /dev/null; then
+                echo "Перезапуск через PM2 (standalone)..."
+                pm2 restart deztechug || pm2 start server.js --name "deztechug" --cwd "${{ secrets.TIMEWEB_DEPLOY_PATH }}"
+                pm2 save
+              else
+                echo "PM2 не найден. Запустите: node server.js"
+              fi
+            else
+              echo "Обычный режим сборки"
+              # Обычный режим - используем npm start
+              if [ ! -d "node_modules" ]; then
+                echo "Установка зависимостей..."
+                npm ci --production
+              fi
+              
+              if command -v pm2 &> /dev/null; then
+                echo "Перезапуск через PM2..."
+                pm2 restart deztechug || pm2 start npm --name "deztechug" -- start
+                pm2 save
+              else
+                echo "PM2 не найден. Убедитесь, что приложение запущено."
+              fi
+            fi
+            
+            echo "Деплой завершен успешно!"
+
+      - name: Deployment success notification
+        if: success()
+        run: |
+          echo "✅ Деплой на TimeWeb.cloud завершен успешно!"
+          echo "🌐 Сайт должен быть доступен по адресу вашего домена"
+
+      - name: Deployment failure notification
+        if: failure()
+        run: |
+          echo "❌ Ошибка при деплое на TimeWeb.cloud"
+          echo "Проверьте логи выше для деталей"
