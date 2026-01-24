@@ -64,7 +64,7 @@ async function sendToWhatsApp(data: BookingRequest): Promise<boolean> {
 }
 
 async function sendToN8n(data: BookingRequest): Promise<boolean> {
-  const webhookUrl = 'https://n8n.lex1case.ru/webhook-test/ac_lead';
+  const webhookUrl = 'https://n8n.lex1case.ru/webhook/DTU_zayavki';
   // Using the token from the screenshot (without Bearer prefix in variable, added in header)
   const token = 'R3sFtTCpEPywoYYy1ph4MYhQYv4oWXfg8tuFmrttOdewcH7vCkUlIbUoZ11lj1uQ';
 
