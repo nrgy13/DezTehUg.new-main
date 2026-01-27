@@ -1,7 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Phone, Mail, MapPin, Clock, MessageCircle, Send, MessageSquare } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, MessageCircle, Send } from 'lucide-react';
+import { MaxIcon } from '@/components/icons/MaxIcon';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import Link from 'next/link';
@@ -182,7 +183,7 @@ export default function ContactPage() {
                   className="flex items-center space-x-6"
                 >
                   <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-purple-500/20 transition-colors">
-                    <MessageSquare className="w-6 h-6 text-purple-500" />
+                    <MaxIcon className="w-6 h-6 text-purple-500" />
                   </div>
                   <div className="flex-1">
                     <h3 className="text-lg font-orbitron font-semibold text-content-primary mb-1">

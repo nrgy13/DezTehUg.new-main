@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Phone, Mail, MapPin, Clock, Award, Send, MessageCircle, MessageSquare } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Award, Send, MessageCircle } from 'lucide-react';
+import { MaxIcon } from '@/components/icons/MaxIcon';
 import { BrandLogo } from './BrandLogo';
 import { PrivacyModal } from '@/components/PrivacyModal';
 
@@ -212,7 +213,7 @@ export function Footer() {
                   { icon: MessageCircle, href: 'https://wa.me/79883194352', color: 'hover:text-green-500', label: 'WhatsApp' },
                   { icon: Send, href: 'https://t.me/deztexugrf', color: 'hover:text-blue-400', label: 'Telegram' },
                   { 
-                    icon: MessageSquare, 
+                    icon: MaxIcon, 
                     href: 'https://max.ru/u/f9LHodD0cOJW6gdomK-1v2rzeSLyqHdLnkVZzHUNUZGXVFl7jF-OQalNlrE', 
                     color: 'hover:text-purple-500', 
                     label: 'MAX'
