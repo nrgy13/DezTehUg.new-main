@@ -26,7 +26,7 @@ const services = [
       'Гарантия эффективности 99.9%'
     ],
     href: '/services/disinfection',
-    price: 'от 7 ₽/м²',
+    price: 'от 5 ₽/м²',
     duration: '30 минут - 1,5 часа'
   },
   {
@@ -46,7 +46,7 @@ const services = [
       'Гарантийное обслуживание'
     ],
     href: '/services/pest-control',
-    price: 'от 8 ₽/м²',
+    price: 'от 7 ₽/м²',
     duration: '30 минут - 1,5 часа'
   },
   {
@@ -124,7 +124,7 @@ const services = [
       'Профессиональный подход'
     ],
     href: '/services/deserpentation',
-    price: 'от 5000 ₽',
+    price: 'от 8 ₽/м²',
     duration: '1 час - 2,5 часа'
   },
   {
@@ -143,7 +143,7 @@ const services = [
       'Быстрый результат'
     ],
     href: '/services/deodorization',
-    price: 'от 7 ₽/м²',
+    price: 'от 5 ₽/м²',
     duration: '30 минут - 1,5 часа'
   },
   {
