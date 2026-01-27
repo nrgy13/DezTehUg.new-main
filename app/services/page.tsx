@@ -26,7 +26,7 @@ const services = [
       'Гарантия эффективности 99.9%'
     ],
     href: '/services/disinfection',
-    price: 'от 150 ₽/м²',
+    price: 'от 7 ₽/м²',
     duration: '30 минут - 1,5 часа'
   },
   {
@@ -46,7 +46,7 @@ const services = [
       'Гарантийное обслуживание'
     ],
     href: '/services/pest-control',
-    price: 'от 200 ₽/м²',
+    price: 'от 8 ₽/м²',
     duration: '30 минут - 1,5 часа'
   },
   {
@@ -66,7 +66,7 @@ const services = [
       'Профилактическое обслуживание'
     ],
     href: '/services/deratization',
-    price: 'от 250 ₽/м²',
+    price: 'от 3 ₽/м²',
     duration: '30 минут - 1,5 часа'
   },
   {
@@ -105,7 +105,7 @@ const services = [
       'Эффективность 100%'
     ],
     href: '/services/fumigation',
-    price: 'от 300 ₽/м²',
+    price: 'от 4 ₽/м²',
     duration: '30 минут - 1,5 часа'
   },
   {
@@ -143,7 +143,7 @@ const services = [
       'Быстрый результат'
     ],
     href: '/services/deodorization',
-    price: 'от 200 ₽/м²',
+    price: 'от 7 ₽/м²',
     duration: '30 минут - 1,5 часа'
   },
   {
@@ -162,7 +162,7 @@ const services = [
       'Защита культурных растений'
     ],
     href: '/services/herbicide-treatment',
-    price: 'от 150 ₽/сотка',
+    price: 'от 10 ₽/сотка',
     duration: '2-4 часа'
   }
 ];
