@@ -233,6 +233,8 @@ export default function AboutPage() {
                 alt="Команда DEZTECHYUG за работой"
                 fill
                 className="object-cover object-right duration-700 ease-in-out"
+                priority
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 placeholder="blur"
                 blurDataURL="data:image/webp;base64,UklGRlIAAABXRUJQVlA4IEYAAADwAQCdASoQAAwAAUAmJaQAA3AA/v89WAAAAP7/28tQ/9s2//7Zt//7Zt//7Zt//7Zt//7Zt//7Zt//7Zt//7Zt//7ZtwAA"
                 onLoadingComplete={(image) => {
