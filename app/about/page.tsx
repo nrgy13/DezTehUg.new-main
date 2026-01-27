@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Shield, Award, Users, Target, Clock, Zap } from 'lucide-react';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
@@ -225,14 +226,15 @@ export default function AboutPage() {
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
               viewport={{ once: true }}
-              className="relative"
+              className="relative h-[500px] lg:h-[600px] w-full rounded-lg shadow-2xl overflow-hidden"
             >
-              <img
-                src="/images/AboutCompany.jpg"
+              <Image
+                src="/images/AboutCompany.webp"
                 alt="Команда DEZTECHYUG за работой"
-                className="w-full h-[500px] lg:h-[600px] object-cover object-right rounded-lg shadow-2xl"
+                fill
+                className="object-cover object-right"
               />
-              <div className="absolute inset-0 bg-gradient-to-tr from-poison-green/20 via-transparent to-neon-orange/20 rounded-lg" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-poison-green/20 via-transparent to-neon-orange/20" />
             </motion.div>
           </div>
         </div>

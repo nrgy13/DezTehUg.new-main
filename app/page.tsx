@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, CheckCircle, Star, Phone, Calculator, Shield } from 'lucide-react';
 import { ServiceIcon } from '@/components/ServiceIcon';
 import { TrustFactorIcon } from '@/components/TrustFactorIcon';
@@ -118,11 +119,13 @@ export default function Home() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="relative"
             >
-              <div className="relative rounded-2xl overflow-hidden">
-                <img
-                  src="/images/hero-image-new.jpg"
+              <div className="relative rounded-2xl overflow-hidden h-[500px] w-full">
+                <Image
+                  src="/images/hero-image-new.webp"
                   alt="Специалист DEZTECHYUG в современной защитной экипировке"
-                  className="w-full h-[500px] object-cover object-right"
+                  fill
+                  className="object-cover object-right"
+                  priority
                 />
                 <div className="absolute inset-0 bg-gradient-to-tr from-poison-green/20 via-transparent to-neon-orange/20" />
                 
