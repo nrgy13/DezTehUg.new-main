@@ -213,31 +213,17 @@ export function Footer() {
                   { icon: Send, href: 'https://t.me/deztexugrf', color: 'hover:text-blue-400', label: 'Telegram' },
                   { 
                     icon: MessageSquare, 
-                    href: 'max://chat?phone=79883194352', 
+                    href: 'https://max.ru', 
                     color: 'hover:text-purple-500', 
                     label: 'MAX'
                   }
                 ].map((social, index) => {
-                  const isMax = social.label === 'MAX';
                   return (
                     <a
                       key={index}
                       href={social.href}
-                      onClick={isMax ? (e) => {
-                        // Попытка открыть MAX мессенджер
-                        const maxLink = 'max://chat?phone=79883194352';
-                        const telLink = 'tel:+79883194352';
-                        
-                        // Пытаемся открыть MAX
-                        window.location.href = maxLink;
-                        
-                        // Если через 500мс не открылось, открываем tel:
-                        setTimeout(() => {
-                          window.location.href = telLink;
-                        }, 500);
-                        
-                        e.preventDefault();
-                      } : undefined}
+                      target={social.label === 'MAX' ? '_blank' : undefined}
+                      rel={social.label === 'MAX' ? 'noopener noreferrer' : undefined}
                       className={`w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-content-muted transition-all duration-300 hover:scale-110 hover:bg-white hover:shadow-lg ${social.color}`}
                     >
                       <social.icon className="w-4 h-4" />

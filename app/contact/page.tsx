@@ -176,8 +176,15 @@ export default function ContactPage() {
               {/* MAX */}
               <CyberpunkCard className="p-6 group hover:border-purple-500 transition-all">
                 <Link 
-                  href="max://chat?phone=+79883194352" 
+                  href="https://max.ru" 
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center space-x-6"
+                  onClick={(e) => {
+                    // Prevent default if it's just the homepage, or leave it to open the site
+                    // e.preventDefault();
+                    // alert('Для перехода в чат MAX необходимо использовать персональную ссылку-приглашение из вашего профиля (QR-код).');
+                  }}
                 >
                   <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-purple-500/20 transition-colors">
                     <MessageSquare className="w-6 h-6 text-purple-500" />
@@ -186,7 +193,7 @@ export default function ContactPage() {
                     <h3 className="text-lg font-orbitron font-semibold text-content-primary mb-1">
                       MAX
                     </h3>
-                    <p className="text-content-secondary leading-relaxed">Мессенджер MAX по рабочему номеру</p>
+                    <p className="text-content-secondary leading-relaxed">Напишите нам в MAX</p>
                   </div>
                 </Link>
               </CyberpunkCard>
