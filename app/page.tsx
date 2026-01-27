@@ -124,8 +124,13 @@ export default function Home() {
                   src="/images/hero-image-new.webp"
                   alt="Специалист DEZTECHYUG в современной защитной экипировке"
                   fill
-                  className="object-cover object-right"
+                  className="object-cover object-right duration-700 ease-in-out group-hover:scale-105"
                   priority
+                  placeholder="blur"
+                  blurDataURL="data:image/webp;base64,UklGRlIAAABXRUJQVlA4IEYAAADwAQCdASoQAAwAAUAmJaQAA3AA/v89WAAAAP7/28tQ/9s2//7Zt//7Zt//7Zt//7Zt//7Zt//7Zt//7Zt//7Zt//7ZtwAA"
+                  onLoadingComplete={(image) => {
+                    image.classList.remove('opacity-0');
+                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-tr from-poison-green/20 via-transparent to-neon-orange/20" />
                 

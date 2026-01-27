@@ -232,7 +232,12 @@ export default function AboutPage() {
                 src="/images/AboutCompany.webp"
                 alt="Команда DEZTECHYUG за работой"
                 fill
-                className="object-cover object-right"
+                className="object-cover object-right duration-700 ease-in-out"
+                placeholder="blur"
+                blurDataURL="data:image/webp;base64,UklGRlIAAABXRUJQVlA4IEYAAADwAQCdASoQAAwAAUAmJaQAA3AA/v89WAAAAP7/28tQ/9s2//7Zt//7Zt//7Zt//7Zt//7Zt//7Zt//7Zt//7Zt//7ZtwAA"
+                onLoadingComplete={(image) => {
+                  image.classList.remove('opacity-0');
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-tr from-poison-green/20 via-transparent to-neon-orange/20" />
             </motion.div>
