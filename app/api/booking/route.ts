@@ -73,8 +73,8 @@ async function sendToN8n(data: BookingRequest): Promise<boolean> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Using 'Autorization' as per n8n screenshot configuration (typo in n8n)
-        'Autorization': `Bearer ${token}`
+        // Using 'Authorization' as per updated n8n configuration
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify(data),
     });
