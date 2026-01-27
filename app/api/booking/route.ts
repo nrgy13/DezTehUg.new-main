@@ -67,6 +67,9 @@ async function sendToN8n(data: BookingRequest): Promise<boolean> {
   const webhookUrl = 'https://n8n.lex1case.ru/webhook/DTU_zayavki';
   // Using the token from the screenshot (without Bearer prefix in variable, added in header)
   const token = 'R3sFtTCpEPywoYYy1ph4MYhQYv4oWXfg8tuFmrttOdewcH7vCkUlIbUoZ11lj1uQ';
+  
+  // Получаем Chat ID из переменных окружения
+  const chatId = process.env.TELEGRAM_CHAT_ID;
 
   try {
     const response = await fetch(webhookUrl, {
@@ -76,7 +79,10 @@ async function sendToN8n(data: BookingRequest): Promise<boolean> {
         // Using 'Authorization' as per updated n8n configuration
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        ...data,
+        chatId: chatId // Передаем chatId в n8n, чтобы использовать {{ $json.chatId }}
+      }),
     });
 
     if (!response.ok) {
