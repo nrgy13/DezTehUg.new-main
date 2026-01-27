@@ -176,15 +176,10 @@ export default function ContactPage() {
               {/* MAX */}
               <CyberpunkCard className="p-6 group hover:border-purple-500 transition-all">
                 <Link 
-                  href="https://max.ru" 
+                  href="https://max.ru/u/f9LHodD0cOJW6gdomK-1v2rzeSLyqHdLnkVZzHUNUZGXVFl7jF-OQalNlrE" 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center space-x-6"
-                  onClick={(e) => {
-                    // Prevent default if it's just the homepage, or leave it to open the site
-                    // e.preventDefault();
-                    // alert('Для перехода в чат MAX необходимо использовать персональную ссылку-приглашение из вашего профиля (QR-код).');
-                  }}
                 >
                   <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-purple-500/20 transition-colors">
                     <MessageSquare className="w-6 h-6 text-purple-500" />

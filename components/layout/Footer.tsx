@@ -213,7 +213,7 @@ export function Footer() {
                   { icon: Send, href: 'https://t.me/deztexugrf', color: 'hover:text-blue-400', label: 'Telegram' },
                   { 
                     icon: MessageSquare, 
-                    href: 'https://max.ru', 
+                    href: 'https://max.ru/u/f9LHodD0cOJW6gdomK-1v2rzeSLyqHdLnkVZzHUNUZGXVFl7jF-OQalNlrE', 
                     color: 'hover:text-purple-500', 
                     label: 'MAX'
                   }
