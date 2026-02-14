@@ -222,7 +222,7 @@ export default function Home() {
                 </CyberpunkButton>
                 
                 <CyberpunkButton
-                  href="tel:+79883194352"
+                  href="tel:+79883313332"
                   variant="secondary"
                   size="lg"
                   className="group"
@@ -450,7 +450,7 @@ export default function Home() {
               </CyberpunkButton>
               
               <CyberpunkButton 
-                href="tel:+79883194352"
+                href="tel:+79883313332"
                 variant="secondary"
                 size="xl"
               >

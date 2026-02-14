@@ -162,7 +162,7 @@ export const disinfectionData: ServicePageData = {
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
     ctaLink: "/booking",
     contactInfo: {
-      phone: "8-988-319-43-52",
+      phone: "8-988-331-33-32",
       email: "deztexug@yandex.ru",
       workingHours: "Круглосуточно, без выходных"
     },

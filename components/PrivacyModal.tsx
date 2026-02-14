@@ -76,10 +76,10 @@ function PrivacyModal({ isOpen, onClose }: PrivacyModalProps) {
                       <p>
                         <span className="font-medium text-content-primary">Телефон:</span>{' '}
                         <a 
-                          href="tel:+79883194352" 
+                          href="tel:+79883313332" 
                           className="text-poison-green hover:underline"
                         >
-                          8-988-319-43-52
+                          8-988-331-33-32
                         </a>
                       </p>
                       <p>

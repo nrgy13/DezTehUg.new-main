@@ -162,7 +162,7 @@ export const waterAnalysisData: ServicePageData = {
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
     ctaLink: "/booking",
     contactInfo: {
-      phone: "8-988-319-43-52",
+      phone: "8-988-331-33-32",
       email: "deztexug@yandex.ru",
       workingHours: "Пн-Пт: 8:00-20:00, Сб: 9:00-15:00"
     },

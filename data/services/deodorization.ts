@@ -105,7 +105,7 @@ export const deodorizationData: ServicePageData = {
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
     ctaLink: "/booking",
     contactInfo: {
-      phone: "8-988-319-43-52",
+      phone: "8-988-331-33-32",
       email: "deztexug@yandex.ru",
       workingHours: "Круглосуточно, без выходных"
     },
@@ -119,7 +119,7 @@ export const deodorizationData: ServicePageData = {
 
   metadata: {
     title: "Дезодорация в Новороссийске - Устранение запахов | ДЕЗТЕХЮГ",
-    description: "Профессиональная дезодорация от ДЕЗТЕХЮГ. Устранение любых неприятных запахов в помещениях. ☎️ 8-988-319-43-52",
+    description: "Профессиональная дезодорация от ДЕЗТЕХЮГ. Устранение любых неприятных запахов в помещениях. ☎️ 8-988-331-33-32",
     keywords: [
       "дезодорация",
       "устранение запахов",

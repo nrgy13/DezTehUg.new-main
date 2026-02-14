@@ -151,7 +151,7 @@ export function Footer() {
                     <Phone className="w-4 h-4 text-poison-green group-hover:drop-shadow-[0_0_5px_#39FF14] group-hover:scale-110 transition-all duration-300" />
                   </div>
                   <div className="text-center">
-                    <p className="font-medium text-content-primary text-sm group-hover:text-poison-green group-hover:drop-shadow-[0_0_3px_#39FF14] transition-all duration-300">8-988-319-43-52</p>
+                    <p className="font-medium text-content-primary text-sm group-hover:text-poison-green group-hover:drop-shadow-[0_0_3px_#39FF14] transition-all duration-300">8-988-331-33-32</p>
                     <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">Круглосуточно</p>
                   </div>
                 </div>
@@ -173,8 +173,8 @@ export function Footer() {
                     <MapPin className="w-4 h-4 text-cyber-blue group-hover:drop-shadow-[0_0_5px_#1E40AF] group-hover:scale-110 transition-all duration-300" />
                   </div>
                   <div className="text-center">
-                    <p className="font-medium text-content-primary text-sm group-hover:text-cyber-blue group-hover:drop-shadow-[0_0_3px_#1E40AF] transition-all duration-300">г. Новороссийск</p>
-                    <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">Выезд по всему Краснодарскому краю</p>
+                    <p className="font-medium text-content-primary text-sm group-hover:text-cyber-blue group-hover:drop-shadow-[0_0_3px_#1E40AF] transition-all duration-300">г. Новороссийск, ул. Леднева, д. 5Б</p>
+                    <p className="text-xs text-content-muted group-hover:text-content-secondary transition-all duration-300">пом. № 2,3,6,10</p>
                   </div>
                 </div>
               </div>
@@ -190,6 +190,24 @@ export function Footer() {
           <div className="relative flex justify-center">
             <div className="bg-white px-6">
               <div className="w-2 h-2 bg-gradient-to-r from-poison-green to-neon-orange rounded-full" />
+            </div>
+          </div>
+        </div>
+
+        {/* Legal Information */}
+        <div className="py-6">
+          <div className="max-w-3xl mx-auto">
+            <div className="bg-gradient-to-r from-poison-green/5 via-cyber-blue/5 to-neon-orange/5 rounded-lg p-4 border border-poison-green/20 hover:border-poison-green/40 transition-all duration-300 hover:shadow-[0_0_12px_rgba(57,255,20,0.2)]">
+              <div className="text-center space-y-1.5">
+                <p className="text-sm font-semibold text-content-primary">
+                  ИП Белавина О.В.
+                </p>
+                <div className="flex flex-col sm:flex-row justify-center items-center gap-3 text-xs text-content-muted">
+                  <span>ИНН: 231507022304</span>
+                  <span className="hidden sm:inline text-poison-green">•</span>
+                  <span>ОГРНИП: 321237500467390</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -105,7 +105,7 @@ export const herbicideTreatmentData: ServicePageData = {
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
     ctaLink: "/booking",
     contactInfo: {
-      phone: "8-988-319-43-52",
+      phone: "8-988-331-33-32",
       email: "deztexug@yandex.ru",
       workingHours: "Круглосуточно, без выходных"
     },
@@ -119,7 +119,7 @@ export const herbicideTreatmentData: ServicePageData = {
 
   metadata: {
     title: "Гербицидная обработка в Новороссийске - Уничтожение сорняков | ДЕЗТЕХЮГ",
-    description: "Профессиональная гербицидная обработка от ДЕЗТЕХЮГ. Уничтожение сорняков и нежелательной растительности. ☎️ 8-988-319-43-52",
+    description: "Профессиональная гербицидная обработка от ДЕЗТЕХЮГ. Уничтожение сорняков и нежелательной растительности. ☎️ 8-988-331-33-32",
     keywords: [
       "гербицидная обработка",
       "уничтожение сорняков",

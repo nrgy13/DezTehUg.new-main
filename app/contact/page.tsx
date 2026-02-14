@@ -53,10 +53,10 @@ export default function ContactPage() {
                       Телефон
                     </h3>
                     <a 
-                      href="tel:+79883194352" 
+                      href="tel:+79883313332" 
                       className="text-xl font-bold text-poison-green hover:text-neon-orange transition-colors"
                     >
-                      8-988-319-43-52
+                      8-988-331-33-32
                     </a>
                     <p className="text-sm text-content-muted mt-1">Круглосуточно</p>
                   </div>
@@ -95,8 +95,9 @@ export default function ContactPage() {
                       Адрес офиса
                     </h3>
                     <p className="text-lg font-medium text-content-primary">
-                      г. Новороссийск, ул. Леднева 5
+                      г. Новороссийск, ул. Леднева, д. 5Б
                     </p>
+                    <p className="text-sm text-content-muted">пом. № 2,3,6,10</p>
                     <p className="text-sm text-content-muted mt-1 leading-relaxed">Выезд по всему Краснодарскому краю</p>
                   </div>
                 </div>
@@ -205,7 +206,7 @@ export default function ContactPage() {
                   Оформить заявку
                 </CyberpunkButton>
                 <CyberpunkButton
-                  href="tel:+79883194352"
+                  href="tel:+79883313332"
                   variant="secondary"
                   size="lg"
                   className="w-full"
@@ -233,27 +234,27 @@ export default function ContactPage() {
               <span className="text-poison-green">найти</span>
             </h2>
             <p className="text-lg text-content-secondary leading-relaxed">
-              г. Новороссийск, ул. Леднева 5
+              г. Новороссийск, ул. Леднева, д. 5Б, пом. № 2,3,6,10
             </p>
           </motion.div>
           <CyberpunkCard className="p-8">
             <div className="aspect-video bg-bg-secondary rounded-lg overflow-hidden border-2 border-gray-200">
               <iframe
-                src="https://yandex.ru/map-widget/v1/?um=constructor%3A0&lang=ru_RU&scroll=false&zoom=16&ll=37.7736%2C44.7239&pt=37.7736%2C44.7239"
+                src="https://yandex.ru/map-widget/v1/?um=constructor%3A0&lang=ru_RU&scroll=false&zoom=16&ll=37.772990%2C44.724488&pt=37.772990%2C44.724488"
                 width="100%"
                 height="100%"
                 frameBorder="0"
                 allowFullScreen
                 style={{ border: 0 }}
-                title="Карта офиса ДЕЗТЕХЮГ - г. Новороссийск, ул. Леднева 5"
+                title="Карта офиса ДЕЗТЕХЮГ - г. Новороссийск, ул. Леднева, д. 5Б"
               />
             </div>
             <div className="mt-4 text-center">
               <p className="text-sm font-medium text-content-primary">
-                г. Новороссийск, ул. Леднева 5
+                г. Новороссийск, ул. Леднева, д. 5Б, пом. № 2,3,6,10
               </p>
               <a
-                href="https://yandex.ru/maps/?pt=37.7736,44.7239&z=16&l=map"
+                href="https://yandex.ru/maps/?pt=37.772990,44.724488&z=16&l=map"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-poison-green hover:text-neon-orange transition-colors mt-2 inline-block"

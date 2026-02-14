@@ -53,7 +53,7 @@ export const deratizationSEO: EnhancedServiceMetadata = {
         "@type": "LocalBusiness",
         "name": "ДЕЗТЕХЮГ",
         "url": "https://deztehug.ru",
-        "telephone": "8-988-319-43-52",
+        "telephone": "8-988-331-33-32",
         "email": "deztexug@yandex.ru",
         "address": {
           "@type": "PostalAddress",

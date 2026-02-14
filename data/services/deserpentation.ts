@@ -105,7 +105,7 @@ export const deserpentationData: ServicePageData = {
     ctaText: "РАССЧИТАТЬ СТОИМОСТЬ",
     ctaLink: "/booking",
     contactInfo: {
-      phone: "8-988-319-43-52",
+      phone: "8-988-331-33-32",
       email: "deztexug@yandex.ru",
       workingHours: "Круглосуточно, без выходных"
     },
@@ -119,7 +119,7 @@ export const deserpentationData: ServicePageData = {
 
   metadata: {
     title: "Десерпентация в Новороссийске - Уничтожение змей | ДЕЗТЕХЮГ",
-    description: "Профессиональная десерпентация от ДЕЗТЕХЮГ. Безопасное удаление змей и пресмыкающихся. ☎️ 8-988-319-43-52",
+    description: "Профессиональная десерпентация от ДЕЗТЕХЮГ. Безопасное удаление змей и пресмыкающихся. ☎️ 8-988-331-33-32",
     keywords: [
       "десерпентация",
       "уничтожение змей",
