@@ -158,7 +158,7 @@ export default function ContactPage() {
               {/* Telegram */}
               <CyberpunkCard className="p-6 group hover:border-blue-400 transition-all">
                 <Link 
-                  href="https://t.me/deztexugrf" 
+                  href="https://t.me/DEZTEAM" 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center space-x-6"
@@ -170,7 +170,7 @@ export default function ContactPage() {
                     <h3 className="text-lg font-orbitron font-semibold text-content-primary mb-1">
                       Telegram
                     </h3>
-                    <p className="text-content-secondary leading-relaxed">@deztexugrf</p>
+                    <p className="text-content-secondary leading-relaxed">@DEZTEAM</p>
                   </div>
                 </Link>
               </CyberpunkCard>
@@ -178,7 +178,7 @@ export default function ContactPage() {
               {/* MAX */}
               <CyberpunkCard className="p-6 group hover:border-purple-500 transition-all">
                 <Link 
-                  href="https://max.ru/u/f9LHodD0cOJW6gdomK-1v2rzeSLyqHdLnkVZzHUNUZGXVFl7jF-OQalNlrE" 
+                  href="https://max.ru/u/f9LHodD0cOKOoy0i--m4zxHSoKBMhEOCW708G26ksoCIINexFW-vr8F-7go" 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center space-x-6"

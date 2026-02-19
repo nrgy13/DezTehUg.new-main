@@ -229,10 +229,10 @@ export function Footer() {
               <div className="flex items-center gap-3">
                 {[
                   { icon: MessageCircle, href: 'https://wa.me/79883194352', color: 'hover:text-green-500', label: 'WhatsApp' },
-                  { icon: Send, href: 'https://t.me/deztexugrf', color: 'hover:text-blue-400', label: 'Telegram' },
+                  { icon: Send, href: 'https://t.me/DEZTEAM', color: 'hover:text-blue-400', label: 'Telegram' },
                   { 
                     icon: MaxIcon, 
-                    href: 'https://max.ru/u/f9LHodD0cOJW6gdomK-1v2rzeSLyqHdLnkVZzHUNUZGXVFl7jF-OQalNlrE', 
+                    href: 'https://max.ru/u/f9LHodD0cOKOoy0i--m4zxHSoKBMhEOCW708G26ksoCIINexFW-vr8F-7go', 
                     color: 'hover:text-purple-500', 
                     label: 'MAX'
                   }
