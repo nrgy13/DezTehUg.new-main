@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { inter, orbitron } from './fonts';
 import { AppWrapper } from '@/components/layout/AppWrapper';
+import { YandexMetrika } from '@/components/analytics/YandexMetrika';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://deztehug.netlify.app'),
@@ -35,6 +36,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className={`${inter.variable} ${orbitron.variable}`}>
       <body className={`${inter.className} antialiased`}>
+        <YandexMetrika />
         <AppWrapper>{children}</AppWrapper>
       </body>
     </html>
