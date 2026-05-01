@@ -34,3 +34,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# CRM project — local
+/tmp/
+/.trae/
+/drizzle/migrations/meta/
+
+# Docker volumes (local dev)
+/docker-data/
+
+# Generated documents (cached locally before S3)
+/storage/
+
+# IDE
+.idea/
+.vscode/launch.json
+*.swp

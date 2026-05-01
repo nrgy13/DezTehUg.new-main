@@ -54,20 +54,36 @@ const ScrollToTop = () => {
   return null;
 };
 
+// Роуты CRM и страница логина — рендерятся БЕЗ публичного Header/Footer
+const isCrmPath = (pathname: string) =>
+  pathname.startsWith('/admin') ||
+  pathname.startsWith('/manager') ||
+  pathname.startsWith('/master') ||
+  pathname.startsWith('/login');
+
 const MainContent = ({ children }: { children: React.ReactNode }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  
+  const pathname = usePathname();
+  const isCrm = isCrmPath(pathname);
+
+  const [isLoading, setIsLoading] = useState(!isCrm); // на CRM не показываем splash
+
   useEffect(() => {
+    if (isCrm) return;
     const MIN_LOAD_TIME = 3000;
-    
+
     const loadTimeout = setTimeout(() => {
       setIsLoading(false);
     }, MIN_LOAD_TIME);
-    
+
     return () => {
       clearTimeout(loadTimeout);
     };
-  }, []);
+  }, [isCrm]);
+
+  // CRM-роуты: чистый layout без публичного хедера/футера
+  if (isCrm) {
+    return <>{children}</>;
+  }
 
   return (
     // Убираем фон отсюда, чтобы он не перекрывал частицы в дочерних компонентах

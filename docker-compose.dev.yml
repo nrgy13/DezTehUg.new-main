@@ -1,0 +1,77 @@
+# Локальный Docker Compose для разработки CRM
+# Запускает только инфраструктуру (Postgres + Redis + MailHog)
+# Next.js запускается отдельно через `npm run dev`
+#
+# Запуск:   docker compose -f docker-compose.dev.yml up -d
+# Остановка: docker compose -f docker-compose.dev.yml down
+# Логи:      docker compose -f docker-compose.dev.yml logs -f
+
+name: deztech-crm-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: deztech-crm-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: deztech_crm
+      POSTGRES_USER: deztech
+      POSTGRES_PASSWORD: dev_password_change_me
+      TZ: Europe/Moscow
+      PGTZ: Europe/Moscow
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./docker-data/postgres-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deztech -d deztech_crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: deztech-crm-redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - ./docker-data/redis-dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # SMTP-заглушка для разработки: ловит письма, не отправляет реально
+  # Веб-морда на http://localhost:8025
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: deztech-crm-mailhog-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"  # SMTP
+      - "127.0.0.1:8025:8025"  # Web UI
+
+  # MinIO как локальная замена Yandex Object Storage
+  # На проде используем Yandex S3, локально — MinIO с S3 API
+  # Веб-морда на http://localhost:9001
+  minio:
+    image: minio/minio:latest
+    container_name: deztech-crm-minio-dev
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: deztech_minio
+      MINIO_ROOT_PASSWORD: dev_minio_password_123
+    ports:
+      - "127.0.0.1:9000:9000"  # S3 API
+      - "127.0.0.1:9001:9001"  # Web UI
+    volumes:
+      - ./docker-data/minio-dev:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
