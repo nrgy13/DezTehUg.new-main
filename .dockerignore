@@ -1,15 +1,50 @@
+# Зависимости (ставятся в контейнере)
 node_modules
+.pnp
+.pnp.js
+
+# Build артефакты
 .next
+out
+build
+dist
+
+# Git
 .git
 .gitignore
-README.md
+
+# Env (передаём через docker-compose env)
+.env
+.env.local
 .env*.local
+
+# Локальные данные
+docker-data
+storage
+tmp
+.trae
+
+# IDE
 .vscode
 .idea
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Логи
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.DS_Store
+
+# Тесты
 coverage
-.vercel
+
+# Prod docker-compose не нужен внутри образа
+docker-compose.dev.yml
+docker-compose.prod.yml
+
+# Документация
+README.md
+*.md
+!components.json
