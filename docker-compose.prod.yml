@@ -23,7 +23,7 @@ volumes:
 services:
   # ---------- Traefik (HTTPS reverse proxy) ----------
   traefik:
-    image: traefik:v3.2
+    image: traefik:v3
     container_name: deztech-crm-traefik
     restart: unless-stopped
     command:
