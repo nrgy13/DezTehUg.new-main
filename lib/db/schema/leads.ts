@@ -4,13 +4,30 @@ import { clients, clientSourceEnum } from './clients';
 import { users } from './users';
 
 // Статусы воронки заявки
+// Внимание: 'qualified' оставлен в enum для совместимости с существующими записями,
+// но в UI и zod-схемах не используется (мигрирован → proposal_sent в 0002).
 export const leadStatusEnum = pgEnum('lead_status', [
-  'new',           // только что пришла
-  'contacted',     // менеджер связался
-  'qualified',     // подтверждена потребность
-  'proposal_sent', // отправлено КП
-  'won',           // конвертирована в сделку
-  'lost',          // отвалилась
+  'new',             // только что пришла
+  'contacted',       // менеджер связался + квалифицировал потребность
+  'qualified',       // [DEPRECATED] не используется в UI с миграции 0002
+  'proposal_sent',   // отправлено КП
+  'contract_signed', // договор подписан → лид сконвертирован в клиента
+  'works_completed', // работы выполнены, ждём оплату
+  'won',             // оплата получена → финал, успех
+  'lost',            // отвалилась
+]);
+
+// Причины, по которым лид не состоялся (для аналитики)
+export const leadLostReasonEnum = pgEnum('lead_lost_reason', [
+  'price_too_high',     // высокая цена
+  'chose_competitor',   // выбрали конкурента
+  'no_response',        // не дозвонились / не отвечает
+  'not_relevant',       // потребность отпала
+  'postponed',          // отложили решение
+  'diy_solved',         // решили самостоятельно
+  'wrong_region',       // не наш регион
+  'spam',               // ошибочная заявка / спам
+  'other',              // другое (требуется комментарий)
 ]);
 
 export const leads = pgTable('leads', {
@@ -46,11 +63,13 @@ export const leads = pgTable('leads', {
   // Когда конвертирован в сделку
   convertedAt: timestamp('converted_at', { withTimezone: true }),
   lostReason: text('lost_reason'),
+  lostReasonCode: leadLostReasonEnum('lost_reason_code'),
 
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type LeadStatus = (typeof leadStatusEnum.enumValues)[number];
+export type LeadLostReason = (typeof leadLostReasonEnum.enumValues)[number];
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;

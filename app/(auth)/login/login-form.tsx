@@ -3,7 +3,9 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Mail, Lock } from 'lucide-react';
+import { NeonInput } from '@/components/cyberpunk/NeonInput';
+import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 
 const ERRORS: Record<string, string> = {
   CredentialsSignin: 'Неверный email или пароль',
@@ -42,7 +44,6 @@ export function LoginForm({
         return;
       }
 
-      // Узнаем роль через session — серверный редирект решит куда отправить
       router.push(callbackUrl ?? '/admin');
       router.refresh();
     });
@@ -51,10 +52,13 @@ export function LoginForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-slate-200 mb-1.5">
+        <label
+          htmlFor="email"
+          className="block text-xs font-orbitron tracking-wider text-content-secondary mb-1.5 uppercase"
+        >
           Email
         </label>
-        <input
+        <NeonInput
           id="email"
           name="email"
           type="email"
@@ -64,16 +68,19 @@ export function LoginForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={pending}
-          className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50"
           placeholder="ivanov@example.com"
+          icon={<Mail className="w-4 h-4" />}
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-slate-200 mb-1.5">
+        <label
+          htmlFor="password"
+          className="block text-xs font-orbitron tracking-wider text-content-secondary mb-1.5 uppercase"
+        >
           Пароль
         </label>
-        <input
+        <NeonInput
           id="password"
           name="password"
           type="password"
@@ -82,32 +89,34 @@ export function LoginForm({
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={pending}
-          className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50"
           placeholder="••••••••"
+          icon={<Lock className="w-4 h-4" />}
         />
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 text-sm text-red-400 bg-red-950/40 border border-red-900/50 rounded-lg p-3">
+        <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      <button
+      <CyberpunkButton
         type="submit"
         disabled={pending}
-        className="w-full bg-orange-600 hover:bg-orange-500 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        variant="primary"
+        size="default"
+        className="w-full"
       >
         {pending ? (
           <>
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             Входим...
           </>
         ) : (
           'Войти'
         )}
-      </button>
+      </CyberpunkButton>
     </form>
   );
 }

@@ -48,6 +48,8 @@ export const config = {
     '/admin/:path*',
     '/manager/:path*',
     '/master/:path*',
+    '/profile/:path*',
+    '/profile',
     '/api/crm/:path*',
   ],
 };

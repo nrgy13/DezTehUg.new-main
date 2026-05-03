@@ -59,6 +59,7 @@ const isCrmPath = (pathname: string) =>
   pathname.startsWith('/admin') ||
   pathname.startsWith('/manager') ||
   pathname.startsWith('/master') ||
+  pathname.startsWith('/profile') ||
   pathname.startsWith('/login');
 
 const MainContent = ({ children }: { children: React.ReactNode }) => {

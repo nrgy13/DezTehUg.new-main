@@ -1,0 +1,94 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { Phone, MapPin, Calendar } from 'lucide-react';
+import type { LeadStatus } from '@/lib/db/schema/leads';
+
+export type BoardLead = {
+  id: string;
+  status: LeadStatus;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  requestedAddress: string | null;
+  channel: string | null;
+  managerName: string | null;
+  isMine: boolean;
+  createdAt: Date;
+};
+
+const dateFmt = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' });
+
+export function LeadCard({ lead, isOverlay = false }: { lead: BoardLead; isOverlay?: boolean }) {
+  const router = useRouter();
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: lead.id,
+    data: { fromStatus: lead.status, lead },
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging && !isOverlay ? 0.4 : 1,
+  };
+
+  // Вся карточка — drag target. Клик (без движения >5px) → переход на детальную.
+  // PointerSensor с activationConstraint distance:5 разделяет click и drag.
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...(!isOverlay ? attributes : {})}
+      {...(!isOverlay ? listeners : {})}
+      onClick={() => {
+        if (isOverlay) return;
+        router.push(`/manager/leads/${lead.id}`);
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Лид ${lead.contactName ?? 'без имени'}`}
+      className={`group bg-bg-primary border border-gray-200 rounded-md p-2 transition-all select-none ${
+        isOverlay
+          ? 'shadow-2xl ring-2 ring-neon-orange rotate-1 cursor-grabbing'
+          : 'hover:shadow-md hover:border-poison-green/40 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-neon-orange/40'
+      }`}
+    >
+      <div className="font-medium text-xs text-content-primary group-hover:text-neon-orange transition-colors line-clamp-1">
+        {lead.contactName ?? '— без имени —'}
+      </div>
+
+      <div className="mt-1.5 space-y-0.5 text-[11px] text-content-muted">
+        {lead.contactPhone && (
+          <div className="flex items-center gap-1">
+            <Phone className="w-2.5 h-2.5 shrink-0" />
+            <span className="truncate">{lead.contactPhone}</span>
+          </div>
+        )}
+        {lead.requestedAddress && (
+          <div className="flex items-start gap-1">
+            <MapPin className="w-2.5 h-2.5 shrink-0 mt-0.5" />
+            <span className="line-clamp-2 leading-tight">{lead.requestedAddress}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1 text-[9px] text-content-muted/80 pt-0.5">
+          <Calendar className="w-2.5 h-2.5 shrink-0" />
+          <span>{dateFmt.format(lead.createdAt)}</span>
+          {lead.channel && (
+            <span className="ml-auto font-mono text-[8px] px-1 py-0.5 bg-gray-100 rounded truncate max-w-[60px]">
+              {lead.channel}
+            </span>
+          )}
+        </div>
+        {lead.managerName && (
+          <div className="text-[9px] truncate">
+            <span className="text-content-muted/60">мен.:</span>{' '}
+            <span className={lead.isMine ? 'text-poison-green font-medium' : 'text-content-secondary'}>
+              {lead.managerName}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

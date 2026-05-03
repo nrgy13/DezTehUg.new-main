@@ -15,8 +15,10 @@ import {
   Inbox,
   Wrench,
   BarChart3,
+  UserCircle,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/db/schema/users';
+import { LogoText } from '@/components/layout/LogoText';
 
 type NavItem = {
   href: string;
@@ -48,26 +50,36 @@ const NAV: NavItem[] = [
   { href: '/admin/settings', label: 'Настройки', icon: Settings, roles: ['admin'] },
 ];
 
+const ROLE_LABEL: Record<UserRole, string> = {
+  admin: 'Администратор',
+  manager: 'Менеджер',
+  master: 'Мастер',
+};
+
 export function Sidebar({
   user,
 }: {
   user: { id: string; email: string; name: string; role: UserRole };
 }) {
   const pathname = usePathname();
+  const isProfile = pathname === '/profile' || pathname.startsWith('/profile/');
 
-  // Админу показываем все его пункты + (опционально) пункты других ролей
   const visibleItems = NAV.filter((item) => {
     if (user.role === 'admin') return item.roles.includes('admin');
     return item.roles.includes(user.role);
   });
 
+  const homeHref = `/${user.role === 'admin' ? 'admin' : user.role === 'manager' ? 'manager' : 'master'}`;
+
   return (
-    <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col h-screen sticky top-0">
+    <aside className="w-64 bg-bg-primary border-r border-gray-200 flex flex-col h-screen sticky top-0">
       {/* Логотип */}
-      <div className="px-5 py-5 border-b border-slate-800">
-        <Link href={`/${user.role === 'admin' ? 'admin' : user.role === 'manager' ? 'manager' : 'master'}`}>
-          <div className="text-lg font-bold text-white">ДезТехЮг</div>
-          <div className="text-xs text-slate-500 mt-0.5">CRM v0.1</div>
+      <div className="px-5 py-5 border-b border-gray-200">
+        <Link href={homeHref} className="block">
+          <LogoText />
+          <div className="text-[10px] font-orbitron tracking-widest text-content-muted mt-1 uppercase">
+            CRM · v0.1
+          </div>
         </Link>
       </div>
 
@@ -76,15 +88,22 @@ export function Sidebar({
         <ul className="space-y-1">
           {visibleItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            // Для root-страниц роли (/manager, /admin, /master) — строгое равенство.
+            // Иначе href '/manager' матчился бы на любой /manager/* и подсвечивал «Дашборд»
+            // когда юзер на «Заявках», «Клиентах» и т.д.
+            const isRootRole =
+              item.href === '/manager' || item.href === '/admin' || item.href === '/master';
+            const isActive = isRootRole
+              ? pathname === item.href
+              : pathname === item.href || pathname.startsWith(item.href + '/');
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
                     isActive
-                      ? 'bg-orange-600/20 text-orange-300 font-medium'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-neon-orange/10 text-neon-orange font-medium border-l-2 border-neon-orange pl-[10px]'
+                      : 'text-content-secondary hover:bg-poison-green/10 hover:text-poison-green'
                   }`}
                 >
                   <Icon className="w-4 h-4 flex-shrink-0" />
@@ -97,15 +116,28 @@ export function Sidebar({
       </nav>
 
       {/* Профиль и выход */}
-      <div className="border-t border-slate-800 p-3 space-y-2">
+      <div className="border-t border-gray-200 p-3 space-y-1">
         <div className="px-3 py-2">
-          <div className="text-sm text-white font-medium truncate">{user.name}</div>
-          <div className="text-xs text-slate-500 truncate">{user.email}</div>
-          <div className="text-xs text-orange-400 mt-0.5 capitalize">{user.role}</div>
+          <div className="text-sm text-content-primary font-medium truncate">{user.name}</div>
+          <div className="text-xs text-content-muted truncate">{user.email}</div>
+          <div className="text-[10px] font-orbitron tracking-wider text-neon-orange mt-1 uppercase">
+            {ROLE_LABEL[user.role]}
+          </div>
         </div>
+        <Link
+          href="/profile"
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+            isProfile
+              ? 'bg-neon-orange/10 text-neon-orange font-medium border-l-2 border-neon-orange pl-[10px]'
+              : 'text-content-secondary hover:bg-poison-green/10 hover:text-poison-green'
+          }`}
+        >
+          <UserCircle className="w-4 h-4" />
+          Профиль
+        </Link>
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-red-950/30 hover:text-red-300 transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-content-secondary hover:bg-red-50 hover:text-red-600 transition-all duration-200"
         >
           <LogOut className="w-4 h-4" />
           Выйти

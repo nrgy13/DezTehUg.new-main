@@ -19,6 +19,10 @@ export const users = pgTable('users', {
   isActive: boolean('is_active').notNull().default(true),
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
 
+  // Принудительная смена пароля при следующем входе
+  // (true для seed-юзеров с временным `welcome123`, для новых юзеров заведённых админом — true)
+  passwordMustChange: boolean('password_must_change').notNull().default(false),
+
   // Токен для установки/сброса пароля через email
   passwordResetToken: varchar('password_reset_token', { length: 128 }),
   passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),

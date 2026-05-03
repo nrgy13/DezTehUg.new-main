@@ -13,12 +13,14 @@ declare module 'next-auth' {
       email: string;
       name: string;
       role: UserRole;
+      passwordMustChange: boolean;
     };
   }
 
   interface User {
     id?: string;
     role?: UserRole;
+    passwordMustChange?: boolean;
   }
 }
 
@@ -26,6 +28,7 @@ declare module '@auth/core/jwt' {
   interface JWT {
     id: string;
     role: UserRole;
+    passwordMustChange: boolean;
   }
 }
 
@@ -42,10 +45,17 @@ export const authConfig = {
   // Провайдеры добавляются в lib/auth/index.ts (т.к. требуют БД)
   providers: [],
   callbacks: {
-    jwt: async ({ token, user }) => {
+    jwt: async ({ token, user, trigger, session }) => {
+      // Первичный логин — берём из user
       if (user) {
         token.id = user.id as string;
         token.role = (user as { role: UserRole }).role;
+        token.passwordMustChange = (user as { passwordMustChange?: boolean }).passwordMustChange ?? false;
+      }
+      // Когда клиент вызывает useSession().update({ passwordMustChange: false })
+      // обновляем токен — без этого middleware будет редиректить на /profile в цикле
+      if (trigger === 'update' && session?.passwordMustChange !== undefined) {
+        token.passwordMustChange = session.passwordMustChange;
       }
       return token;
     },
@@ -53,6 +63,7 @@ export const authConfig = {
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
+        session.user.passwordMustChange = (token.passwordMustChange as boolean) ?? false;
       }
       return session;
     },
@@ -63,16 +74,26 @@ export const authConfig = {
       const publicPaths = ['/login', '/api/auth', '/api/leads/inbound'];
       const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
-      // Корневые публичные страницы сайта (не CRM)
+      // CRM-роуты (включая /profile — он доступен всем авторизованным)
       const isCrmRoute =
         pathname.startsWith('/admin') ||
         pathname.startsWith('/manager') ||
         pathname.startsWith('/master') ||
-        pathname.startsWith('/api/crm');
+        pathname.startsWith('/api/crm') ||
+        pathname === '/profile' ||
+        pathname.startsWith('/profile/');
 
       if (!isCrmRoute || isPublic) return true;
 
       if (!auth?.user) return false;
+
+      // Принудительная смена пароля: пускаем только на /profile
+      if (auth.user.passwordMustChange) {
+        if (pathname === '/profile' || pathname.startsWith('/profile/')) {
+          return true;
+        }
+        return Response.redirect(new URL('/profile', request.url));
+      }
 
       const role = auth.user.role;
 

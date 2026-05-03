@@ -59,6 +59,7 @@ export const {
           email: user.email,
           name: user.fullName,
           role: user.role,
+          passwordMustChange: user.passwordMustChange,
         };
       },
     }),

@@ -1,7 +1,58 @@
 # DezTehYug CRM — память проекта
 
 > Файл читается Claude автоматически в начале каждой сессии в этом проекте.
-> Обновляй при больших изменениях. Последнее обновление: **2026-05-02 (конец Спринта 1).**
+> Обновляй при больших изменениях. Последнее обновление: **2026-05-03 (середина Спринта 2, прервано на лимите Claude).**
+
+---
+
+## ⚡ ВНИМАНИЕ: где сейчас стоит работа (читать перед стартом!)
+
+**Спринт 2 в работе**, локальная ветка `feature/crm`, **ничего не закоммичено и не пушено** — копим до конца спринта.
+
+### ✅ Закрыто в Спринте 2 (локально, на dev):
+- **Задача 0** — редизайн CRM под стиль публичного сайта (light cyberpunk: bg-bg-primary, neon-orange, poison-green, font-orbitron, CyberpunkButton/CyberpunkCard/NeonInput, LogoText в Sidebar и Login). Файлы: `app/(crm)/layout.tsx`, `components/crm/Sidebar.tsx`, `components/crm/CrmProviders.tsx` (новый, SessionProvider+Toaster), `app/(auth)/login/{page,login-form}.tsx`, `app/(crm)/profile/{page,PasswordForm}.tsx`, `app/(crm)/{admin,manager,master}/page.tsx`, `components/layout/AppWrapper.tsx` (+`/profile` в isCrmPath).
+- **Задача 3** — UI смены пароля. Миграция `0001_stiff_pepper_potts.sql` (колонка `users.password_must_change boolean default false`). JWT-флаг через `useSession().update()`. Edge-safe middleware: `lib/auth/config.ts` + `middleware.ts` (matcher включает `/profile`). Server Action `app/(crm)/profile/actions.ts` (bcrypt+activity_log). E2E 11/11 в preview.
+- **Задача 2** — модуль клиентов. Утилита валидации `lib/validation/inn.ts` (ИНН/ОГРН/ОГРНИП/КПП/БИК/р.с./корсчёт по алгоритмам ФНС/ЦБ — 23/23 unit-теста). Zod discriminated union (legal/individual). Server Actions в `app/(crm)/manager/clients/actions.ts` (CRUD + status change + objects + activity_log). UI: список с фильтрами (тип/статус/mine/q)+пагинацией, форма create/edit (одна длинная), карточка с 4 табами (Реквизиты/Объекты/Договоры/История), CRUD объектов, dropdown смены статуса. E2E 7/7 в preview.
+
+### 🔄 В процессе: Задача 4 (n8n + UI лидов)
+
+**Готово (код написан, частично протестировано):**
+- `app/api/leads/inbound/route.ts` — endpoint POST с проверкой `X-N8N-Secret`. Гибкий парсинг payload (`message.content` n8n-формат, ключи `customer_phone`/`phone`/`tel` и т.д.). Phone обязателен. Создаёт `lead` с `rawPayload` (jsonb) + activity_log `lead.create_from_n8n`. **Curl-тесты 4/4 прошли** (401/401/422/201).
+- Секрет `N8N_INBOUND_SECRET` лежит в `.env.local` (gitignored). **На prod надо тот же положить в `/opt/deztech-crm/.env` + в header `X-N8N-Secret` в n8n-ноде.** Реальное значение в локальном `.env.local`, в репо не коммитим.
+- UI: `app/(crm)/manager/leads/page.tsx` (список+таб-фильтры по статусу+поиск+mine), `[id]/page.tsx` (карточка с rawPayload в `<details>`), `LeadStatusControl.tsx` (dropdown), `LeadActions.tsx` (TakeLeadButton + ConvertLeadButton с модалкой), `actions.ts` (Server Actions: updateLeadStatus, takeLead, convertLeadToClient).
+- `components/crm/LeadStatusBadge.tsx` (6 статусов).
+
+**Не доделано (новая сессия должна продолжить):**
+1. **E2E тест в preview**: рефреш `/manager/leads` после curl-заявки → видно lead → клик «Взять в работу» → клик «Конвертировать в клиента» (тип legal/individual + shortName) → создаётся client, lead.status=won, lead.client_id заполнен, редирект на `/manager/clients/<id>`. Локальный curl-тест на endpoint уже сделан, **проверить визуально и через сеанс Регины**.
+2. **Добавить ноду в n8n workflow `DEzTechUg_bot` (id `SkUMV2EUN8hObo76`).** Текущая структура: Webhook(/DTU_zayavki, headerAuth) → AGENT Diagnose (OpenAI) → Insert row1 (n8n dataTable DezTechUg_Client) → fan-out: Telegram + Gmail. **Нужно добавить третью ветку из `Insert row1` → HTTP Request → `https://crm.дезтехюг.рф/api/leads/inbound`** с заголовком `X-N8N-Secret: <prod_secret>` и body = `{{$json.message.content}}` (или весь `$json` — endpoint оба формата ест). MCP `n8n_update_partial_workflow` с операцией `addNode` + `addConnection`. Не забыть **deactivate→activate** workflow после правки (см. правило в Sanctum memory).
+3. **Не забыть улучшить текущий workflow** — Саня просил по ходу глянуть что можно подправить. Сейчас не успел.
+
+### ⏳ Pending в Спринте 2:
+- **Задача 5** — канбан воронки (drag-n-drop по статусам через `@dnd-kit/core` — НЕ установлен) + конвертация уже частично есть (`convertLeadToClient`).
+- **Задача 1** — DOCX-болванки (6 шаблонов docxtemplater). Образцы скопированы в `tmp/source/` (gitignored): 2 PDF (договор Аппетит + ДС№4) + 2 DOCX (акт обследования + акт работ). Требует docxtemplater + pizzip — **уже стоят**.
+- **Финальный деплой Спринта 2 на prod** (по договорённости — пакетом в конце спринта). После применения миграции 0001 на prod не забыть:
+  ```sql
+  UPDATE users SET password_must_change = true
+  WHERE email IN ('sanctumizm@gmail.com','deztexug@yandex.ru','nrgy131@gmail.com');
+  ```
+  Также `N8N_INBOUND_SECRET` положить в prod env.
+
+### Состояние dev-окружения
+- Локальный Docker dev-стек крутится: `deztech-crm-postgres-dev`, redis, mailhog, minio.
+- Next.js dev на `localhost:3000` через preview-сервер. Запуск: `mcp__Claude_Preview__preview_start({name:'next-dev'})`. Если порт занят — `Get-NetTCPConnection -LocalPort 3000` → Stop-Process. После `npm run build` смешиваются prod/dev артефакты в `.next/` → перед dev-запуском **удалить `.next/`** (`rm -rf .next`).
+- БД на 03.05.2026: 3 seed-юзера на `welcome123` (флаг должен быть `true`, но возможно у Регины `false` — проверь `SELECT password_must_change FROM users`). 0 клиентов, 0 лидов (всё чистил после E2E).
+- Логин для тестов: `deztexug@yandex.ru / welcome123` (Регина, manager).
+
+### Конфиги, которые НЕ в гите (gitignored, но критичны)
+- `.env.local` — DB, AUTH_SECRET, REDIS, **N8N_INBOUND_SECRET**.
+- `.mcp.json` — n8n MCP API key (подтянут из санктум-проекта `D:\Projects_GitHub\n8n_JSON\n8n_Cc_Sanctum\.mcp.json`). API URL `https://n8n.lex1case.ru`. Health-check: `bash tools/check-mcp-health.sh`.
+- `tmp/` — папка с образцами договоров и плановыми документами.
+
+### MCP инструменты в этой сессии
+- **n8n MCP** — работает (после релоуда Claude Code 03.05). 63 workflow видно. Workflow `DEzTechUg_bot` ID = `SkUMV2EUN8hObo76`.
+- **context7** и **Docling MCP** — не подключаются после релоуда (не критично, не использую).
+
+---
 
 ---
 

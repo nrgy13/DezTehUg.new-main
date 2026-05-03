@@ -30,18 +30,21 @@ const seedUsers: NewUser[] = [
     fullName: 'Саня (Admin)',
     role: 'admin',
     isActive: true,
+    passwordMustChange: true,
   },
   {
     email: 'deztexug@yandex.ru',
     fullName: 'Регина',
     role: 'manager',
     isActive: true,
+    passwordMustChange: true,
   },
   {
     email: 'nrgy131@gmail.com',
     fullName: 'Александр',
     role: 'master',
     isActive: true,
+    passwordMustChange: true,
   },
 ];
 

@@ -4,6 +4,7 @@ import { users } from '@/lib/db/schema/users';
 import { clients } from '@/lib/db/schema/clients';
 import { sql } from 'drizzle-orm';
 import { Users, UserCog, Wrench, FileText } from 'lucide-react';
+import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 
 export const metadata = { title: 'Админ — ДезТехЮг CRM' };
 
@@ -16,8 +17,12 @@ export default async function AdminDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Админ-дашборд</h1>
-        <p className="text-slate-400 mt-1">Привет, {user.name}! Это панель администратора.</p>
+        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+          Админ-дашборд
+        </h1>
+        <p className="text-content-muted mt-1 text-sm">
+          Привет, {user.name}! Это панель администратора.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -27,15 +32,20 @@ export default async function AdminDashboard() {
         <StatCard label="Шаблонов" value="—" icon={FileText} hint="загрузится позже" />
       </div>
 
-      <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold mb-3">Что дальше</h2>
-        <ul className="text-sm text-slate-400 space-y-1.5 list-disc pl-5">
-          <li>Этап 1-3 — БД, Auth, каркас панели — <span className="text-emerald-400">в работе</span></li>
+      <CyberpunkCard variant="default" hoverEffect={false} className="p-6">
+        <h2 className="text-base font-orbitron font-semibold tracking-wider text-content-primary mb-3 uppercase">
+          Что дальше
+        </h2>
+        <ul className="text-sm text-content-secondary space-y-1.5 list-disc pl-5">
+          <li>
+            Этап 1-3 — БД, Auth, каркас панели —{' '}
+            <span className="text-poison-green font-semibold">завершён</span>
+          </li>
           <li>Этап 4 — модуль клиентов и сделок — далее</li>
           <li>Этап 5 — интеграция с n8n (заявки с сайта)</li>
           <li>Этап 6 — документооборот (договоры, акты, КП)</li>
         </ul>
-      </div>
+      </CyberpunkCard>
     </div>
   );
 }
@@ -52,13 +62,13 @@ function StatCard({
   hint?: string;
 }) {
   return (
-    <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-5">
+    <CyberpunkCard variant="default" className="p-5">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-slate-400">{label}</span>
-        <Icon className="w-4 h-4 text-slate-500" />
+        <span className="text-xs font-orbitron tracking-wider text-content-muted uppercase">{label}</span>
+        <Icon className="w-4 h-4 text-content-muted" />
       </div>
-      <div className="text-2xl font-bold text-white">{value}</div>
-      {hint && <div className="text-xs text-slate-500 mt-1">{hint}</div>}
-    </div>
+      <div className="text-2xl font-orbitron font-bold text-content-primary">{value}</div>
+      {hint && <div className="text-xs text-content-muted mt-1">{hint}</div>}
+    </CyberpunkCard>
   );
 }
