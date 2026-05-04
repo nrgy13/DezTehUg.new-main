@@ -18,7 +18,13 @@ import { KanbanColumn, type ColumnDef } from './KanbanColumn';
 import { LeadCard, type BoardLead } from './LeadCard';
 import { LostReasonModal } from './LostReasonModal';
 import { ConvertOnDropModal } from './ConvertOnDropModal';
-import { updateLeadStatus, convertLeadToClient, markLeadLost } from '../actions';
+import { ProposalDialog, type ProposalSubmitInput } from './ProposalDialog';
+import {
+  updateLeadStatus,
+  convertLeadToClient,
+  markLeadLost,
+  submitProposalForLead,
+} from '../actions';
 
 const COLUMNS: ColumnDef[] = [
   { id: 'new', label: 'Новые', accent: 'border-electric-blue text-electric-blue', bgAccent: 'bg-electric-blue/10' },
@@ -33,7 +39,14 @@ const COLUMNS: ColumnDef[] = [
 type PendingDrop =
   | null
   | { kind: 'lost'; leadId: string; fromStatus: LeadStatus; leadName: string | null }
-  | { kind: 'convert'; leadId: string; fromStatus: LeadStatus; defaultName: string };
+  | { kind: 'convert'; leadId: string; fromStatus: LeadStatus; defaultName: string }
+  | {
+      kind: 'proposal';
+      leadId: string;
+      fromStatus: LeadStatus;
+      defaultName: string;
+      defaultEmail: string;
+    };
 
 export function LeadBoard({ initialLeads }: { initialLeads: BoardLead[] }) {
   const router = useRouter();
@@ -113,6 +126,18 @@ export function LeadBoard({ initialLeads }: { initialLeads: BoardLead[] }) {
       });
       return;
     }
+    // "КП отправлено" = генерация и отправка КП клиенту по email.
+    // Открываем модалку прайса. Без submit — лид остаётся в исходной колонке.
+    if (newStatus === 'proposal_sent') {
+      setPendingDrop({
+        kind: 'proposal',
+        leadId,
+        fromStatus: lead.status,
+        defaultName: lead.contactName ?? '',
+        defaultEmail: lead.contactEmail ?? '',
+      });
+      return;
+    }
 
     // Обычная смена статуса — optimistic update
     const prev = leads;
@@ -154,7 +179,11 @@ export function LeadBoard({ initialLeads }: { initialLeads: BoardLead[] }) {
     });
   };
 
-  const submitConvert = (input: { type: 'legal' | 'individual'; shortName: string }) => {
+  const submitConvert = (input: {
+    type: 'legal' | 'individual';
+    shortName: string;
+    createDeal: boolean;
+  }) => {
     if (!pendingDrop || pendingDrop.kind !== 'convert') return;
     const { leadId } = pendingDrop;
     const prev = leads;
@@ -167,9 +196,61 @@ export function LeadBoard({ initialLeads }: { initialLeads: BoardLead[] }) {
         setPendingDrop(null);
         return;
       }
-      toast.success('Клиент создан, лид помечен как «Договор подписан»');
+      toast.success(
+        input.createDeal
+          ? 'Клиент и сделка созданы'
+          : 'Клиент создан, лид помечен как «Договор подписан»',
+      );
       setPendingDrop(null);
-      router.push(`/manager/clients/${res.data.clientId}`);
+      router.push(
+        res.data.dealId
+          ? `/manager/deals/${res.data.dealId}`
+          : `/manager/clients/${res.data.clientId}`,
+      );
+      router.refresh();
+    });
+  };
+
+  const submitProposal = (input: ProposalSubmitInput) => {
+    if (!pendingDrop || pendingDrop.kind !== 'proposal') return;
+    const { leadId } = pendingDrop;
+    const prev = leads;
+    // Optimistic: переводим в proposal_sent сразу для отзывчивости
+    setLeads((cur) =>
+      cur.map((l) => (l.id === leadId ? { ...l, status: 'proposal_sent' } : l)),
+    );
+    startTransition(async () => {
+      const res = await submitProposalForLead({
+        leadId,
+        type: input.type,
+        shortName: input.shortName,
+        email: input.email,
+        subject: input.subject,
+        validUntil: input.validUntil,
+        items: input.items.map((it) => ({
+          customName: it.customName,
+          areaM2: Number(it.areaM2) || 0,
+          priceNoVat: Number(it.priceNoVat) || 0,
+          vatRate: Number(it.vatRate) || 0,
+          method: it.method,
+          frequency: it.frequency,
+        })),
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        setLeads(prev); // откат
+        // НЕ закрываем модалку — даём возможность исправить
+        return;
+      }
+      const transportNote =
+        res.data.emailTransport === 'noop'
+          ? ' (email замокан, скачай DOCX в карточке сделки)'
+          : res.data.emailTransport === 'failed'
+            ? ' (email упал, DOCX готов — скачай в сделке)'
+            : '';
+      toast.success(`КП отправлено на ${input.email}${transportNote}`);
+      setPendingDrop(null);
+      router.push(`/manager/deals/${res.data.dealId}?tab=documents`);
       router.refresh();
     });
   };
@@ -198,6 +279,14 @@ export function LeadBoard({ initialLeads }: { initialLeads: BoardLead[] }) {
         defaultName={pendingDrop?.kind === 'convert' ? pendingDrop.defaultName : ''}
         onClose={closePending}
         onSubmit={submitConvert}
+        isPending={isPending}
+      />
+      <ProposalDialog
+        open={pendingDrop?.kind === 'proposal'}
+        defaultName={pendingDrop?.kind === 'proposal' ? pendingDrop.defaultName : ''}
+        defaultEmail={pendingDrop?.kind === 'proposal' ? pendingDrop.defaultEmail : ''}
+        onClose={closePending}
+        onSubmit={submitProposal}
         isPending={isPending}
       />
     </DndContext>

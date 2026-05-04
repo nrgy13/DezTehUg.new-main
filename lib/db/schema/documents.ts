@@ -9,6 +9,7 @@ import {
   integer,
   boolean,
   date,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './users';
@@ -102,9 +103,26 @@ export const documents = pgTable('documents', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Счётчики для сквозной нумерации документов по году+типу
+// Используется через INSERT ... ON CONFLICT DO UPDATE RETURNING для атомарности
+export const documentNumberCounters = pgTable(
+  'document_number_counters',
+  {
+    year: integer('year').notNull(),
+    type: documentTypeEnum('type').notNull(),
+    lastNumber: integer('last_number').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.year, t.type] }),
+  }),
+);
+
 export type DocumentType = (typeof documentTypeEnum.enumValues)[number];
 export type DocumentStatus = (typeof documentStatusEnum.enumValues)[number];
 export type DocumentTemplate = typeof documentTemplates.$inferSelect;
 export type NewDocumentTemplate = typeof documentTemplates.$inferInsert;
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
+export type DocumentNumberCounter = typeof documentNumberCounters.$inferSelect;
+export type NewDocumentNumberCounter = typeof documentNumberCounters.$inferInsert;

@@ -1,56 +1,74 @@
 # DezTehYug CRM — память проекта
 
 > Файл читается Claude автоматически в начале каждой сессии в этом проекте.
-> Обновляй при больших изменениях. Последнее обновление: **2026-05-03 (середина Спринта 2, прервано на лимите Claude).**
+> Обновляй при больших изменениях. Последнее обновление: **2026-05-04 (закрытие Спринта 3, развёртывание на prod).**
 
 ---
 
 ## ⚡ ВНИМАНИЕ: где сейчас стоит работа (читать перед стартом!)
 
-**Спринт 2 в работе**, локальная ветка `feature/crm`, **ничего не закоммичено и не пушено** — копим до конца спринта.
+**Спринт 3 ЗАКРЫТ и развёрнут на prod.** Ветка `feature/crm`, working tree чистый после большого коммита Sprint 3.
 
-### ✅ Закрыто в Спринте 2 (локально, на dev):
-- **Задача 0** — редизайн CRM под стиль публичного сайта (light cyberpunk: bg-bg-primary, neon-orange, poison-green, font-orbitron, CyberpunkButton/CyberpunkCard/NeonInput, LogoText в Sidebar и Login). Файлы: `app/(crm)/layout.tsx`, `components/crm/Sidebar.tsx`, `components/crm/CrmProviders.tsx` (новый, SessionProvider+Toaster), `app/(auth)/login/{page,login-form}.tsx`, `app/(crm)/profile/{page,PasswordForm}.tsx`, `app/(crm)/{admin,manager,master}/page.tsx`, `components/layout/AppWrapper.tsx` (+`/profile` в isCrmPath).
-- **Задача 3** — UI смены пароля. Миграция `0001_stiff_pepper_potts.sql` (колонка `users.password_must_change boolean default false`). JWT-флаг через `useSession().update()`. Edge-safe middleware: `lib/auth/config.ts` + `middleware.ts` (matcher включает `/profile`). Server Action `app/(crm)/profile/actions.ts` (bcrypt+activity_log). E2E 11/11 в preview.
-- **Задача 2** — модуль клиентов. Утилита валидации `lib/validation/inn.ts` (ИНН/ОГРН/ОГРНИП/КПП/БИК/р.с./корсчёт по алгоритмам ФНС/ЦБ — 23/23 unit-теста). Zod discriminated union (legal/individual). Server Actions в `app/(crm)/manager/clients/actions.ts` (CRUD + status change + objects + activity_log). UI: список с фильтрами (тип/статус/mine/q)+пагинацией, форма create/edit (одна длинная), карточка с 4 табами (Реквизиты/Объекты/Договоры/История), CRUD объектов, dropdown смены статуса. E2E 7/7 в preview.
+### Состояние ветки
+- Sprint 3 закрыт большим коммитом (см. последний `git log`). Ветка опережает `main`.
+- Не мерджим в `main` — `feature/crm` остаётся живой веткой разработки CRM, не трогаем `main` (там — публичный сайт).
 
-### 🔄 В процессе: Задача 4 (n8n + UI лидов)
+### ✅ Что закрыто в Спринте 3 (всё на prod, миграция 0003 применена)
 
-**Готово (код написан, частично протестировано):**
-- `app/api/leads/inbound/route.ts` — endpoint POST с проверкой `X-N8N-Secret`. Гибкий парсинг payload (`message.content` n8n-формат, ключи `customer_phone`/`phone`/`tel` и т.д.). Phone обязателен. Создаёт `lead` с `rawPayload` (jsonb) + activity_log `lead.create_from_n8n`. **Curl-тесты 4/4 прошли** (401/401/422/201).
-- Секрет `N8N_INBOUND_SECRET` лежит в `.env.local` (gitignored). **На prod надо тот же положить в `/opt/deztech-crm/.env` + в header `X-N8N-Secret` в n8n-ноде.** Реальное значение в локальном `.env.local`, в репо не коммитим.
-- UI: `app/(crm)/manager/leads/page.tsx` (список+таб-фильтры по статусу+поиск+mine), `[id]/page.tsx` (карточка с rawPayload в `<details>`), `LeadStatusControl.tsx` (dropdown), `LeadActions.tsx` (TakeLeadButton + ConvertLeadButton с модалкой), `actions.ts` (Server Actions: updateLeadStatus, takeLead, convertLeadToClient).
-- `components/crm/LeadStatusBadge.tsx` (6 статусов).
+**A. Фундамент** — `lib/storage/{index,local}` с защитой от path-traversal (9/9 smoke), `lib/document-number` атомарная нумерация через INSERT ... ON CONFLICT (8/8 smoke, в т.ч. 10 параллельных без коллизий), `lib/render-pdf` через `child_process.spawn('soffice')`, `Dockerfile` переключён на `node:20-slim` + `apt install libreoffice-core libreoffice-writer` (~950МБ).
 
-**Не доделано (новая сессия должна продолжить):**
-1. **E2E тест в preview**: рефреш `/manager/leads` после curl-заявки → видно lead → клик «Взять в работу» → клик «Конвертировать в клиента» (тип legal/individual + shortName) → создаётся client, lead.status=won, lead.client_id заполнен, редирект на `/manager/clients/<id>`. Локальный curl-тест на endpoint уже сделан, **проверить визуально и через сеанс Регины**.
-2. **Добавить ноду в n8n workflow `DEzTechUg_bot` (id `SkUMV2EUN8hObo76`).** Текущая структура: Webhook(/DTU_zayavki, headerAuth) → AGENT Diagnose (OpenAI) → Insert row1 (n8n dataTable DezTechUg_Client) → fan-out: Telegram + Gmail. **Нужно добавить третью ветку из `Insert row1` → HTTP Request → `https://crm.дезтехюг.рф/api/leads/inbound`** с заголовком `X-N8N-Secret: <prod_secret>` и body = `{{$json.message.content}}` (или весь `$json` — endpoint оба формата ест). MCP `n8n_update_partial_workflow` с операцией `addNode` + `addConnection`. Не забыть **deactivate→activate** workflow после правки (см. правило в Sanctum memory).
-3. **Не забыть улучшить текущий workflow** — Саня просил по ходу глянуть что можно подправить. Сейчас не успел.
+**B. Каталог услуг** — `/admin/services` с inline-toggle активности и create/edit dialog (`ServicesClient.tsx`).
 
-### ⏳ Pending в Спринте 2:
-- **Задача 5** — канбан воронки (drag-n-drop по статусам через `@dnd-kit/core` — НЕ установлен) + конвертация уже частично есть (`convertLeadToClient`).
-- **Задача 1** — DOCX-болванки (6 шаблонов docxtemplater). Образцы скопированы в `tmp/source/` (gitignored): 2 PDF (договор Аппетит + ДС№4) + 2 DOCX (акт обследования + акт работ). Требует docxtemplater + pizzip — **уже стоят**.
-- **Финальный деплой Спринта 2 на prod** (по договорённости — пакетом в конце спринта). После применения миграции 0001 на prod не забыть:
-  ```sql
-  UPDATE users SET password_must_change = true
-  WHERE email IN ('sanctumizm@gmail.com','deztexug@yandex.ru','nrgy131@gmail.com');
-  ```
-  Также `N8N_INBOUND_SECRET` положить в prod env.
+**C. Сделки** — модуль на 5 actions (createDeal/updateDeal/status/priceItems/master), карточка с 5 табами (Реквизиты/Прайс/Документы/ДС/История), inline-edit реквизитов, прайс-таблица с автосчётом НДС. Кнопка «Создать сделку» в карточке клиента + DealsTab. Конвертация лида расширена чекбоксом «Сразу создать сделку» (default ON).
+
+**D. Документы + шаблоны** — `lib/documents/generate.ts` экстракт-функция, `getActiveTemplate` с fallback на `templates/*.docx`, seed 6 базовых шаблонов через `npm run db:seed:templates`, `/admin/templates` с drag-n-drop upload + валидация через docxtemplater + версионирование, API `/api/documents/generate` переписан, download endpoint, DocumentsTab в карточке сделки с **delete-кнопкой**.
+
+**E. ДС** — отдельный таб в карточке сделки, нумерация в рамках сделки (внутренняя 1/2/3), при генерации DOCX → официальный номер `ДС-2026-NNN` сквозной по году.
+
+**F. Email** — `lib/mailer/{index,transports/smtp,transports/noop}` + `lib/mailer/templates.ts` с body-шаблонами для всех 6 типов документов (HTML+plain text, подпись с контактами компании). UI «Отправить клиенту» в DocumentsTab.
+
+**G. Master UI** — `/master` со списком своих сделок без цен (group by status), `/master/deals/[id]` с контактами клиента, объектами (link на Я.Карты), планом работ, журналом + form `WorkLogForm` для записи работ + кнопка «Завершить выезд».
+
+**H. Admin UI юзеров** — `/admin/users` с CRUD, одноразовый пароль (12 chars, bcrypt-хеш в БД, plaintext только в UI с copy-кнопкой), сброс пароля, защита от деактивации/смены роли самому себе.
+
+**I. Playwright** — `playwright.config.ts` + `tests/e2e/happy-path.spec.ts` (3 теста: дашборд, создание сделки→прайс→DOCX, admin создание юзера). Все 3 зелёные. `npm run test:e2e`.
+
+**K. КП-flow из канбана** — drop лида в колонку «КП отправлено» открывает `ProposalDialog` (тип клиента, название, email, прайс-позиции, срок). Server action `submitProposalForLead` атомарно создаёт черновик клиента (без реквизитов), draft-сделку, прайс, генерирует DOCX КП и отправляет email. При отмене — статус лида откатывается. Удаление документов через корзину в DocumentsTab (DOCX+PDF+signed scan из storage + запись из БД).
+
+**Активные n8n CRM-нода** в workflow `DEzTechUg_bot` (id `SkUMV2EUN8hObo76`) продолжает работать с прошлого спринта.
+
+### Ключевые решения, зафиксированные в Sprint 3
+
+- LibreOffice — `apt install` в app-контейнере (изоляция > размер образа)
+- Master без цен и сумм
+- Admin показывает одноразовый пароль в UI (не шлёт email)
+- Convert лида в сделку — чекбокс default ON
+- DOCX-шаблоны через UI (с seed для 6 базовых)
+- Нумерация документов сквозная по году+типу: `ДГ-2026-001`, `ДС-2026-001`
+- Storage на prod — named volume `app-storage` → `/app/storage` в контейнере (НЕ bind-mount — изначально планировался bind, но есть существующий named volume)
+- Mailer в prod = `noop` пока не получен SMTP Yandex 360
+- При пустом email body — анти-спам ругается, поэтому body-шаблоны для всех типов документов
 
 ### Состояние dev-окружения
-- Локальный Docker dev-стек крутится: `deztech-crm-postgres-dev`, redis, mailhog, minio.
-- Next.js dev на `localhost:3000` через preview-сервер. Запуск: `mcp__Claude_Preview__preview_start({name:'next-dev'})`. Если порт занят — `Get-NetTCPConnection -LocalPort 3000` → Stop-Process. После `npm run build` смешиваются prod/dev артефакты в `.next/` → перед dev-запуском **удалить `.next/`** (`rm -rf .next`).
-- БД на 03.05.2026: 3 seed-юзера на `welcome123` (флаг должен быть `true`, но возможно у Регины `false` — проверь `SELECT password_must_change FROM users`). 0 клиентов, 0 лидов (всё чистил после E2E).
-- Логин для тестов: `deztexug@yandex.ru / welcome123` (Регина, manager).
+- Локальный Docker dev-стек: `deztech-crm-postgres-dev`, redis, mailhog (http://localhost:8025), minio.
+- Next.js dev на `localhost:3000` через preview-сервер. Запуск: `mcp__Claude_Preview__preview_start({name:'next-dev'})`. После `npm run build` смешиваются prod/dev артефакты в `.next/` → перед dev-запуском **удалить `.next/` ПЕРЕД restart** (если удалить пока сервер бежит — webpack-runtime сломается с ENOENT).
+- БД на dev: содержит данные после Sprint 3 (тестовые лиды, клиенты, сделки, документы, КП). Если нужно — почистить через миграции.
+- 3 seed-юзера на `welcome123` (флаг must_change=true изначально, после первого логина в браузере становится false для тестируемых).
+- Логин для тестов: `deztexug@yandex.ru / welcome123` (Регина, manager). admin: `sanctumizm@gmail.com`. master: `nrgy131@gmail.com`.
+- Email на dev → MailHog (http://localhost:8025), `MAILER_TRANSPORT=smtp` в `.env.local`.
 
 ### Конфиги, которые НЕ в гите (gitignored, но критичны)
-- `.env.local` — DB, AUTH_SECRET, REDIS, **N8N_INBOUND_SECRET**.
-- `.mcp.json` — n8n MCP API key (подтянут из санктум-проекта `D:\Projects_GitHub\n8n_JSON\n8n_Cc_Sanctum\.mcp.json`). API URL `https://n8n.lex1case.ru`. Health-check: `bash tools/check-mcp-health.sh`.
-- `tmp/` — папка с образцами договоров и плановыми документами.
+- `.env.local` — DB, AUTH_SECRET, REDIS, `N8N_INBOUND_SECRET`, `STORAGE_DRIVER=local`, `STORAGE_ROOT=./storage`, `MAILER_TRANSPORT=smtp`.
+- `.mcp.json` — n8n MCP API key. API URL `https://n8n.lex1case.ru`. Health-check: `bash tools/check-mcp-health.sh`.
+- `tmp/` — папка с образцами договоров (`tmp/source/`) и планами (`tmp/plans/`).
+- `storage/` — локальные сгенерированные документы (на prod — named volume `app-storage`).
+- `test-results/`, `playwright-report/` — артефакты Playwright.
 
-### MCP инструменты в этой сессии
-- **n8n MCP** — работает (после релоуда Claude Code 03.05). 63 workflow видно. Workflow `DEzTechUg_bot` ID = `SkUMV2EUN8hObo76`.
-- **context7** и **Docling MCP** — не подключаются после релоуда (не критично, не использую).
+### MCP инструменты
+- **n8n MCP** — работает. Workflow `DEzTechUg_bot` ID = `SkUMV2EUN8hObo76`.
+- **Claude Preview** — для запуска dev-сервера и E2E через браузер.
+- **Playwright MCP** — будет использоваться в Эпике I для Sprint 3 тестов.
+- **context7** и **Docling MCP** — не подключаются (не критично).
 
 ---
 
@@ -195,78 +213,33 @@ DezTehUg.new-main/
 
 ---
 
-## Что СДЕЛАНО (Спринт 1, 2026-05-01 → 2026-05-02)
+## Что СДЕЛАНО (Спринты 1, 2, 3)
 
-✅ Этапы 0-3 из плана:
-- VPS развёрнут и защищён
-- Docker stack работает
-- БД с миграцией и seed
-- Auth.js v5 с ролями (admin/manager/master)
-- Каркас CRM-панели (sidebar, дашборды-заглушки)
-- HTTPS + Let's Encrypt
-- Host-aware middleware (корень `/` на crm-поддомене → редирект)
-- Ветка `feature/crm` запушена в GitHub: https://github.com/nrgy13/DezTehUg.new-main/tree/feature/crm
+**Спринт 1 (2026-05-01 → 2026-05-02):** VPS, Docker stack, БД с миграцией+seed, Auth.js v5 с ролями (admin/manager/master), каркас CRM-панели, HTTPS+Let's Encrypt, host-aware middleware.
+
+**Спринт 2 (2026-05-03):** редизайн CRM (light cyberpunk), смена пароля (миграция 0001), модуль клиентов с ИНН/ОГРН валидацией (23 unit-теста), модуль лидов + n8n integration + канбан на dnd-kit (миграция 0002), 6 DOCX-шаблонов с tools-builder, минимальная генерация контракта, активная n8n CRM-нода на проде. Закрыт коммитом `8c486ca`.
+
+**Спринт 3 (2026-05-04):** см. секцию ✅ выше. Migration 0003. Полный цикл лид→клиент→сделка→документ→выезд→акт. КП-flow прямо из канбана. Удаление документов. Email body шаблоны для всех типов. Master/Admin UI наполнены. 3 Playwright теста. LibreOffice в app-контейнере вместо отдельного. GitHub: https://github.com/nrgy13/DezTehUg.new-main/tree/feature/crm
 
 ---
 
-## Что НЕ сделано / БЛОКЕРЫ для следующих спринтов
+## Блокеры для будущих спринтов (Sprint 4+)
 
-❌ **Yandex Object Storage** — не настроен (нужен для Этапа 6).
-   Действия: создать bucket `deztechyug-crm`, сервисный ключ, заполнить S3_* в `/opt/deztech-crm/.env`
+❌ **SMTP Yandex 360** — настроены `SMTP_HOST=smtp.yandex.ru` в шаблонах, `MAILER_TRANSPORT=noop` на проде. Саня даст пароль приложения из `id.yandex.ru → Безопасность` → переключаем `MAILER_TRANSPORT=smtp` без передеплоя.
 
-❌ **DOCX-шаблоны** от заказчика — пока нет. Договорились **сверстать болванки** по PDF-образцу.
+❌ **Yandex Object Storage** — не настроен. Storage abstraction готов: `lib/storage/{index,local}.ts`, переход — добавить `S3Storage` класс и `STORAGE_DRIVER=s3`. На prod пока named volume `app-storage` → `/app/storage`.
 
-❌ **Telegram bot** — нет токена (нужен для Этапа 8).
-   Действия: создать через @BotFather, токен в `TELEGRAM_BOT_TOKEN` в .env
+❌ **Telegram bot** — нет токена. Запланировано на Sprint 4.
 
-❌ **SMTP Beget** — данные не заполнены (нужен для Этапа 6 — отправка документов).
-   Действия: получить SMTP-доступ от Beget, заполнить SMTP_USER, SMTP_PASS в .env
+❌ **CI/CD** — нет. Playwright тесты запускаются локально (`npm run test:e2e`).
 
-❌ **UI смены пароля** — все юзеры на `welcome123`. Сделать в Спринте 2.
-
-❌ **Test coverage** — тестов нет. Добавим Playwright в Спринте 5-6.
-
----
-
-## План Спринта 2 (следующая сессия)
-
-Длительность: 2 недели. Цель: **клиенты + интеграция с сайтом + смена пароля**.
-
-### Задачи
-
-1. **DOCX-болванки** (1-2 дня)
-   - Сверстать 6 шаблонов по образцу `tmp/plans/` (есть PDF-образец договора `ДОГОВОР ООО Аппетит.pdf`):
-     договор, доп.соглашение, акт работ, акт обследования, КП, счёт
-   - Использовать `docxtemplater` синтаксис: `{{client.short_name}}`, `{#objects}{...}{/objects}`
-   - Сохранить в `templates/` папке проекта (пока локально, потом в S3)
-
-2. **Этап 4: модуль клиентов** (3-4 дня)
-   - Список клиентов с фильтром по типу (физ/юр), статусу, менеджеру
-   - Форма создания/редактирования юрлица с реквизитами
-   - Карточка клиента с табами (реквизиты, объекты, история)
-   - CRUD объектов обслуживания
-   - Server Actions для операций
-
-3. **UI смены пароля** (0.5 дня)
-   - Страница `/profile` или модалка
-   - Server Action change-password (старый + новый, проверка bcrypt, обновление в БД)
-   - При первом входе с `welcome123` принудительно редиректить на смену
-
-4. **Этап 5: интеграция с n8n** (2 дня)
-   - Endpoint `POST /api/leads/inbound` с проверкой `N8N_INBOUND_SECRET`
-   - В n8n настроить отправку формы сайта на новый endpoint
-   - Создание lead в БД при входящем webhook
-   - Уведомление менеджера (email пока через MailHog в dev)
-
-5. **Воронка лидов** (3 дня)
-   - Канбан с колонками по статусам lead_status
-   - Drag-n-drop для смены статуса
-   - Конвертация lead → client + deal
-
-### Open questions перед стартом
-- Получены ли DOCX-шаблоны от заказчика?
-- Готов ли Yandex Cloud аккаунт?
-- Где сейчас принимает форму с сайта n8n? Куда подключаемся?
+❌ **PDF на проде** — DOCX→PDF через LibreOffice headless внутри app-контейнера, smoke ещё не делал на проде, нужно проверить после первой реальной генерации с PDF (флаг `format=both` или `format=pdf` в API).
+- **F. Email** — nodemailer wrapper, в prod транспорт `noop` пока нет SMTP
+- **G. Master UI** — список своих сделок (без цен), запись work_log, завершение выезда
+- **H. Admin UI** — CRUD юзеров с одноразовым паролем
+- **I. Playwright** — happy-path lead→client→deal→documents→work→complete, плюс admin тесты
+- **J. Деплой** — миграция 0003 на prod, named-volume storage, rebuild с LibreOffice, smoke-test, обновление CLAUDE.md+MEMORY.md, один коммит
+- **K. Bonus (по запросу Сани в процессе):** КП-flow из канбана при drop в «КП отправлено», email body шаблоны (анти-спам), удаление документов
 
 ---
 
@@ -279,25 +252,36 @@ ssh root@91.229.90.53 -i ~/.ssh/id_ed25519_nopass
 # Локальная разработка
 npm run docker:dev:up      # Postgres+Redis+MailHog+MinIO
 npm run dev                # Next.js на localhost:3000
-npm run db:generate        # после изменения схемы
-npm run db:migrate         # применить миграции локально
-npm run db:seed            # засеять локальную БД
+npm run db:generate        # после изменения схемы (drizzle-kit generate)
+npm run db:migrate         # ВНИМАНИЕ: drizzle-kit migrate НЕ используется на этом проекте.
+                           # Миграции применяются вручную через psql -f. См. docker exec ниже.
+npm run db:seed            # засеять локальную БД (3 юзера + 8 услуг)
+npm run db:seed:templates  # засеять documentTemplates 6 базовыми шаблонами
 
-# На VPS
+# Тесты
+npm run test:e2e           # Playwright happy-path
+npm run test:e2e:ui        # Playwright с UI
+
+# Применение миграции локально (вручную, не drizzle-kit)
+docker cp drizzle/migrations/0003_xxx.sql deztech-crm-postgres-dev:/tmp/m.sql
+MSYS_NO_PATHCONV=1 docker exec -i deztech-crm-postgres-dev psql -U deztech deztech_crm -f /tmp/m.sql
+
+# На VPS — деплой нового кода через git
 cd /opt/deztech-crm
-docker compose -f docker-compose.prod.yml ps                    # статус
-docker logs deztech-crm-app --tail 50                           # логи app
-docker compose -f docker-compose.prod.yml --env-file .env up -d --force-recreate app  # перезапуск
-docker compose -f docker-compose.prod.yml --env-file .env build app                   # ребилд
-
-# Деплой нового кода (после git pull или rsync)
+git fetch origin feature/crm
+git reset --hard origin/feature/crm
 docker compose -f docker-compose.prod.yml --env-file .env build app
 docker compose -f docker-compose.prod.yml --env-file .env up -d --force-recreate app
 
-# Миграция на prod
-docker compose -f docker-compose.prod.yml --env-file .env exec -T app npx drizzle-kit migrate
+# Применение миграции на prod (вручную)
+docker cp drizzle/migrations/0003_xxx.sql deztech-crm-postgres:/tmp/m.sql
+docker exec -i deztech-crm-postgres psql -U deztech deztech_crm -f /tmp/m.sql
 
-# Бэкап БД (TODO: автоматизировать)
+# Seed шаблонов на prod (one-shot контейнер)
+docker compose -f docker-compose.prod.yml --env-file .env run --rm app node -e "import('./node_modules/tsx/dist/cli.mjs').then(t=>t.main(['lib/db/seed-templates.ts']))"
+# или проще — собрать js из ts заранее, или сделать отдельный node-скрипт без tsx
+
+# Бэкап БД
 docker exec deztech-crm-postgres pg_dump -U deztech deztech_crm > backup-$(date +%Y%m%d).sql
 ```
 
@@ -316,4 +300,6 @@ docker exec deztech-crm-postgres pg_dump -U deztech deztech_crm > backup-$(date 
 
 ## История по сессиям
 
-- **Сессия 1 (2026-05-01..02):** инициализация проекта, развёртывание MVP-инфры, доведение до production https://crm.дезтехюг.рф/login. 9 коммитов в feature/crm.
+- **Сессия 1 (2026-05-01..02):** инициализация проекта, развёртывание MVP-инфры, доведение до production https://crm.дезтехюг.рф/login. 5 коммитов: `20d6195` (MVP infra) → `6fad23c` (prod-инфра) → `c1bee75` (Traefik) → `583bf0a` (Punycode) → `04e3ca7` (auth split) → `cc1fe6a` (host-aware redirect) → `0f1fb60` (CLAUDE.md).
+- **Сессия 2 (2026-05-03):** Sprint 2 — клиенты, лиды (UI+канбан), n8n integration, 6 DOCX-шаблонов, дашборд, миграции 0001/0002, активация CRM-ноды на проде. 2 коммита: `8c486ca` (большой Sprint 2) + `802d5ec` (toggle-script).
+- **Сессия 3 (2026-05-03 → 2026-05-04):** Sprint 3 целиком — все 10 эпиков (A-J) + бонус K (КП-flow из канбана + email body + удаление документов). Миграция 0003 применена на dev и prod, named volume `app-storage` подхвачен в `/app/storage`, LibreOffice ставится `apt install` в app-контейнер (~950МБ), отдельный `deztech-crm-libreoffice` сервис удалён, `MAILER_TRANSPORT=noop` на проде до получения SMTP Yandex. 3 Playwright-теста зелёные. Закрыт одним большим коммитом (см. `git log feature/crm`).

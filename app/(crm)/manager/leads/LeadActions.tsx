@@ -65,6 +65,8 @@ export function ConvertLeadButton({
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<'legal' | 'individual'>('legal');
   const [shortName, setShortName] = useState(defaultName);
+  // Default ON (согласовано с Саней): чтобы из лида одним кликом получить и клиента, и сделку
+  const [createDeal, setCreateDeal] = useState(true);
   const [isPending, startTransition] = useTransition();
 
   if (alreadyConverted && clientId) {
@@ -82,13 +84,23 @@ export function ConvertLeadButton({
       return;
     }
     startTransition(async () => {
-      const res = await convertLeadToClient({ id: leadId, type, shortName: shortName.trim() });
+      const res = await convertLeadToClient({
+        id: leadId,
+        type,
+        shortName: shortName.trim(),
+        createDeal,
+      });
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success('Клиент создан');
-      router.push(`/manager/clients/${res.data.clientId}`);
+      toast.success(createDeal ? 'Клиент и сделка созданы' : 'Клиент создан');
+      // Если создали сделку — редиректим сразу в неё, иначе в карточку клиента
+      router.push(
+        res.data.dealId
+          ? `/manager/deals/${res.data.dealId}`
+          : `/manager/clients/${res.data.clientId}`,
+      );
       router.refresh();
     });
   };
@@ -160,6 +172,17 @@ export function ConvertLeadButton({
                   className="h-11 w-full rounded-md bg-bg-primary px-3 py-2 text-sm border border-gray-200 focus:border-poison-green focus:ring-2 focus:ring-poison-green/20 focus:outline-none transition-all"
                 />
               </div>
+
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-content-secondary">
+                <input
+                  type="checkbox"
+                  checked={createDeal}
+                  onChange={(e) => setCreateDeal(e.target.checked)}
+                  disabled={isPending}
+                  className="w-4 h-4 accent-neon-orange"
+                />
+                <span>Сразу создать draft-сделку и перейти в неё</span>
+              </label>
             </div>
 
             <div className="flex items-center gap-3 mt-6">

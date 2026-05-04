@@ -11,9 +11,11 @@ import { users } from '@/lib/db/schema/users';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { ClientTypeBadge } from '@/components/crm/ClientStatusBadge';
+import { DealStatusBadge } from '@/components/crm/DealStatusBadge';
 import { ClientStatusControl } from '../ClientStatusControl';
-import { GenerateDocumentMenu } from './GenerateDocumentMenu';
 import { DeleteObjectButton } from '../DeleteObjectButton';
+import { CreateDealButton } from './CreateDealButton';
+import { deals } from '@/lib/db/schema/deals';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,7 +69,7 @@ export default async function ClientCardPage({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <GenerateDocumentMenu clientId={id} />
+            <CreateDealButton clientId={id} />
             <CyberpunkButton href={`/manager/clients/${id}/edit`} variant="secondary" size="default">
               <Pencil className="w-4 h-4 mr-2" />
               Редактировать
@@ -101,7 +103,7 @@ export default async function ClientCardPage({
       {/* Tab content */}
       {tab === 'requisites' && <RequisitesTab client={client} />}
       {tab === 'objects' && <ObjectsTab clientId={id} />}
-      {tab === 'deals' && <DealsPlaceholder />}
+      {tab === 'deals' && <DealsTab clientId={id} />}
       {tab === 'history' && <HistoryTab clientId={id} />}
     </div>
   );
@@ -247,15 +249,72 @@ async function ObjectsTab({ clientId }: { clientId: string }) {
 }
 
 // ============================================================
-// Deals tab — placeholder (этап 4 в Спринте 3+)
+// Deals tab — список сделок клиента
 // ============================================================
 
-function DealsPlaceholder() {
+async function DealsTab({ clientId }: { clientId: string }) {
+  const list = await db
+    .select({
+      id: deals.id,
+      contractNumber: deals.contractNumber,
+      contractDate: deals.contractDate,
+      status: deals.status,
+      totalAmount: deals.totalAmount,
+    })
+    .from(deals)
+    .where(eq(deals.clientId, clientId))
+    .orderBy(desc(deals.contractDate), desc(deals.createdAt));
+
+  if (list.length === 0) {
+    return (
+      <CyberpunkCard variant="default" hoverEffect={false} className="p-10 text-center">
+        <p className="text-sm text-content-muted mb-4">
+          У этого клиента ещё нет сделок.
+        </p>
+        <CreateDealButton clientId={clientId} />
+      </CyberpunkCard>
+    );
+  }
+
   return (
-    <CyberpunkCard variant="default" hoverEffect={false} className="p-10 text-center">
-      <p className="text-sm text-content-muted">
-        Договоры с этим клиентом появятся после внедрения модуля сделок (Спринт 3+).
-      </p>
+    <CyberpunkCard variant="default" hoverEffect={false} className="p-0 overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-bg-secondary border-b border-gray-200">
+          <tr className="text-xs uppercase font-orbitron tracking-wider text-content-muted">
+            <th className="text-left px-4 py-3 w-44">Номер</th>
+            <th className="text-left px-4 py-3 w-32">Дата</th>
+            <th className="text-left px-4 py-3 w-32">Статус</th>
+            <th className="text-right px-4 py-3 w-32">Сумма</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {list.map((d) => (
+            <tr key={d.id} className="hover:bg-bg-secondary/50">
+              <td className="px-4 py-3">
+                <Link
+                  href={`/manager/deals/${d.id}`}
+                  className="text-neon-orange hover:underline font-mono text-xs"
+                >
+                  {d.contractNumber}
+                </Link>
+              </td>
+              <td className="px-4 py-3 text-content-secondary">
+                {d.contractDate
+                  ? d.contractDate.split('-').reverse().join('.')
+                  : '—'}
+              </td>
+              <td className="px-4 py-3">
+                <DealStatusBadge status={d.status} />
+              </td>
+              <td className="px-4 py-3 text-right text-content-secondary">
+                {d.totalAmount
+                  ? `${new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2 }).format(Number(d.totalAmount))} ₽`
+                  : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </CyberpunkCard>
   );
 }

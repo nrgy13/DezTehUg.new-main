@@ -49,6 +49,11 @@ next-env.d.ts
 # Generated documents (cached locally before S3)
 /storage/
 
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
 # IDE
 .idea/
 .vscode/launch.json

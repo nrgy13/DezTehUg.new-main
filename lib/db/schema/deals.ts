@@ -9,12 +9,14 @@ import {
   integer,
   decimal,
   date,
+  index,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { clients } from './clients';
 import { clientObjects } from './objects';
 import { services } from './services';
 import { users } from './users';
+import { leads } from './leads';
 
 // Статус договора/сделки
 export const dealStatusEnum = pgEnum('deal_status', [
@@ -39,6 +41,17 @@ export const deals = pgTable('deals', {
   clientId: uuid('client_id')
     .notNull()
     .references(() => clients.id, { onDelete: 'restrict' }),
+
+  // Лид-источник (если сделка создана конвертацией из лида)
+  leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
+
+  // Назначения
+  assignedManagerId: uuid('assigned_manager_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  assignedMasterId: uuid('assigned_master_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
 
   // Период действия
   startDate: date('start_date'),
@@ -79,10 +92,14 @@ export const dealPriceItems = pgTable('deal_price_items', {
   objectId: uuid('object_id').references(() => clientObjects.id, { onDelete: 'set null' }),
   serviceId: uuid('service_id').references(() => services.id, { onDelete: 'set null' }),
 
+  // Свободное название услуги (когда менеджер вписывает что-то вне каталога)
+  // Если пусто — отображаем services.name. Если оба пусты — UI требует одно из двух.
+  customName: varchar('custom_name', { length: 255 }),
+
   // Параметры
   areaM2: integer('area_m2').notNull(),
   method: varchar('method', { length: 128 }), // "Сухая/Точечное орошение/Туман"
-  frequency: varchar('frequency', { length: 64 }).notNull(), // "Ежемесячно", "По заявке"
+  frequency: varchar('frequency', { length: 64 }), // "Ежемесячно", "По заявке" — опционально для разовых работ
 
   // Цены
   priceNoVat: decimal('price_no_vat', { precision: 12, scale: 2 }).notNull(),
@@ -119,6 +136,32 @@ export const dealAddendums = pgTable('deal_addendums', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Журнал выполненных работ мастером по сделке (для акта работ)
+export const dealWorkLogs = pgTable(
+  'deal_work_logs',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+
+    dealId: uuid('deal_id')
+      .notNull()
+      .references(() => deals.id, { onDelete: 'cascade' }),
+    masterId: uuid('master_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+
+    performedAt: timestamp('performed_at', { withTimezone: true }).notNull().defaultNow(),
+    description: text('description').notNull(),
+    areaM2: integer('area_m2'),
+    notes: text('notes'),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    dealIdx: index('deal_work_logs_deal_id_idx').on(t.dealId),
+    masterIdx: index('deal_work_logs_master_id_idx').on(t.masterId),
+  }),
+);
+
 export type DealStatus = (typeof dealStatusEnum.enumValues)[number];
 export type Deal = typeof deals.$inferSelect;
 export type NewDeal = typeof deals.$inferInsert;
@@ -126,3 +169,5 @@ export type DealPriceItem = typeof dealPriceItems.$inferSelect;
 export type NewDealPriceItem = typeof dealPriceItems.$inferInsert;
 export type DealAddendum = typeof dealAddendums.$inferSelect;
 export type NewDealAddendum = typeof dealAddendums.$inferInsert;
+export type DealWorkLog = typeof dealWorkLogs.$inferSelect;
+export type NewDealWorkLog = typeof dealWorkLogs.$inferInsert;

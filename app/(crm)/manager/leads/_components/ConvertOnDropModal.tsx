@@ -14,18 +14,19 @@ export function ConvertOnDropModal({
   open: boolean;
   defaultName: string;
   onClose: () => void;
-  onSubmit: (input: { type: 'legal' | 'individual'; shortName: string }) => void;
+  onSubmit: (input: { type: 'legal' | 'individual'; shortName: string; createDeal: boolean }) => void;
   isPending: boolean;
 }) {
   const [type, setType] = useState<'legal' | 'individual'>('legal');
   const [shortName, setShortName] = useState(defaultName);
+  const [createDeal, setCreateDeal] = useState(true);
 
   if (!open) return null;
 
   const submit = () => {
     const trimmed = shortName.trim();
     if (!trimmed) return;
-    onSubmit({ type, shortName: trimmed });
+    onSubmit({ type, shortName: trimmed, createDeal });
   };
 
   return (
@@ -95,6 +96,17 @@ export function ConvertOnDropModal({
               className="h-11 w-full rounded-md bg-bg-primary px-3 py-2 text-sm border border-gray-200 focus:border-poison-green focus:ring-2 focus:ring-poison-green/20 focus:outline-none transition-all"
             />
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-content-secondary">
+            <input
+              type="checkbox"
+              checked={createDeal}
+              onChange={(e) => setCreateDeal(e.target.checked)}
+              disabled={isPending}
+              className="w-4 h-4 accent-neon-orange"
+            />
+            <span>Сразу создать draft-сделку и перейти в неё</span>
+          </label>
         </div>
 
         <div className="flex items-center gap-3 mt-6">
