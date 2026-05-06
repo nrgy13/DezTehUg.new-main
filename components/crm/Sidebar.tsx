@@ -25,14 +25,17 @@ type NavItem = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   roles: UserRole[];
+  // Тонкая рамка-маркер стадии воронки (Заявки → Клиенты → Договоры).
+  // Видна постоянно, не зависит от active-state.
+  stageBorder?: string;
 };
 
 const NAV: NavItem[] = [
   // Менеджер
   { href: '/manager', label: 'Дашборд', icon: LayoutDashboard, roles: ['manager'] },
-  { href: '/manager/leads', label: 'Заявки', icon: Inbox, roles: ['manager'] },
-  { href: '/manager/clients', label: 'Клиенты', icon: Users, roles: ['manager'] },
-  { href: '/manager/deals', label: 'Договоры', icon: Briefcase, roles: ['manager'] },
+  { href: '/manager/leads', label: 'Заявки', icon: Inbox, roles: ['manager'], stageBorder: 'border border-green-500/70' },
+  { href: '/manager/clients', label: 'Клиенты', icon: Users, roles: ['manager'], stageBorder: 'border border-amber-400/80' },
+  { href: '/manager/deals', label: 'Договоры', icon: Briefcase, roles: ['manager'], stageBorder: 'border border-blue-500/70' },
   { href: '/manager/documents', label: 'Документы', icon: FileText, roles: ['manager'] },
   { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'] },
   { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'] },
@@ -101,8 +104,10 @@ export function Sidebar({
                 <Link
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    item.stageBorder ?? ''
+                  } ${
                     isActive
-                      ? 'bg-neon-orange/10 text-neon-orange font-medium border-l-2 border-neon-orange pl-[10px]'
+                      ? 'bg-neon-orange/10 text-neon-orange font-medium border-l-2 border-l-neon-orange pl-[10px]'
                       : 'text-content-secondary hover:bg-poison-green/10 hover:text-poison-green'
                   }`}
                 >
