@@ -1,6 +1,7 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
+import { AlertTriangle } from 'lucide-react';
 import type { LeadStatus } from '@/lib/db/schema/leads';
 import { LeadCard, type BoardLead } from './LeadCard';
 
@@ -11,8 +12,23 @@ export type ColumnDef = {
   bgAccent: string; // tailwind bg color (subtle)
 };
 
-export function KanbanColumn({ column, leads }: { column: ColumnDef; leads: BoardLead[] }) {
+export type ColumnSummary = {
+  count: number;
+  avgDays: number;
+  staleCount: number;
+};
+
+export function KanbanColumn({
+  column,
+  leads,
+  summary,
+}: {
+  column: ColumnDef;
+  leads: BoardLead[];
+  summary?: ColumnSummary;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const isFinal = column.id === 'won' || column.id === 'lost';
 
   return (
     <div className="flex flex-col min-w-0">
@@ -27,6 +43,24 @@ export function KanbanColumn({ column, leads }: { column: ColumnDef; leads: Boar
             {leads.length}
           </span>
         </div>
+        {/* Сводка колонки: среднее дней + количество зависших.
+            Не показываем для финальных колонок (won/lost). */}
+        {!isFinal && summary && summary.count > 0 && (
+          <div className="mt-1 flex items-center justify-between gap-1 text-[9px] text-content-muted">
+            <span title="Среднее количество дней лидов на этой стадии">
+              ~{summary.avgDays}д ср.
+            </span>
+            {summary.staleCount > 0 && (
+              <span
+                className="inline-flex items-center gap-0.5 text-red-600 font-medium"
+                title={`Зависших: ${summary.staleCount}`}
+              >
+                <AlertTriangle className="w-2 h-2" />
+                {summary.staleCount}
+              </span>
+            )}
+          </div>
+        )}
       </div>
       <div
         ref={setNodeRef}

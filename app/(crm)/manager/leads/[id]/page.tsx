@@ -19,6 +19,8 @@ import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { LEAD_LOST_REASON_LABELS } from '@/lib/lead-lost-reasons';
 import { LeadStatusControl } from '../LeadStatusControl';
 import { TakeLeadButton, ConvertLeadButton } from '../LeadActions';
+import { getLeadHistory } from '@/lib/lead-stages';
+import { LeadHistoryTimeline } from '../_components/LeadHistoryTimeline';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +50,9 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
 
   if (!row) notFound();
   const lead = row.lead;
+
+  // История стадий
+  const history = await getLeadHistory(lead.id);
 
   const isMine = lead.assignedManagerId === user.id;
   const dateFmt = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long', timeStyle: 'short' });
@@ -181,6 +186,10 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
               )}
             </p>
           </div>
+        </CyberpunkCard>
+
+        <CyberpunkCard variant="default" hoverEffect={false} className="p-5 lg:col-span-2">
+          <LeadHistoryTimeline entries={history} currentStatus={lead.status} />
         </CyberpunkCard>
 
         {lead.rawPayload != null && typeof lead.rawPayload === 'object' && (

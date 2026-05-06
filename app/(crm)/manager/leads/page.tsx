@@ -10,6 +10,13 @@ import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { LeadStatusBadge } from '@/components/crm/LeadStatusBadge';
 import { ViewToggle } from './_components/ViewToggle';
 import { NewLeadButton } from './_components/NewLeadButton';
+import {
+  badgeClassesForLead,
+  formatDays,
+  getDaysInStageBatch,
+  stageHealthLevel,
+} from '@/lib/lead-stages';
+import { Clock } from 'lucide-react';
 
 export const metadata = { title: 'Заявки — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -95,6 +102,9 @@ export default async function LeadsListPage({
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const dateFmt = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+
+  // Дни на текущей стадии для отображаемых лидов
+  const daysMap = await getDaysInStageBatch(rows.map((r) => r.id));
 
   return (
     <div className="space-y-6">
@@ -197,6 +207,7 @@ export default async function LeadsListPage({
                 <Th>Контакт</Th>
                 <Th>Адрес</Th>
                 <Th>Статус</Th>
+                <Th>Дней</Th>
                 <Th>Канал</Th>
                 <Th>Менеджер</Th>
                 <Th>Создана</Th>
@@ -223,6 +234,9 @@ export default async function LeadsListPage({
                   <td className="px-4 py-3">
                     <LeadStatusBadge status={l.status} />
                   </td>
+                  <td className="px-4 py-3">
+                    <DaysCell status={l.status} days={daysMap[l.id] ?? 0} />
+                  </td>
                   <td className="px-4 py-3 font-mono text-xs text-content-secondary">
                     {l.channel ?? '—'}
                   </td>
@@ -241,6 +255,27 @@ export default async function LeadsListPage({
 
       {totalPages > 1 && <Pagination current={page} total={totalPages} sp={sp} />}
     </div>
+  );
+}
+
+function DaysCell({ status, days }: { status: LeadStatus; days: number }) {
+  const health = stageHealthLevel(status, days);
+  if (health === 'final') {
+    return <span className="text-xs text-content-muted">—</span>;
+  }
+  const c = badgeClassesForLead(status, days);
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-orbitron font-semibold ${c.bg} ${c.text}`}
+      title={
+        health === 'stale'
+          ? `⚠ Зависший: ${days} дн.`
+          : `${days} дн. на стадии`
+      }
+    >
+      <Clock className="w-3 h-3" />
+      {formatDays(days)}
+    </span>
   );
 }
 

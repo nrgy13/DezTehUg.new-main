@@ -48,7 +48,13 @@ type PendingDrop =
       defaultEmail: string;
     };
 
-export function LeadBoard({ initialLeads }: { initialLeads: BoardLead[] }) {
+export function LeadBoard({
+  initialLeads,
+  columnSummaries,
+}: {
+  initialLeads: BoardLead[];
+  columnSummaries?: Partial<Record<LeadStatus, { count: number; avgDays: number; staleCount: number }>>;
+}) {
   const router = useRouter();
   const [leads, setLeads] = useState<BoardLead[]>(initialLeads);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -259,7 +265,12 @@ export function LeadBoard({ initialLeads }: { initialLeads: BoardLead[] }) {
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 pb-4">
         {COLUMNS.map((c) => (
-          <KanbanColumn key={c.id} column={c} leads={grouped[c.id]} />
+          <KanbanColumn
+            key={c.id}
+            column={c}
+            leads={grouped[c.id]}
+            summary={columnSummaries?.[c.id]}
+          />
         ))}
       </div>
 

@@ -3,8 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Phone, MapPin, Calendar } from 'lucide-react';
+import { Phone, MapPin, Calendar, Clock } from 'lucide-react';
 import type { LeadStatus } from '@/lib/db/schema/leads';
+import { badgeClassesForLead, formatDays, stageHealthLevel } from '@/lib/lead-stages';
 
 export type BoardLead = {
   id: string;
@@ -17,6 +18,7 @@ export type BoardLead = {
   managerName: string | null;
   isMine: boolean;
   createdAt: Date;
+  daysInStage?: number; // подгружается отдельно в page.tsx через getDaysInStageBatch
 };
 
 const dateFmt = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -54,8 +56,15 @@ export function LeadCard({ lead, isOverlay = false }: { lead: BoardLead; isOverl
           : 'hover:shadow-md hover:border-poison-green/40 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-neon-orange/40'
       }`}
     >
-      <div className="font-medium text-xs text-content-primary group-hover:text-neon-orange transition-colors line-clamp-1">
-        {lead.contactName ?? '— без имени —'}
+      <div className="flex items-start justify-between gap-1 mb-0.5">
+        <div className="font-medium text-xs text-content-primary group-hover:text-neon-orange transition-colors line-clamp-1 flex-1">
+          {lead.contactName ?? '— без имени —'}
+        </div>
+        {/* Бейдж дней на стадии. Не показываем для финальных стадий. */}
+        {typeof lead.daysInStage === 'number' &&
+          stageHealthLevel(lead.status, lead.daysInStage) !== 'final' && (
+            <DaysBadge status={lead.status} days={lead.daysInStage} />
+          )}
       </div>
 
       <div className="mt-1.5 space-y-0.5 text-[11px] text-content-muted">
@@ -90,5 +99,26 @@ export function LeadCard({ lead, isOverlay = false }: { lead: BoardLead; isOverl
         )}
       </div>
     </div>
+  );
+}
+
+function DaysBadge({ status, days }: { status: LeadStatus; days: number }) {
+  const c = badgeClassesForLead(status, days);
+  const health = stageHealthLevel(status, days);
+  return (
+    <span
+      title={
+        health === 'stale'
+          ? `⚠ Зависший лид: ${days} дн. на стадии`
+          : health === 'warn'
+            ? `Внимание: ${days} дн. на стадии`
+            : `${days} дн. на текущей стадии`
+      }
+      className={`shrink-0 inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-orbitron font-semibold ${c.bg} ${c.text} ${c.ringPulse ?? ''}`}
+    >
+      <span className={`w-1 h-1 rounded-full ${c.dot} shrink-0`}></span>
+      <Clock className="w-2 h-2 shrink-0" />
+      {formatDays(days)}
+    </span>
   );
 }

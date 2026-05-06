@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { count, eq, and, gte, inArray } from 'drizzle-orm';
-import { Inbox, Users, Briefcase, FileText, ArrowRight } from 'lucide-react';
+import { Inbox, Users, Briefcase, FileText, ArrowRight, AlertTriangle } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema/leads';
@@ -8,6 +8,7 @@ import { clients } from '@/lib/db/schema/clients';
 import { deals } from '@/lib/db/schema/deals';
 import { documents } from '@/lib/db/schema/documents';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
+import { getStaleLeadsCount } from '@/lib/lead-stages';
 
 export const metadata = { title: 'Менеджер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,7 @@ export default async function ManagerDashboard() {
     [{ activeDeals }],
     [{ docsPreparing }],
     [{ wonThisMonth }],
+    staleLeads,
   ] = await Promise.all([
     db
       .select({ newLeads: count() })
@@ -52,6 +54,7 @@ export default async function ManagerDashboard() {
       .select({ wonThisMonth: count() })
       .from(leads)
       .where(and(eq(leads.status, 'won'), gte(leads.updatedAt, monthAgo))),
+    getStaleLeadsCount(),
   ]);
 
   return (
@@ -99,8 +102,16 @@ export default async function ManagerDashboard() {
           label="Документов готовится"
           value={docsPreparing}
           icon={FileText}
-          href="/manager/documents"
+          href="/manager/deals"
           hint="DOCX/PDF в очереди генерации"
+        />
+        <StatCard
+          label="Зависших лидов"
+          value={staleLeads}
+          icon={AlertTriangle}
+          href="/manager/leads/board"
+          hint="превышен порог дней на стадии"
+          accent={staleLeads > 0 ? 'orange' : 'muted'}
         />
       </div>
 

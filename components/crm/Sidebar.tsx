@@ -28,6 +28,8 @@ type NavItem = {
   // Тонкая рамка-маркер стадии воронки (Заявки → Клиенты → Договоры).
   // Видна постоянно, не зависит от active-state.
   stageBorder?: string;
+  // Страница ещё не реализована — кнопка disabled, hover-tooltip «Скоро».
+  disabled?: boolean;
 };
 
 const NAV: NavItem[] = [
@@ -36,21 +38,21 @@ const NAV: NavItem[] = [
   { href: '/manager/leads', label: 'Заявки', icon: Inbox, roles: ['manager'], stageBorder: 'border border-green-500/70' },
   { href: '/manager/clients', label: 'Клиенты', icon: Users, roles: ['manager'], stageBorder: 'border border-amber-400/80' },
   { href: '/manager/deals', label: 'Договоры', icon: Briefcase, roles: ['manager'], stageBorder: 'border border-blue-500/70' },
-  { href: '/manager/documents', label: 'Документы', icon: FileText, roles: ['manager'] },
-  { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'] },
-  { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'] },
+  { href: '/manager/documents', label: 'Документы', icon: FileText, roles: ['manager'], disabled: true },
+  { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'], disabled: true },
+  { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'], disabled: true },
 
   // Мастер
   { href: '/master', label: 'Мои выезды', icon: Wrench, roles: ['master'] },
-  { href: '/master/calendar', label: 'Календарь', icon: Calendar, roles: ['master'] },
-  { href: '/master/completed', label: 'Выполнено', icon: ListChecks, roles: ['master'] },
+  { href: '/master/calendar', label: 'Календарь', icon: Calendar, roles: ['master'], disabled: true },
+  { href: '/master/completed', label: 'Выполнено', icon: ListChecks, roles: ['master'], disabled: true },
 
   // Админ
   { href: '/admin', label: 'Дашборд', icon: LayoutDashboard, roles: ['admin'] },
   { href: '/admin/users', label: 'Пользователи', icon: Users, roles: ['admin'] },
   { href: '/admin/services', label: 'Услуги', icon: Wrench, roles: ['admin'] },
   { href: '/admin/templates', label: 'Шаблоны', icon: FileText, roles: ['admin'] },
-  { href: '/admin/settings', label: 'Настройки', icon: Settings, roles: ['admin'] },
+  { href: '/admin/settings', label: 'Настройки', icon: Settings, roles: ['admin'], disabled: true },
 ];
 
 const ROLE_LABEL: Record<UserRole, string> = {
@@ -99,6 +101,25 @@ export function Sidebar({
             const isActive = isRootRole
               ? pathname === item.href
               : pathname === item.href || pathname.startsWith(item.href + '/');
+            // Disabled — страница ещё не реализована. Рендерим как <span>
+            // вместо <Link>, чтобы клик не работал. Стили — приглушённые.
+            if (item.disabled) {
+              return (
+                <li key={item.href}>
+                  <span
+                    title="Скоро"
+                    aria-disabled="true"
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-content-muted/60 cursor-not-allowed select-none ${item.stageBorder ?? ''}`}
+                  >
+                    <Icon className="w-4 h-4 flex-shrink-0 opacity-60" />
+                    <span className="flex-1">{item.label}</span>
+                    <span className="text-[9px] font-orbitron tracking-wider uppercase text-content-muted/50">
+                      скоро
+                    </span>
+                  </span>
+                </li>
+              );
+            }
             return (
               <li key={item.href}>
                 <Link

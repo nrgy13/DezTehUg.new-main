@@ -3,12 +3,13 @@ import { desc, eq } from 'drizzle-orm';
 import { RefreshCw } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
-import { leads } from '@/lib/db/schema/leads';
+import { leads, type LeadStatus } from '@/lib/db/schema/leads';
 import { users } from '@/lib/db/schema/users';
 import { ViewToggle } from '../_components/ViewToggle';
 import { NewLeadButton } from '../_components/NewLeadButton';
 import { LeadBoard } from '../_components/LeadBoard';
 import type { BoardLead } from '../_components/LeadCard';
+import { getDaysInStageBatch, getColumnSummary } from '@/lib/lead-stages';
 
 export const metadata = { title: 'Воронка лидов — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -33,6 +34,9 @@ export default async function LeadsBoardPage() {
     .leftJoin(users, eq(leads.assignedManagerId, users.id))
     .orderBy(desc(leads.createdAt));
 
+  // Батчем подгружаем дни на стадии для всех лидов
+  const daysMap = await getDaysInStageBatch(rows.map((r) => r.id));
+
   const initialLeads: BoardLead[] = rows.map((r) => ({
     id: r.id,
     status: r.status,
@@ -44,7 +48,24 @@ export default async function LeadsBoardPage() {
     managerName: r.managerName,
     isMine: r.assignedManagerId === user.id,
     createdAt: r.createdAt,
+    daysInStage: daysMap[r.id] ?? 0,
   }));
+
+  // Сводки по каждой колонке (count + avg + stale)
+  const allStatuses: LeadStatus[] = [
+    'new',
+    'contacted',
+    'proposal_sent',
+    'contract_signed',
+    'works_completed',
+    'won',
+    'lost',
+  ];
+  const summaries = await Promise.all(allStatuses.map((s) => getColumnSummary(s)));
+  const columnSummaries: Partial<Record<LeadStatus, { count: number; avgDays: number; staleCount: number }>> = {};
+  allStatuses.forEach((s, i) => {
+    columnSummaries[s] = summaries[i];
+  });
 
   return (
     <div className="space-y-5">
@@ -71,7 +92,7 @@ export default async function LeadsBoardPage() {
         </div>
       </div>
 
-      <LeadBoard initialLeads={initialLeads} />
+      <LeadBoard initialLeads={initialLeads} columnSummaries={columnSummaries} />
     </div>
   );
 }

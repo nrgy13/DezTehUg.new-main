@@ -59,3 +59,4 @@ next-env.d.ts
 .vscode/launch.json
 *.swp
 __pycache__/
+.claude/worktrees/
