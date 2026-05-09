@@ -143,6 +143,22 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
   });
 }
 
+/** Сериализует DealEvent для передачи в client component (Date → ISO string). */
+export function serializeForClient(events: DealEvent[]) {
+  return events.map((e) => ({
+    id: e.id,
+    contractNumber: e.contractNumber,
+    startDate: e.startDate ? e.startDate.toISOString().slice(0, 10) : null,
+    endDate: e.endDate ? e.endDate.toISOString().slice(0, 10) : null,
+    status: e.status as string,
+    clientShortName: e.clientShortName,
+    clientPhone: e.clientPhone,
+    masterName: e.masterName,
+    managerName: e.managerName,
+    health: e.health,
+  }));
+}
+
 export type EventGroup = {
   key: string;
   label: string;
