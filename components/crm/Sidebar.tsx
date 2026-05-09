@@ -40,12 +40,12 @@ const NAV: NavItem[] = [
   { href: '/manager/deals', label: 'Договоры', icon: Briefcase, roles: ['manager'], stageBorder: 'border border-blue-500/70' },
   { href: '/manager/analytics', label: 'Аналитика', icon: BarChart3, roles: ['manager'] },
   { href: '/manager/documents', label: 'Документы', icon: FileText, roles: ['manager'] },
-  { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'], disabled: true },
+  { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'] },
   { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'], disabled: true },
 
   // Мастер
   { href: '/master', label: 'Мои выезды', icon: Wrench, roles: ['master'] },
-  { href: '/master/calendar', label: 'Календарь', icon: Calendar, roles: ['master'], disabled: true },
+  { href: '/master/calendar', label: 'Календарь', icon: Calendar, roles: ['master'] },
   { href: '/master/completed', label: 'Выполнено', icon: ListChecks, roles: ['master'] },
 
   // Админ
@@ -53,7 +53,7 @@ const NAV: NavItem[] = [
   { href: '/admin/users', label: 'Пользователи', icon: Users, roles: ['admin'] },
   { href: '/admin/services', label: 'Услуги', icon: Wrench, roles: ['admin'] },
   { href: '/admin/templates', label: 'Шаблоны', icon: FileText, roles: ['admin'] },
-  { href: '/admin/settings', label: 'Настройки', icon: Settings, roles: ['admin'], disabled: true },
+  { href: '/admin/settings', label: 'Настройки', icon: Settings, roles: ['admin'] },
 ];
 
 const ROLE_LABEL: Record<UserRole, string> = {
