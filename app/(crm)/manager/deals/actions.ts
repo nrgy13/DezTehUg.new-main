@@ -21,6 +21,7 @@ import {
   dealFormSchema,
   priceItemFormSchema,
   updateDealStatusSchema,
+  updateDealDatesSchema,
 } from './schemas';
 
 type Result<T = void> =
@@ -247,6 +248,56 @@ export async function updateDealStatus(
   revalidatePath(`/manager/clients/${existing[0].clientId}`);
 
   return { ok: true, data: { status: parsed.data.status } };
+}
+
+/**
+ * Drag-n-drop переноса дат сделки в календаре.
+ * Доступно только manager / admin.
+ */
+export async function updateDealDates(
+  id: string,
+  input: unknown,
+): Promise<Result<{ startDate: string; endDate: string | null }>> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Нет доступа' };
+
+  const parsed = updateDealDatesSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0].message };
+  }
+  const { startDate, endDate } = parsed.data;
+
+  const existing = await db
+    .select({
+      id: deals.id,
+      clientId: deals.clientId,
+      startDate: deals.startDate,
+      endDate: deals.endDate,
+    })
+    .from(deals)
+    .where(eq(deals.id, id))
+    .limit(1);
+  if (existing.length === 0) return { ok: false, error: 'Сделка не найдена' };
+
+  await db
+    .update(deals)
+    .set({
+      startDate,
+      endDate: endDate ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(deals.id, id));
+
+  await logActivity(actor.id, 'deal.dates_drag', id, {
+    from: { startDate: existing[0].startDate, endDate: existing[0].endDate },
+    to: { startDate, endDate: endDate ?? null },
+  });
+
+  revalidatePath('/manager/calendar');
+  revalidatePath('/manager/deals');
+  revalidatePath(`/manager/deals/${id}`);
+
+  return { ok: true, data: { startDate, endDate: endDate ?? null } };
 }
 
 export async function assignMaster(

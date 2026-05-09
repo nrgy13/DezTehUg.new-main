@@ -54,3 +54,16 @@ export type PriceItemFormInput = z.infer<typeof priceItemFormSchema>;
 export const updateDealStatusSchema = z.object({
   status: z.enum(dealStatusValues),
 });
+
+// Drag-n-drop переноса дат сделки в календаре (manager).
+// startDate обязателен, endDate опционален.
+export const updateDealDatesSchema = z.object({
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Дата должна быть в формате YYYY-MM-DD'),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Дата должна быть в формате YYYY-MM-DD')
+    .nullable()
+    .optional(),
+});

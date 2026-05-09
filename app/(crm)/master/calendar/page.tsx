@@ -10,10 +10,6 @@ export default async function MasterCalendarPage() {
   const events = await getDealEvents({ kind: 'master', userId: user.id });
   const serialized = serializeForClient(events);
 
-  const todayCount = events.filter((e) => e.health === 'today').length;
-  const soonCount = events.filter((e) => e.health === 'soon').length;
-  const totalCount = events.length;
-
   return (
     <div className="space-y-4">
       <div>
@@ -22,8 +18,6 @@ export default async function MasterCalendarPage() {
         </h1>
         <p className="text-content-muted mt-1 text-sm">
           Выезды по сделкам, где ты назначен исполнителем.
-          {' '}Всего: <strong>{totalCount}</strong> · сегодня: <strong>{todayCount}</strong>
-          {' '}· в течение недели: <strong>{soonCount}</strong>.
         </p>
       </div>
       <CalendarFull events={serialized} dealHrefBase="/master/deals" />

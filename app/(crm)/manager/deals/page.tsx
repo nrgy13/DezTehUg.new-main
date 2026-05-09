@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { and, or, eq, ilike, desc, sql, count } from 'drizzle-orm';
-import { Search, Briefcase } from 'lucide-react';
+import { Search, Briefcase, LayoutGrid, Calendar as CalendarIcon, List as ListIcon } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
 import { deals, type DealStatus } from '@/lib/db/schema/deals';
@@ -85,7 +85,7 @@ export default async function DealsListPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
             Сделки
@@ -93,6 +93,26 @@ export default async function DealsListPage({
           <p className="text-content-muted mt-1 text-sm">
             Договоры и работы по клиентам.
           </p>
+        </div>
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-1">
+          <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-neon-orange text-white rounded font-medium">
+            <ListIcon className="w-3.5 h-3.5" />
+            Список
+          </span>
+          <Link
+            href="/manager/deals/board"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-content-secondary hover:bg-gray-50 rounded transition-colors"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+            Канбан
+          </Link>
+          <Link
+            href="/manager/calendar"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-content-secondary hover:bg-gray-50 rounded transition-colors"
+          >
+            <CalendarIcon className="w-3.5 h-3.5" />
+            Календарь
+          </Link>
         </div>
       </div>
 

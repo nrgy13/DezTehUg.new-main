@@ -14,10 +14,6 @@ export default async function ManagerCalendarPage() {
   });
   const serialized = serializeForClient(events);
 
-  const todayCount = events.filter((e) => e.health === 'today').length;
-  const soonCount = events.filter((e) => e.health === 'soon').length;
-  const totalCount = events.length;
-
   return (
     <div className="space-y-4">
       <div>
@@ -26,13 +22,11 @@ export default async function ManagerCalendarPage() {
         </h1>
         <p className="text-content-muted mt-1 text-sm">
           {user.role === 'admin'
-            ? 'Все запланированные выезды (как admin — видишь всё).'
-            : 'Выезды по сделкам, где ты ответственный менеджер.'}
-          {' '}Всего: <strong>{totalCount}</strong> · сегодня: <strong>{todayCount}</strong>
-          {' '}· в течение недели: <strong>{soonCount}</strong>.
+            ? 'Все запланированные выезды (как admin — видишь всё). Перетаскивай для переноса.'
+            : 'Выезды по сделкам, где ты ответственный менеджер. Перетаскивай для переноса.'}
         </p>
       </div>
-      <CalendarFull events={serialized} dealHrefBase="/manager/deals" />
+      <CalendarFull events={serialized} dealHrefBase="/manager/deals" canDragDates />
     </div>
   );
 }
