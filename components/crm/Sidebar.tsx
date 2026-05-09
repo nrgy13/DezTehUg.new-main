@@ -38,14 +38,15 @@ const NAV: NavItem[] = [
   { href: '/manager/leads', label: 'Заявки', icon: Inbox, roles: ['manager'], stageBorder: 'border border-green-500/70' },
   { href: '/manager/clients', label: 'Клиенты', icon: Users, roles: ['manager'], stageBorder: 'border border-amber-400/80' },
   { href: '/manager/deals', label: 'Договоры', icon: Briefcase, roles: ['manager'], stageBorder: 'border border-blue-500/70' },
-  { href: '/manager/documents', label: 'Документы', icon: FileText, roles: ['manager'], disabled: true },
+  { href: '/manager/analytics', label: 'Аналитика', icon: BarChart3, roles: ['manager'] },
+  { href: '/manager/documents', label: 'Документы', icon: FileText, roles: ['manager'] },
   { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'], disabled: true },
   { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'], disabled: true },
 
   // Мастер
   { href: '/master', label: 'Мои выезды', icon: Wrench, roles: ['master'] },
   { href: '/master/calendar', label: 'Календарь', icon: Calendar, roles: ['master'], disabled: true },
-  { href: '/master/completed', label: 'Выполнено', icon: ListChecks, roles: ['master'], disabled: true },
+  { href: '/master/completed', label: 'Выполнено', icon: ListChecks, roles: ['master'] },
 
   // Админ
   { href: '/admin', label: 'Дашборд', icon: LayoutDashboard, roles: ['admin'] },

@@ -244,6 +244,74 @@ ${ctx.customNote ? `<p>${escapeHtml(ctx.customNote)}</p>` : ''}
 }
 
 // =============================================================
+// Дайджест зависших лидов (для менеджера)
+// =============================================================
+export type StuckLeadRow = {
+  id: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  statusLabel: string;
+  days: number;
+};
+
+export function stuckLeadsDigestBody(args: {
+  managerName: string;
+  leads: StuckLeadRow[];
+}): MailBody {
+  const { managerName, leads } = args;
+  const count = leads.length;
+  const greet = `Здравствуйте, ${managerName}!`;
+  const leadLine = (l: StuckLeadRow) => {
+    const contact = [l.contactName, l.contactPhone, l.contactEmail]
+      .filter(Boolean)
+      .join(' · ');
+    return `• [${l.statusLabel}, ${l.days}д] ${contact || '(без контактов)'}`;
+  };
+
+  const text = `${greet}
+
+В воронке скопились лиды, которые слишком долго стоят без движения — всего ${count} шт.
+Нужно с ними связаться или перевести в следующую стадию.
+
+${leads.map(leadLine).join('\n')}
+
+Открыть воронку: https://crm.дезтехюг.рф/manager/leads${SIGNATURE_TEXT}`;
+
+  const rowsHtml = leads
+    .map((l) => {
+      const contact = [
+        l.contactName,
+        l.contactPhone,
+        l.contactEmail,
+      ]
+        .filter(Boolean)
+        .map(escapeHtml)
+        .join(' · ');
+      const colour = l.days >= 14 ? '#dc2626' : l.days >= 7 ? '#f59e0b' : '#0891b2';
+      return `<tr>
+        <td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:12px;color:${colour};white-space:nowrap">
+          ${escapeHtml(l.statusLabel)} · ${l.days}д
+        </td>
+        <td style="padding:6px 12px;border-bottom:1px solid #eee">${contact || '<em style="color:#999">без контактов</em>'}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const html = wrapHtml(`
+<p>${greet}</p>
+<p>В воронке скопились лиды, которые слишком долго стоят без движения — <strong>${count} шт</strong>.<br/>
+Нужно с ними связаться или перевести в следующую стадию.</p>
+<table style="width:100%;border-collapse:collapse;margin-top:12px">
+${rowsHtml}
+</table>
+<p style="margin-top:16px"><a href="https://crm.xn--c1abdaj0ewa6e.xn--p1ai/manager/leads" style="color:#0891b2">Открыть воронку →</a></p>
+`);
+
+  return { text, html };
+}
+
+// =============================================================
 // Router: выбор шаблона по типу документа
 // =============================================================
 export function bodyForDocumentType(type: DocumentType, ctx: Ctx): MailBody {
