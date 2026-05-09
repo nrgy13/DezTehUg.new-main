@@ -19,7 +19,7 @@ import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { LEAD_LOST_REASON_LABELS } from '@/lib/lead-lost-reasons';
 import { LeadStatusControl } from '../LeadStatusControl';
 import { TakeLeadButton, ConvertLeadButton } from '../LeadActions';
-import { getLeadHistory } from '@/lib/lead-stages';
+import { getLeadHistory } from '@/lib/lead-stages-server';
 import { LeadHistoryTimeline } from '../_components/LeadHistoryTimeline';
 
 export const dynamic = 'force-dynamic';

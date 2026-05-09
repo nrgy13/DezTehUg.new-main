@@ -9,7 +9,7 @@ import { ViewToggle } from '../_components/ViewToggle';
 import { NewLeadButton } from '../_components/NewLeadButton';
 import { LeadBoard } from '../_components/LeadBoard';
 import type { BoardLead } from '../_components/LeadCard';
-import { getDaysInStageBatch, getColumnSummary } from '@/lib/lead-stages';
+import { getDaysInStageBatch, getColumnSummary } from '@/lib/lead-stages-server';
 
 export const metadata = { title: 'Воронка лидов — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';

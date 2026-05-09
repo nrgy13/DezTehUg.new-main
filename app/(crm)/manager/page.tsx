@@ -8,7 +8,7 @@ import { clients } from '@/lib/db/schema/clients';
 import { deals } from '@/lib/db/schema/deals';
 import { documents } from '@/lib/db/schema/documents';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
-import { getStaleLeadsCount } from '@/lib/lead-stages';
+import { getStaleLeadsCount } from '@/lib/lead-stages-server';
 
 export const metadata = { title: 'Менеджер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';

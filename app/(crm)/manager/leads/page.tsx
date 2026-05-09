@@ -10,12 +10,8 @@ import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { LeadStatusBadge } from '@/components/crm/LeadStatusBadge';
 import { ViewToggle } from './_components/ViewToggle';
 import { NewLeadButton } from './_components/NewLeadButton';
-import {
-  badgeClassesForLead,
-  formatDays,
-  getDaysInStageBatch,
-  stageHealthLevel,
-} from '@/lib/lead-stages';
+import { badgeClassesForLead, formatDays, stageHealthLevel } from '@/lib/lead-stages';
+import { getDaysInStageBatch } from '@/lib/lead-stages-server';
 import { Clock } from 'lucide-react';
 
 export const metadata = { title: 'Заявки — ДезТехЮг CRM' };
