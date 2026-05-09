@@ -148,7 +148,8 @@ export async function runStuckLeadsCheck(
   const recipients: Recipient[] = [];
 
   // 1. Лиды с назначенным менеджером — шлём только ему
-  for (const [managerId, leads] of byManager.entries()) {
+  // Array.from чтобы избежать downlevelIteration требования для Map.entries()
+  for (const [managerId, leads] of Array.from(byManager.entries())) {
     if (managerId == null) continue;
     const first = leads[0];
     if (!first.managerEmail || !first.managerName) {

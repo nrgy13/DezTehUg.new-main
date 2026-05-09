@@ -280,12 +280,8 @@ ${leads.map(leadLine).join('\n')}
 
   const rowsHtml = leads
     .map((l) => {
-      const contact = [
-        l.contactName,
-        l.contactPhone,
-        l.contactEmail,
-      ]
-        .filter(Boolean)
+      const contact = [l.contactName, l.contactPhone, l.contactEmail]
+        .filter((v): v is string => Boolean(v))
         .map(escapeHtml)
         .join(' · ');
       const colour = l.days >= 14 ? '#dc2626' : l.days >= 7 ? '#f59e0b' : '#0891b2';

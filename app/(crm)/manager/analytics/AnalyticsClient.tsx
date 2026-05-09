@@ -152,10 +152,10 @@ export function AnalyticsClient(props: Props) {
                 <XAxis type="number" tick={{ fontSize: 11 }} />
                 <YAxis dataKey="label" type="category" width={140} tick={{ fontSize: 11 }} />
                 <Tooltip
-                  formatter={(value: number, _name: string, item: { payload: AvgTimeRow }) => [
-                    `${value} дн (${item.payload.samples} переходов)`,
-                    'Среднее',
-                  ]}
+                  formatter={(value, _name, item) => {
+                    const samples = (item?.payload as AvgTimeRow | undefined)?.samples ?? 0;
+                    return [`${value} дн (${samples} переходов)`, 'Среднее'];
+                  }}
                 />
                 <Bar dataKey="avgDays" fill="#7c3aed" radius={[0, 4, 4, 0]} />
               </BarChart>
