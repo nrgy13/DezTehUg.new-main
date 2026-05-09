@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { leadStatusHistory } from '@/lib/db/schema/lead-status-history';
 import type { LeadStatus } from '@/lib/db/schema/leads';
 import { users } from '@/lib/db/schema/users';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, inArray } from 'drizzle-orm';
 import { STALE_THRESHOLDS, daysSince } from './lead-stages';
 
 // SERVER-ONLY: БД-запросы по lead_status_history.
@@ -50,20 +50,27 @@ export async function getDaysInCurrentStage(leadId: string): Promise<number> {
   return daysSince(rows[0].changedAt);
 }
 
-/** Батч: leadId → daysInCurrentStage. Один SQL без N+1. */
+/** Батч: leadId → daysInCurrentStage. Один SQL без N+1.
+ * Использует Drizzle query builder с inArray + DISTINCT ON через нативный
+ * Postgres-приём (ORDER BY + DISTINCT ON), завёрнутый в подзапрос.
+ * Раньше делал raw `ANY(${arr}::uuid[])`, но Drizzle разворачивает массив
+ * в `($1, $2, $3)` (record), а не в array — Postgres не кастит record в uuid[].
+ */
 export async function getDaysInStageBatch(
   leadIds: string[],
 ): Promise<Record<string, number>> {
   if (leadIds.length === 0) return {};
-  const rows = await db.execute<{ lead_id: string; changed_at: Date }>(sql`
-    SELECT DISTINCT ON (lead_id) lead_id, changed_at
-    FROM lead_status_history
-    WHERE lead_id = ANY(${leadIds}::uuid[])
-    ORDER BY lead_id, changed_at DESC
-  `);
+  const rows = await db
+    .selectDistinctOn([leadStatusHistory.leadId], {
+      leadId: leadStatusHistory.leadId,
+      changedAt: leadStatusHistory.changedAt,
+    })
+    .from(leadStatusHistory)
+    .where(inArray(leadStatusHistory.leadId, leadIds))
+    .orderBy(leadStatusHistory.leadId, desc(leadStatusHistory.changedAt));
   const out: Record<string, number> = {};
-  for (const r of rows as unknown as Array<{ lead_id: string; changed_at: Date }>) {
-    out[r.lead_id] = daysSince(r.changed_at);
+  for (const r of rows) {
+    out[r.leadId] = daysSince(r.changedAt);
   }
   return out;
 }
