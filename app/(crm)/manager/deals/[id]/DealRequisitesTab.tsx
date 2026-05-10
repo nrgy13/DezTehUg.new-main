@@ -36,6 +36,12 @@ export function DealRequisitesTab({
   const [contractPlace, setContractPlace] = useState(deal.contractPlace ?? '');
   const [startDate, setStartDate] = useState(deal.startDate ?? '');
   const [endDate, setEndDate] = useState(deal.endDate ?? '');
+  const [startTime, setStartTime] = useState(
+    deal.isAllDay || !deal.startAt ? '' : moscowHHMM(deal.startAt),
+  );
+  const [endTime, setEndTime] = useState(
+    deal.isAllDay || !deal.endAt ? '' : moscowHHMM(deal.endAt),
+  );
   const [signatoryClient, setSignatoryClient] = useState(deal.signatoryClient ?? '');
   const [signatoryExecutor, setSignatoryExecutor] = useState(deal.signatoryExecutor ?? '');
   const [assignedManagerId, setAssignedManagerId] = useState(deal.assignedManagerId ?? '');
@@ -51,6 +57,8 @@ export function DealRequisitesTab({
         contractPlace,
         startDate,
         endDate,
+        startTime,
+        endTime,
         signatoryClient,
         signatoryExecutor,
         assignedManagerId: assignedManagerId || null,
@@ -140,23 +148,48 @@ export function DealRequisitesTab({
 
         <Field label="Период действия">
           {editing ? (
-            <div className="flex gap-2">
-              <NeonInput
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                disabled={isPending}
-              />
-              <NeonInput
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                disabled={isPending}
-              />
+            <div className="space-y-2">
+              <div className="flex gap-2 items-center">
+                <NeonInput
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  disabled={isPending}
+                />
+                <NeonInput
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  disabled={isPending}
+                  className="w-24"
+                />
+              </div>
+              <div className="flex gap-2 items-center">
+                <NeonInput
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  disabled={isPending}
+                />
+                <NeonInput
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  disabled={isPending}
+                  className="w-24"
+                />
+              </div>
+              <p className="text-[10px] text-content-muted">
+                Время — опционально (МСК). Без времени — событие на весь день.
+              </p>
             </div>
           ) : (
             <span className="text-content-secondary">
-              {formatDate(deal.startDate)} – {formatDate(deal.endDate)}
+              {formatDate(deal.startDate)}
+              {!deal.isAllDay && deal.startAt && ` ${moscowHHMM(deal.startAt)}`}
+              {' – '}
+              {formatDate(deal.endDate)}
+              {!deal.isAllDay && deal.endAt && ` ${moscowHHMM(deal.endAt)}`}
             </span>
           )}
         </Field>
@@ -264,4 +297,16 @@ function formatDate(d: string | null): string {
   if (!d) return '—';
   const [y, m, day] = d.split('-');
   return `${day}.${m}.${y}`;
+}
+
+/** ISO timestamp → 'HH:MM' в TZ='Europe/Moscow'. */
+function moscowHHMM(iso: Date | string | null): string {
+  if (!iso) return '';
+  const d = typeof iso === 'string' ? new Date(iso) : iso;
+  return new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Moscow',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
 }

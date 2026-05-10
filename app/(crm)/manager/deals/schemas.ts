@@ -13,6 +13,17 @@ export const dealFormSchema = z.object({
 
   startDate: z.string().optional().or(z.literal('')),
   endDate: z.string().optional().or(z.literal('')),
+  // Опциональное время (МСК) для точечного выезда. HH:MM. Если оба пусты → весь день.
+  startTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, 'Формат HH:MM')
+    .optional()
+    .or(z.literal('')),
+  endTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, 'Формат HH:MM')
+    .optional()
+    .or(z.literal('')),
 
   signatoryClient: z.string().max(255).optional().or(z.literal('')),
   signatoryExecutor: z.string().max(255).optional().or(z.literal('')),
@@ -55,15 +66,12 @@ export const updateDealStatusSchema = z.object({
   status: z.enum(dealStatusValues),
 });
 
-// Drag-n-drop переноса дат сделки в календаре (manager).
-// startDate обязателен, endDate опционален.
+// Drag-n-drop переноса дат/времени сделки в календаре (manager).
+// startAt — обязателен, endAt — опционален. ISO 8601 с UTC offset.
+// isAllDay=true → событие на весь день (UI отображает только дату).
+// isAllDay=false → событие на конкретный час (отображается в timeGrid).
 export const updateDealDatesSchema = z.object({
-  startDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Дата должна быть в формате YYYY-MM-DD'),
-  endDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Дата должна быть в формате YYYY-MM-DD')
-    .nullable()
-    .optional(),
+  startAt: z.string().datetime({ offset: true }),
+  endAt: z.string().datetime({ offset: true }).nullable().optional(),
+  isAllDay: z.boolean(),
 });

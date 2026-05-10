@@ -16,16 +16,9 @@ export default async function ManagerCalendarPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Календарь выездов
-        </h1>
-        <p className="text-content-muted mt-1 text-sm">
-          {user.role === 'admin'
-            ? 'Все запланированные выезды (как admin — видишь всё). Перетаскивай для переноса.'
-            : 'Выезды по сделкам, где ты ответственный менеджер. Перетаскивай для переноса.'}
-        </p>
-      </div>
+      <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+        Календарь выездов
+      </h1>
       <CalendarFull events={serialized} dealHrefBase="/manager/deals" canDragDates />
     </div>
   );

@@ -65,6 +65,13 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Публичный сайт рендерится в 90% масштабе (дизайн под этот scale).
+     CRM-роуты (/admin /manager /master /profile /login) рендерятся в 100%,
+     иначе FullCalendar и другие layout-чувствительные компоненты ломаются:
+     getBoundingClientRect возвращает scaled px, а offsetTop — unscaled,
+     что приводит к ошибкам позиционирования событий в timeGrid. */
+  body:not(:has([data-crm-root])) {
     zoom: 0.9;
   }
 }

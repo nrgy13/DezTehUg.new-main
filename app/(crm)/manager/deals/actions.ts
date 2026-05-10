@@ -64,6 +64,31 @@ function emptyToNull(v: string | null | undefined): string | null {
 }
 
 /**
+ * Вычисляет startAt/endAt timestamptz и флаг isAllDay из date+time inputs формы.
+ * Время трактуется как МСК (Europe/Moscow → UTC offset +03:00).
+ * Если оба startTime и endTime пусты → isAllDay=true, startAt=date 00:00 МСК, endAt=date 23:59 МСК.
+ */
+function deriveDealTimes(
+  startDate: string | null,
+  endDate: string | null,
+  startTime: string | null,
+  endTime: string | null,
+): { startAt: Date | null; endAt: Date | null; isAllDay: boolean } {
+  if (!startDate && !endDate) {
+    return { startAt: null, endAt: null, isAllDay: true };
+  }
+  const hasTime = Boolean(startTime || endTime);
+  const isAllDay = !hasTime;
+  const sd = startDate ?? endDate!;
+  const ed = endDate ?? startDate!;
+  const sTime = startTime || (isAllDay ? '00:00' : '09:00');
+  const eTime = endTime || (isAllDay ? '23:59' : '18:00');
+  const startAt = new Date(`${sd}T${sTime}:00+03:00`);
+  const endAt = new Date(`${ed}T${eTime}:00+03:00`);
+  return { startAt, endAt, isAllDay };
+}
+
+/**
  * Сгенерировать предварительный contract_number вида "ДТЮ-DD/MM/YY-ШТ"
  * где ШТ — порядковый номер для текущего дня. Это технический номер сделки
  * (не путать с official номером договора, который выдаёт Эпик A3 при генерации DOCX).
@@ -121,6 +146,15 @@ export async function createDeal(input: unknown): Promise<Result<{ id: string }>
 
   const contractNumber = await generatePreliminaryDealNumber(contractDate);
 
+  const startDate = emptyToNull(data.startDate);
+  const endDate = emptyToNull(data.endDate);
+  const times = deriveDealTimes(
+    startDate,
+    endDate,
+    emptyToNull(data.startTime),
+    emptyToNull(data.endTime),
+  );
+
   const [created] = await db
     .insert(deals)
     .values({
@@ -129,8 +163,11 @@ export async function createDeal(input: unknown): Promise<Result<{ id: string }>
       contractPlace: emptyToNull(data.contractPlace) ?? 'г. Новороссийск',
       clientId: data.clientId,
       leadId: data.leadId ?? null,
-      startDate: emptyToNull(data.startDate) as string | null,
-      endDate: emptyToNull(data.endDate) as string | null,
+      startDate,
+      endDate,
+      startAt: times.startAt,
+      endAt: times.endAt,
+      isAllDay: times.isAllDay,
       status: 'draft',
       signatoryClient: emptyToNull(data.signatoryClient),
       signatoryExecutor: emptyToNull(data.signatoryExecutor) ?? 'ИП Белавина Ольга Владимировна',
@@ -187,6 +224,15 @@ export async function updateDeal(
   const existing = await db.select().from(deals).where(eq(deals.id, id)).limit(1);
   if (existing.length === 0) return { ok: false, error: 'Сделка не найдена' };
 
+  const startDate = emptyToNull(data.startDate);
+  const endDate = emptyToNull(data.endDate);
+  const times = deriveDealTimes(
+    startDate,
+    endDate,
+    emptyToNull(data.startTime),
+    emptyToNull(data.endTime),
+  );
+
   await db
     .update(deals)
     .set({
@@ -194,8 +240,11 @@ export async function updateDeal(
       contractPlace: emptyToNull(data.contractPlace) ?? 'г. Новороссийск',
       clientId: data.clientId,
       leadId: data.leadId ?? null,
-      startDate: emptyToNull(data.startDate) as string | null,
-      endDate: emptyToNull(data.endDate) as string | null,
+      startDate,
+      endDate,
+      startAt: times.startAt,
+      endAt: times.endAt,
+      isAllDay: times.isAllDay,
       signatoryClient: emptyToNull(data.signatoryClient),
       signatoryExecutor: emptyToNull(data.signatoryExecutor) ?? 'ИП Белавина Ольга Владимировна',
       assignedManagerId: data.assignedManagerId ?? null,
@@ -251,13 +300,16 @@ export async function updateDealStatus(
 }
 
 /**
- * Drag-n-drop переноса дат сделки в календаре.
+ * Drag-n-drop переноса дат/времени сделки в календаре.
  * Доступно только manager / admin.
+ *
+ * Принимает ISO 8601 timestamps (UTC offset). Если isAllDay=true — также
+ * синхронизирует date-колонки start_date/end_date для обратной совместимости.
  */
 export async function updateDealDates(
   id: string,
   input: unknown,
-): Promise<Result<{ startDate: string; endDate: string | null }>> {
+): Promise<Result<{ startAt: string; endAt: string | null; isAllDay: boolean }>> {
   const actor = await getActor();
   if (!actor) return { ok: false, error: 'Нет доступа' };
 
@@ -265,14 +317,28 @@ export async function updateDealDates(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0].message };
   }
-  const { startDate, endDate } = parsed.data;
+  const { startAt, endAt, isAllDay } = parsed.data;
+  const startAtDate = new Date(startAt);
+  const endAtDate = endAt ? new Date(endAt) : null;
+
+  // Дата в TZ='Europe/Moscow' для совместимых полей start_date/end_date.
+  const moscowDate = (d: Date) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Moscow',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  const startDateMSK = moscowDate(startAtDate);
+  const endDateMSK = endAtDate ? moscowDate(endAtDate) : null;
 
   const existing = await db
     .select({
       id: deals.id,
       clientId: deals.clientId,
-      startDate: deals.startDate,
-      endDate: deals.endDate,
+      startAt: deals.startAt,
+      endAt: deals.endAt,
+      isAllDay: deals.isAllDay,
     })
     .from(deals)
     .where(eq(deals.id, id))
@@ -282,22 +348,30 @@ export async function updateDealDates(
   await db
     .update(deals)
     .set({
-      startDate,
-      endDate: endDate ?? null,
+      startAt: startAtDate,
+      endAt: endAtDate,
+      isAllDay,
+      startDate: startDateMSK,
+      endDate: endDateMSK,
       updatedAt: new Date(),
     })
     .where(eq(deals.id, id));
 
   await logActivity(actor.id, 'deal.dates_drag', id, {
-    from: { startDate: existing[0].startDate, endDate: existing[0].endDate },
-    to: { startDate, endDate: endDate ?? null },
+    from: {
+      startAt: existing[0].startAt,
+      endAt: existing[0].endAt,
+      isAllDay: existing[0].isAllDay,
+    },
+    to: { startAt, endAt: endAt ?? null, isAllDay },
   });
 
   revalidatePath('/manager/calendar');
+  revalidatePath('/master/calendar');
   revalidatePath('/manager/deals');
   revalidatePath(`/manager/deals/${id}`);
 
-  return { ok: true, data: { startDate, endDate: endDate ?? null } };
+  return { ok: true, data: { startAt, endAt: endAt ?? null, isAllDay } };
 }
 
 export async function assignMaster(

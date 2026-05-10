@@ -10,6 +10,7 @@ import {
   decimal,
   date,
   index,
+  boolean,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { clients } from './clients';
@@ -53,9 +54,15 @@ export const deals = pgTable('deals', {
     onDelete: 'set null',
   }),
 
-  // Период действия
+  // Период действия (date — для совместимости с формами, оставлены до Sprint 5.1)
   startDate: date('start_date'),
   endDate: date('end_date'),
+
+  // Точные timestamp'ы начала/конца. Если is_all_day=true — время игнорируется на UI.
+  // В БД храним UTC (timestamptz), на фронте FullCalendar рендерит в TZ='Europe/Moscow'.
+  startAt: timestamp('start_at', { withTimezone: true, mode: 'date' }),
+  endAt: timestamp('end_at', { withTimezone: true, mode: 'date' }),
+  isAllDay: boolean('is_all_day').notNull().default(true),
 
   // Статус
   status: dealStatusEnum('status').notNull().default('draft'),

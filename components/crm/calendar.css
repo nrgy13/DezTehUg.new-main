@@ -21,6 +21,9 @@
 
   /* List view */
   --fc-list-event-hover-bg-color: rgba(255, 107, 53, 0.04);
+
+  /* Now-indicator (стрелка + линия "сейчас") — neon-orange вместо красного */
+  --fc-now-indicator-color: #FF6B35;
 }
 
 /* Заголовки дней недели — Orbitron, uppercase */
@@ -258,9 +261,11 @@
   border-width: 5px !important;
 }
 
-/* TimeGrid (неделя/день) — slot-line стиль */
+/* TimeGrid (неделя/день) — slot-line стиль.
+   ВНИМАНИЕ: НЕ переопределяем height — FullCalendar v6 вычисляет positioning
+   событий based on actual rendered slot heights, и переопределение CSS может
+   сбить event placement (event визуально не совпадает с API state). */
 .fc-deztech-wrapper .fc-timegrid-slot {
-  height: 32px !important;
   border-color: #f8fafc;
 }
 
@@ -270,16 +275,42 @@
   color: #94a3b8;
 }
 
-/* Now-indicator (красная линия "сейчас") — neon-orange вместо красной */
-.fc-deztech-wrapper .fc-timegrid-now-indicator-line {
-  border-color: #FF6B35 !important;
-  border-width: 2px !important;
-  box-shadow: 0 0 8px rgba(255, 107, 53, 0.4);
+/* Метки часов на оси (06:00, 07:00, …) — компактнее */
+.fc-deztech-wrapper .fc-timegrid-slot-label-cushion {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px !important;
+  color: #94a3b8;
+  padding: 0 4px;
 }
 
-.fc-deztech-wrapper .fc-timegrid-now-indicator-arrow {
-  border-top-color: #FF6B35 !important;
-  border-bottom-color: #FF6B35 !important;
+/* «Весь день» — мельче, чтобы влезало в узкую ячейку axis */
+.fc-deztech-wrapper .fc-timegrid-axis-cushion {
+  font-family: 'Orbitron', monospace;
+  font-size: 9px !important;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+  max-width: 60px;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: center;
+}
+
+/* Now-indicator — толще + neon-glow.
+   Цвет берётся из --fc-now-indicator-color (см. переменные .fc-deztech-wrapper выше). */
+.fc-deztech-wrapper .fc-timegrid-now-indicator-line {
+  border-top-width: 2px !important;
+  box-shadow: 0 0 6px rgba(255, 107, 53, 0.45);
+}
+
+/* Arrow на оси. FC default ставит её на left:0 axis-cell — апекс висит в воздухе
+   далеко от линии (40+px gap для нашей широкой axis-cell с надписью «Весь день»).
+   Сдвигаем стрелку к правому краю axis, чтобы её остриё касалось начала линии. */
+.fc-deztech-wrapper.fc-direction-ltr .fc-timegrid-now-indicator-arrow,
+.fc-deztech-wrapper .fc-direction-ltr .fc-timegrid-now-indicator-arrow {
+  left: auto !important;
+  right: 0 !important;
 }
 
 /* Scrollbar — minimal */
@@ -351,4 +382,18 @@
 .fc-deztech-wrapper .fc-highlight {
   background: rgba(255, 107, 53, 0.12) !important;
   border: 1px dashed rgba(255, 107, 53, 0.4);
+}
+
+/* Cursor-following tooltip — плавное появление на месте без масштабирования */
+@keyframes deztech-tooltip-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.deztech-tooltip-fade {
+  animation: deztech-tooltip-fade 220ms ease-out;
 }

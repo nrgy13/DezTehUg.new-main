@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { createPortal } from 'react-dom';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -9,7 +10,6 @@ import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import ruLocale from '@fullcalendar/core/locales/ru';
 import type { EventClickArg, EventContentArg, EventDropArg, DatesSetArg } from '@fullcalendar/core';
-import * as Tooltip from '@radix-ui/react-tooltip';
 import { Search, X, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Phone, Wrench, User as UserIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateDealDates } from '@/app/(crm)/manager/deals/actions';
@@ -21,6 +21,10 @@ export type SerializedDealEvent = {
   contractNumber: string;
   startDate: string | null;
   endDate: string | null;
+  /** ISO 8601 timestamp с UTC offset, либо null. */
+  startAt: string | null;
+  endAt: string | null;
+  isAllDay: boolean;
   status: string;
   clientShortName: string | null;
   clientPhone: string | null;
@@ -29,14 +33,27 @@ export type SerializedDealEvent = {
   health: 'past' | 'today' | 'soon' | 'future' | 'no-date';
 };
 
+const CALENDAR_TZ = 'Europe/Moscow';
+
+/** Date → 'YYYY-MM-DD' в TZ='Europe/Moscow'. */
+function toMoscowDateISO(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: CALENDAR_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+
 // ─── Маппинги цвет/иконка ────────────────────────────────────
 const STATUS_BORDER: Record<string, string> = {
-  draft: '#94a3b8',       // gray-400 — незаконченный
-  sent: '#06b6d4',        // cyan-500 — отправлен
-  signed: '#8b5cf6',      // violet-500 — подписан
-  active: '#FF6B35',      // neon-orange — в работе (главный акцент)
-  completed: '#10b981',   // emerald-500 — выполнен
-  terminated: '#ef4444',  // red-500 — расторгнут
+  draft: '#94a3b8',
+  sent: '#06b6d4',
+  signed: '#8b5cf6',
+  active: '#FF6B35',
+  completed: '#10b981',
+  terminated: '#ef4444',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -59,8 +76,8 @@ const STATUS_ICON: Record<string, string> = {
 
 const HEALTH_BG: Record<SerializedDealEvent['health'], string> = {
   past: '#f8fafc',
-  today: 'rgba(57, 255, 20, 0.10)',     // poison-green wash
-  soon: 'rgba(245, 158, 11, 0.08)',     // amber wash
+  today: 'rgba(57, 255, 20, 0.10)',
+  soon: 'rgba(245, 158, 11, 0.08)',
   future: '#ffffff',
   'no-date': '#f8fafc',
 };
@@ -71,6 +88,23 @@ const HEALTH_LABEL: Record<SerializedDealEvent['health'], string> = {
   soon: 'скоро',
   future: 'позже',
   'no-date': 'без даты',
+};
+
+const TOOLTIP_DELAY = 600;
+
+// Локальная YYYY-MM-DD без UTC-конверсии (учитывает локальный TZ браузера)
+function toLocalISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+type TooltipState = {
+  visible: boolean;
+  x: number;
+  y: number;
+  ev: SerializedDealEvent | null;
 };
 
 // ─── Component ────────────────────────────────────────────────
@@ -86,14 +120,49 @@ export function CalendarFull({
 }) {
   const router = useRouter();
   const calendarRef = useRef<FullCalendar | null>(null);
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
+  // Lock на время save → router.refresh, иначе быстрые подряд-drop'ы попадают
+  // в очередь startTransition и второй info.event ссылается на stale объект
+  // (FC re-mount events после refresh).
+  const [isSavingDrop, setIsSavingDrop] = useState(false);
+  const dragLocked = isPending || isSavingDrop;
 
   // Фильтры
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [healthFilter, setHealthFilter] = useState<Set<SerializedDealEvent['health']>>(new Set());
-  const [currentTitle, setCurrentTitle] = useState('');
+  const [, setCurrentTitle] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  // Cursor-following tooltip
+  const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, ev: null });
+  const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showTooltipDelayed(ev: SerializedDealEvent, x: number, y: number) {
+    if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+    tooltipTimer.current = setTimeout(() => {
+      setTooltip({ visible: true, x, y, ev });
+    }, TOOLTIP_DELAY);
+  }
+
+  function moveTooltip(x: number, y: number) {
+    setTooltip((prev) => (prev.visible ? { ...prev, x, y } : prev));
+  }
+
+  function hideTooltip() {
+    if (tooltipTimer.current) {
+      clearTimeout(tooltipTimer.current);
+      tooltipTimer.current = null;
+    }
+    setTooltip({ visible: false, x: 0, y: 0, ev: null });
+  }
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+    };
+  }, []);
 
   // Apply filters
   const filteredEvents = useMemo(() => {
@@ -113,21 +182,30 @@ export function CalendarFull({
   const fcEvents = useMemo(
     () =>
       filteredEvents
-        .filter((e) => e.startDate || e.endDate)
+        .filter((e) => e.startDate || e.endDate || e.startAt || e.endAt)
         .map((e) => {
-          const start = e.startDate ?? e.endDate!;
-          let end: string | undefined = undefined;
-          if (e.endDate) {
-            const ed = new Date(e.endDate);
-            ed.setDate(ed.getDate() + 1);
-            end = ed.toISOString().slice(0, 10);
+          const allDay = e.isAllDay;
+          let start: string;
+          let end: string | undefined;
+          if (allDay) {
+            // Все события без времени — old-style: date 'YYYY-MM-DD'
+            start = e.startDate ?? e.endDate!;
+            if (e.endDate) {
+              const ed = new Date(e.endDate);
+              ed.setDate(ed.getDate() + 1);
+              end = toLocalISO(ed);
+            }
+          } else {
+            // Точечное событие с временем — ISO 8601 с offset, FullCalendar парсит в timeZone
+            start = e.startAt ?? e.endAt!;
+            end = e.endAt ?? undefined;
           }
           return {
             id: e.id,
             title: `${e.contractNumber} · ${e.clientShortName ?? '—'}`,
             start,
             end,
-            allDay: true,
+            allDay,
             backgroundColor: HEALTH_BG[e.health],
             borderColor: STATUS_BORDER[e.status] ?? '#94a3b8',
             textColor: '#1e293b',
@@ -138,7 +216,9 @@ export function CalendarFull({
     [filteredEvents],
   );
 
-  const noDateEvents = filteredEvents.filter((e) => !e.startDate && !e.endDate);
+  const noDateEvents = filteredEvents.filter(
+    (e) => !e.startDate && !e.endDate && !e.startAt && !e.endAt,
+  );
 
   // Stats
   const stats = useMemo(
@@ -190,13 +270,21 @@ export function CalendarFull({
 
   // Event click → открыть сделку
   function handleEventClick(arg: EventClickArg) {
+    hideTooltip();
     router.push(`${dealHrefBase}/${arg.event.id}`);
   }
 
-  // Drag-n-drop переноса даты
+  // Drag-n-drop переноса даты/времени — поддержка allDay и точечных событий
   function handleEventDrop(info: EventDropArg) {
+    hideTooltip();
     if (!canDragDates) {
       info.revert();
+      return;
+    }
+    if (dragLocked) {
+      // Save предыдущего drag ещё не завершился. Откатываем чтобы избежать stale event.
+      info.revert();
+      toast.warning('Подожди — сохраняю предыдущий перенос');
       return;
     }
     const start = info.event.start;
@@ -205,23 +293,64 @@ export function CalendarFull({
       info.revert();
       return;
     }
-    const startISO = start.toISOString().slice(0, 10);
-    // FullCalendar end exclusive → -1 день
-    let endISO: string | null = null;
-    if (end) {
-      const e = new Date(end);
-      e.setDate(e.getDate() - 1);
-      endISO = e.toISOString().slice(0, 10);
+
+    const isAllDay = info.event.allDay;
+    let payload: {
+      startAt: string | null;
+      endAt: string | null;
+      isAllDay: boolean;
+    };
+    let toastLabel: string;
+
+    if (isAllDay) {
+      // event.start в TZ календаря (Europe/Moscow), 00:00. Конвертируем в UTC ISO.
+      // FullCalendar end exclusive → -1 день для отображения.
+      const startMSK = toMoscowDateISO(start);
+      const startAtUTC = new Date(`${startMSK}T00:00:00+03:00`).toISOString();
+      let endAtUTC: string | null = null;
+      if (end) {
+        const eDate = new Date(end);
+        eDate.setDate(eDate.getDate() - 1);
+        const endMSK = toMoscowDateISO(eDate);
+        endAtUTC = new Date(`${endMSK}T23:59:59+03:00`).toISOString();
+      }
+      payload = { startAt: startAtUTC, endAt: endAtUTC, isAllDay: true };
+      toastLabel = `Перенесено на ${startMSK}`;
+    } else {
+      // Точечное событие с временем — start/end это Date в локальной TZ браузера,
+      // но соответствуют моменту в Europe/Moscow. .toISOString() = верный UTC.
+      const startAtUTC = start.toISOString();
+      const endAtUTC = end ? end.toISOString() : null;
+      const fmt = new Intl.DateTimeFormat('ru-RU', {
+        timeZone: CALENDAR_TZ,
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      toastLabel = `Перенесено на ${fmt.format(start)} (МСК)`;
+      payload = { startAt: startAtUTC, endAt: endAtUTC, isAllDay: false };
     }
 
+    setIsSavingDrop(true);
     startTransition(async () => {
-      const res = await updateDealDates(info.event.id, { startDate: startISO, endDate: endISO });
-      if (!res.ok) {
-        toast.error(res.error ?? 'Не удалось перенести');
+      try {
+        const res = await updateDealDates(info.event.id, payload);
+        if (!res.ok) {
+          toast.error(res.error ?? 'Не удалось перенести');
+          info.revert();
+        } else {
+          toast.success(toastLabel);
+          router.refresh();
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Ошибка переноса');
         info.revert();
-      } else {
-        toast.success(`Перенесено на ${startISO}`);
-        router.refresh();
+      } finally {
+        // Отпускаем lock с небольшой задержкой, чтобы router.refresh успел
+        // пересоздать FC events с актуальными данными (иначе следующий drag
+        // может работать со stale событиями).
+        setTimeout(() => setIsSavingDrop(false), 350);
       }
     });
   }
@@ -236,94 +365,33 @@ export function CalendarFull({
     const ext = arg.event.extendedProps as SerializedDealEvent;
     const icon = STATUS_ICON[ext.status] ?? '·';
     return (
-      <Tooltip.Root delayDuration={150}>
-        <Tooltip.Trigger asChild>
-          <div className="fc-event-chip">
-            <span className="fc-event-chip__num">{ext.contractNumber}</span>
-            <span className="fc-event-chip__client">{ext.clientShortName ?? '—'}</span>
-            <span className="fc-event-chip__icon" style={{ color: STATUS_BORDER[ext.status] }}>
-              {icon}
-            </span>
-          </div>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            side="right"
-            align="start"
-            sideOffset={8}
-            className="z-50 max-w-xs animate-in fade-in zoom-in-95 duration-150"
-          >
-            <div className="bg-white rounded-lg border border-gray-200 shadow-xl p-3 text-xs space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span
-                  className="inline-block w-2 h-2 rounded-full"
-                  style={{ backgroundColor: STATUS_BORDER[ext.status] }}
-                />
-                <span className="font-mono font-semibold text-content-primary">
-                  {ext.contractNumber}
-                </span>
-                <span className="ml-auto text-[10px] uppercase tracking-wider text-content-muted font-orbitron">
-                  {STATUS_LABEL[ext.status] ?? ext.status}
-                </span>
-              </div>
-              <div className="text-content-primary font-medium">
-                {ext.clientShortName ?? '—'}
-              </div>
-              {ext.clientPhone && (
-                <div className="flex items-center gap-1.5 text-content-secondary">
-                  <Phone className="w-3 h-3" />
-                  {ext.clientPhone}
-                </div>
-              )}
-              {(ext.startDate || ext.endDate) && (
-                <div className="flex items-center gap-1.5 text-content-secondary">
-                  <CalendarIcon className="w-3 h-3" />
-                  {formatPeriod(ext.startDate, ext.endDate)}
-                </div>
-              )}
-              {ext.masterName && (
-                <div className="flex items-center gap-1.5 text-content-muted">
-                  <Wrench className="w-3 h-3" />
-                  Мастер: {ext.masterName}
-                </div>
-              )}
-              {ext.managerName && (
-                <div className="flex items-center gap-1.5 text-content-muted">
-                  <UserIcon className="w-3 h-3" />
-                  Менеджер: {ext.managerName}
-                </div>
-              )}
-              <div className="pt-1.5 mt-1.5 border-t border-gray-100 text-[10px] text-content-muted">
-                <span
-                  className="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium"
-                  style={{
-                    backgroundColor: HEALTH_BG[ext.health],
-                    color: STATUS_BORDER[ext.status],
-                  }}
-                >
-                  {HEALTH_LABEL[ext.health]}
-                </span>
-                <span className="ml-2">Клик — открыть сделку</span>
-              </div>
-            </div>
-            <Tooltip.Arrow className="fill-white" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
+      <div
+        className="fc-event-chip"
+        onMouseEnter={(e) => showTooltipDelayed(ext, e.clientX, e.clientY)}
+        onMouseMove={(e) => moveTooltip(e.clientX, e.clientY)}
+        onMouseLeave={hideTooltip}
+        onMouseDown={hideTooltip}
+      >
+        <span className="fc-event-chip__num">{ext.contractNumber}</span>
+        <span className="fc-event-chip__client">{ext.clientShortName ?? '—'}</span>
+        <span className="fc-event-chip__icon" style={{ color: STATUS_BORDER[ext.status] }}>
+          {icon}
+        </span>
+      </div>
     );
   }
 
   return (
-    <Tooltip.Provider>
-      <div className="flex gap-4 items-start">
+    <>
+      <div className="flex gap-4 items-stretch">
         {/* ─── Сайдбар ────────────────────────────────── */}
-        <aside className="w-64 flex-shrink-0 space-y-4 sticky top-4">
-          {/* Stats */}
+        <aside className="w-64 flex-shrink-0 flex flex-col gap-4">
+          {/* Stats — компактный inline-формат */}
           <div className="bg-white rounded-lg border border-gray-200 p-3">
             <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2">
               Сводка
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-2 gap-1.5">
               <StatChip label="Всего" value={stats.total} accent="muted" />
               <StatChip label="Сегодня" value={stats.today} accent="green" />
               <StatChip label="Скоро" value={stats.soon} accent="orange" />
@@ -359,12 +427,12 @@ export function CalendarFull({
             </div>
           </div>
 
-          {/* Status filter */}
+          {/* Status filter — 2 колонки для компактности */}
           <div className="bg-white rounded-lg border border-gray-200 p-3">
             <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2">
               Статус сделки
             </div>
-            <div className="space-y-1">
+            <div className="grid grid-cols-2 gap-1">
               {Object.entries(STATUS_LABEL).map(([key, label]) => {
                 const cnt = statusCounts[key] ?? 0;
                 const active = statusFilter.has(key);
@@ -373,7 +441,7 @@ export function CalendarFull({
                     key={key}
                     onClick={() => toggleStatus(key)}
                     disabled={cnt === 0}
-                    className={`w-full flex items-center gap-2 px-2 py-1 rounded text-xs transition-colors ${
+                    className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] transition-colors min-w-0 ${
                       active
                         ? 'bg-neon-orange/10 text-neon-orange'
                         : cnt === 0
@@ -382,46 +450,21 @@ export function CalendarFull({
                     }`}
                   >
                     <span
-                      className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                      className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
                       style={{ backgroundColor: STATUS_BORDER[key] }}
                     />
-                    <span className="flex-1 text-left">{label}</span>
-                    <span className="text-[10px] tabular-nums opacity-70">{cnt}</span>
+                    <span className="flex-1 text-left truncate">{label}</span>
+                    <span className="text-[9px] tabular-nums opacity-70 flex-shrink-0">{cnt}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Health filter */}
-          <div className="bg-white rounded-lg border border-gray-200 p-3">
-            <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2">
-              Срочность
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {(['today', 'soon', 'future', 'past', 'no-date'] as const).map((h) => {
-                const cnt = events.filter((e) => e.health === h).length;
-                const active = healthFilter.has(h);
-                return (
-                  <button
-                    key={h}
-                    onClick={() => toggleHealth(h)}
-                    disabled={cnt === 0}
-                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                      active
-                        ? 'bg-poison-green/15 text-emerald-700 ring-1 ring-emerald-400/40'
-                        : cnt === 0
-                        ? 'bg-gray-50 text-content-muted/40 cursor-not-allowed'
-                        : 'bg-gray-100 text-content-secondary hover:bg-gray-200'
-                    }`}
-                  >
-                    {HEALTH_LABEL[h]} · {cnt}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Spacer — для выравнивания нижних блоков по низу календаря */}
+          <div className="flex-1" />
 
+          {/* Сбросить фильтры — внизу sidebar */}
           {(search || statusFilter.size > 0 || healthFilter.size > 0) && (
             <button
               onClick={clearFilters}
@@ -431,16 +474,10 @@ export function CalendarFull({
               Сбросить фильтры
             </button>
           )}
-
-          {canDragDates && (
-            <div className="text-[10px] text-content-muted px-2 leading-relaxed">
-              💡 Перетаскивай выезды между датами для быстрого переноса
-            </div>
-          )}
         </aside>
 
         {/* ─── Основной грид ──────────────────────── */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col gap-4">
           <div className="fc-deztech-wrapper bg-white rounded-lg border border-gray-200 shadow-sm p-4">
             <FullCalendar
               ref={calendarRef}
@@ -449,6 +486,7 @@ export function CalendarFull({
               locale={ruLocale}
               firstDay={1}
               height="auto"
+              /* timeZone не задаём — полагаемся на browser TZ (МСК для всех пользователей) */
               headerToolbar={{
                 left: 'prev,next today',
                 center: 'title',
@@ -466,20 +504,65 @@ export function CalendarFull({
               eventContent={renderEventContent}
               eventDrop={handleEventDrop}
               datesSet={handleDatesSet}
-              editable={canDragDates}
-              droppable={canDragDates}
+              editable={canDragDates && !dragLocked}
+              droppable={canDragDates && !dragLocked}
               dayMaxEvents={3}
               weekends
               nowIndicator
               dayHeaderFormat={{ weekday: 'short', day: 'numeric', omitCommas: true }}
               noEventsContent="Выездов нет"
               eventDisplay="block"
+              /* Day/Week view: рабочее окно 06:00–22:00, snap drag к часовой границе.
+                 NB: FC v6.1.20 имеет визуальный offset в timeGrid render (event displays
+                 ~42-60 min раньше API state). Drag сохраняет всё корректно — это исключительно
+                 рендер. Время точно меняется через форму сделки. */
+              slotMinTime="06:00:00"
+              slotMaxTime="22:00:00"
+              snapDuration="01:00:00"
+              slotLabelFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+              allDayText="Весь день"
             />
+          </div>
+
+          {/* Срочность — перенесено из sidebar под календарь */}
+          <div className="bg-white rounded-lg border border-gray-200 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted">
+                Срочность
+              </div>
+              {canDragDates && (
+                <div className="text-[10px] text-content-muted">
+                  💡 Перетаскивай выезды для быстрого переноса
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(['today', 'soon', 'future', 'past', 'no-date'] as const).map((h) => {
+                const cnt = events.filter((e) => e.health === h).length;
+                const active = healthFilter.has(h);
+                return (
+                  <button
+                    key={h}
+                    onClick={() => toggleHealth(h)}
+                    disabled={cnt === 0}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                      active
+                        ? 'bg-poison-green/15 text-emerald-700 ring-1 ring-emerald-400/40'
+                        : cnt === 0
+                        ? 'bg-gray-50 text-content-muted/40 cursor-not-allowed'
+                        : 'bg-gray-100 text-content-secondary hover:bg-gray-200'
+                    }`}
+                  >
+                    {HEALTH_LABEL[h]} · {cnt}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Сделки без дат */}
           {noDateEvents.length > 0 && (
-            <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-3 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                 Без планируемых дат · {noDateEvents.length}
@@ -504,7 +587,109 @@ export function CalendarFull({
           )}
         </div>
       </div>
-    </Tooltip.Provider>
+
+      {/* Cursor-following tooltip portal */}
+      {tooltip.visible && tooltip.ev && (
+        <CursorTooltip ev={tooltip.ev} x={tooltip.x} y={tooltip.y} />
+      )}
+    </>
+  );
+}
+
+// ─── Cursor-following tooltip (react portal) ───────────────────
+function CursorTooltip({
+  ev,
+  x,
+  y,
+}: {
+  ev: SerializedDealEvent;
+  x: number;
+  y: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    // курсор касается левого нижнего угла → tooltip справа и выше курсора
+    let left = x + 2;
+    let top = y - rect.height - 2;
+    // Если уходит за верх экрана — ставим под курсором
+    if (top < 8) top = y + 16;
+    // Если уходит за правый край — сдвигаем влево
+    if (left + rect.width > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - rect.width - 8);
+    }
+    setPos({ left, top });
+  }, [x, y]);
+
+  if (typeof document === 'undefined') return null;
+
+  const style: React.CSSProperties = {
+    position: 'fixed',
+    left: pos?.left ?? 0,
+    top: pos?.top ?? 0,
+    zIndex: 50,
+    pointerEvents: 'none',
+    visibility: pos ? 'visible' : 'hidden',
+  };
+
+  return createPortal(
+    <div
+      ref={ref}
+      style={style}
+      className="deztech-tooltip-fade bg-white rounded-lg border border-gray-200 shadow-xl p-3 text-xs space-y-1.5 max-w-xs"
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-block w-2 h-2 rounded-full"
+          style={{ backgroundColor: STATUS_BORDER[ev.status] }}
+        />
+        <span className="font-mono font-semibold text-content-primary">{ev.contractNumber}</span>
+        <span className="ml-auto text-[10px] uppercase tracking-wider text-content-muted font-orbitron">
+          {STATUS_LABEL[ev.status] ?? ev.status}
+        </span>
+      </div>
+      <div className="text-content-primary font-medium">{ev.clientShortName ?? '—'}</div>
+      {ev.clientPhone && (
+        <div className="flex items-center gap-1.5 text-content-secondary">
+          <Phone className="w-3 h-3" />
+          {ev.clientPhone}
+        </div>
+      )}
+      {(ev.startDate || ev.endDate) && (
+        <div className="flex items-center gap-1.5 text-content-secondary">
+          <CalendarIcon className="w-3 h-3" />
+          {formatPeriod(ev.startDate, ev.endDate)}
+        </div>
+      )}
+      {ev.masterName && (
+        <div className="flex items-center gap-1.5 text-content-muted">
+          <Wrench className="w-3 h-3" />
+          Мастер: {ev.masterName}
+        </div>
+      )}
+      {ev.managerName && (
+        <div className="flex items-center gap-1.5 text-content-muted">
+          <UserIcon className="w-3 h-3" />
+          Менеджер: {ev.managerName}
+        </div>
+      )}
+      <div className="pt-1.5 mt-1.5 border-t border-gray-100 text-[10px] text-content-muted">
+        <span
+          className="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium"
+          style={{
+            backgroundColor: HEALTH_BG[ev.health],
+            color: STATUS_BORDER[ev.status],
+          }}
+        >
+          {HEALTH_LABEL[ev.health]}
+        </span>
+        <span className="ml-2">Клик — открыть сделку</span>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -535,11 +720,11 @@ function StatChip({
     orange: 'text-neon-orange',
   };
   return (
-    <div className="bg-gray-50 rounded p-2">
-      <div className="text-[9px] uppercase tracking-wider text-content-muted font-orbitron">
+    <div className="bg-gray-50 rounded px-2 py-1 flex items-center justify-between">
+      <span className="text-[9px] uppercase tracking-wider text-content-muted font-orbitron">
         {label}
-      </div>
-      <div className={`text-lg font-bold tabular-nums ${accentClasses[accent]}`}>{value}</div>
+      </span>
+      <span className={`text-sm font-bold tabular-nums ${accentClasses[accent]}`}>{value}</span>
     </div>
   );
 }
@@ -573,7 +758,7 @@ function MiniCalendar({
   const month = viewDate.getMonth();
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  const startOffset = (firstDay.getDay() + 6) % 7; // понедельник как первый
+  const startOffset = (firstDay.getDay() + 6) % 7;
   const totalDays = lastDay.getDate();
 
   const cells: Array<{ day: number; date: Date } | null> = [];
@@ -583,7 +768,7 @@ function MiniCalendar({
 
   const monthLabel = viewDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
   const today = new Date();
-  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayKey = toLocalISO(today);
 
   function prev() {
     setViewDate(new Date(year, month - 1, 1));
@@ -623,7 +808,7 @@ function MiniCalendar({
       <div className="grid grid-cols-7 gap-0.5">
         {cells.map((c, i) => {
           if (!c) return <div key={i} className="h-6" />;
-          const dateKey = `${c.date.getFullYear()}-${String(c.date.getMonth() + 1).padStart(2, '0')}-${String(c.date.getDate()).padStart(2, '0')}`;
+          const dateKey = toLocalISO(c.date);
           const isToday = dateKey === todayKey;
           const hasEvents = eventDays.has(dateKey);
           const isCurrent =

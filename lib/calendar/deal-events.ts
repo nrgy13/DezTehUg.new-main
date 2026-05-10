@@ -15,6 +15,11 @@ export type DealEvent = {
   contractNumber: string;
   startDate: Date | null;
   endDate: Date | null;
+  /** Точный timestamp начала (UTC). Если is_all_day=true — время = 00:00 МСК. */
+  startAt: Date | null;
+  /** Точный timestamp окончания (UTC). Если is_all_day=true — время = 23:59 МСК. */
+  endAt: Date | null;
+  isAllDay: boolean;
   status: DealStatus;
   clientId: string | null;
   clientShortName: string | null;
@@ -97,6 +102,9 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
       contractNumber: deals.contractNumber,
       startDate: deals.startDate,
       endDate: deals.endDate,
+      startAt: deals.startAt,
+      endAt: deals.endAt,
+      isAllDay: deals.isAllDay,
       status: deals.status,
       clientId: clients.id,
       clientShortName: clients.shortName,
@@ -131,6 +139,9 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
       contractNumber: r.contractNumber,
       startDate: start,
       endDate: end,
+      startAt: r.startAt ?? null,
+      endAt: r.endAt ?? null,
+      isAllDay: r.isAllDay ?? true,
       status: r.status,
       clientId: r.clientId,
       clientShortName: r.clientShortName,
@@ -150,6 +161,10 @@ export function serializeForClient(events: DealEvent[]) {
     contractNumber: e.contractNumber,
     startDate: e.startDate ? e.startDate.toISOString().slice(0, 10) : null,
     endDate: e.endDate ? e.endDate.toISOString().slice(0, 10) : null,
+    /** ISO 8601 с UTC offset (или null). FullCalendar парсит в timeZone='Europe/Moscow'. */
+    startAt: e.startAt ? e.startAt.toISOString() : null,
+    endAt: e.endAt ? e.endAt.toISOString() : null,
+    isAllDay: e.isAllDay,
     status: e.status as string,
     clientShortName: e.clientShortName,
     clientPhone: e.clientPhone,

@@ -12,14 +12,9 @@ export default async function MasterCalendarPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Мой календарь
-        </h1>
-        <p className="text-content-muted mt-1 text-sm">
-          Выезды по сделкам, где ты назначен исполнителем.
-        </p>
-      </div>
+      <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+        Мой календарь
+      </h1>
       <CalendarFull events={serialized} dealHrefBase="/master/deals" />
     </div>
   );
