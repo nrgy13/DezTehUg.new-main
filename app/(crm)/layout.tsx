@@ -2,11 +2,22 @@ import { requireAuth } from '@/lib/auth/helpers';
 import { Sidebar } from '@/components/crm/Sidebar';
 import { CrmProviders } from '@/components/crm/CrmProviders';
 import { Toaster } from '@/components/ui/sonner';
+import { getPendingDeletionsCount } from '@/lib/documents/deletion';
+import { getInboxCount } from '@/lib/inbox/queries';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CrmLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAuth();
+
+  // Бейдж pending запросов на удаление — только для админа.
+  // Бейдж inbox — для менеджера (и админа). Для master не нужен.
+  const [pendingDeletionsCount, inboxCount] = await Promise.all([
+    user.role === 'admin' ? getPendingDeletionsCount() : Promise.resolve(0),
+    user.role === 'manager' || user.role === 'admin'
+      ? getInboxCount(user.role === 'admin' ? null : user.id)
+      : Promise.resolve(0),
+  ]);
 
   return (
     <CrmProviders>
@@ -17,7 +28,11 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
         data-crm-root
         className="min-h-screen flex bg-bg-secondary text-content-primary"
       >
-        <Sidebar user={user} />
+        <Sidebar
+          user={user}
+          pendingDeletionsCount={pendingDeletionsCount}
+          inboxCount={inboxCount}
+        />
         <main className="flex-1 overflow-x-hidden">
           <div className="px-6 py-6 max-w-7xl mx-auto">
             {children}

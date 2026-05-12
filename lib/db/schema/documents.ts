@@ -37,6 +37,20 @@ export const documentStatusEnum = pgEnum('document_status', [
   'archived',
 ]);
 
+// Статус запроса на удаление документа (Sprint 5 эпик B).
+// 'none' — документ в обычном состоянии, нет активного запроса.
+// 'pending' — manager запросил удаление, ждёт решения admin.
+// 'approved' — admin одобрил, выполнено реальное удаление файлов и записи.
+//              Сама строка обычно уже не существует — статус используется
+//              только в audit-trail (если решим хранить tombstone).
+// 'rejected' — admin отклонил запрос, документ остался в обращении.
+export const deletionStatusEnum = pgEnum('deletion_status', [
+  'none',
+  'pending',
+  'approved',
+  'rejected',
+]);
+
 // Шаблоны DOCX (хранятся в S3, с переменными типа {{client.short_name}})
 export const documentTemplates = pgTable('document_templates', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
@@ -97,6 +111,19 @@ export const documents = pgTable('documents', {
 
   notes: text('notes'),
 
+  // Soft-delete approval-flow (Sprint 5 эпик B).
+  deletionStatus: deletionStatusEnum('deletion_status').notNull().default('none'),
+  deletionRequestedAt: timestamp('deletion_requested_at', { withTimezone: true }),
+  deletionRequestedById: uuid('deletion_requested_by_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  deletionResolvedAt: timestamp('deletion_resolved_at', { withTimezone: true }),
+  deletionResolvedById: uuid('deletion_resolved_by_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  deletionReason: text('deletion_reason'),
+  deletionAdminNote: text('deletion_admin_note'),
+
   createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
 
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -120,6 +147,7 @@ export const documentNumberCounters = pgTable(
 
 export type DocumentType = (typeof documentTypeEnum.enumValues)[number];
 export type DocumentStatus = (typeof documentStatusEnum.enumValues)[number];
+export type DeletionStatus = (typeof deletionStatusEnum.enumValues)[number];
 export type DocumentTemplate = typeof documentTemplates.$inferSelect;
 export type NewDocumentTemplate = typeof documentTemplates.$inferInsert;
 export type Document = typeof documents.$inferSelect;

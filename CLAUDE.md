@@ -1,16 +1,20 @@
 # DezTehYug CRM — память проекта
 
 > Файл читается Claude автоматически в начале каждой сессии в этом проекте.
-> Обновляй при больших изменениях. Последнее обновление: **2026-05-04 (закрытие Спринта 3, развёртывание на prod).**
+> Обновляй при больших изменениях. Последнее обновление: **2026-05-11 (закрытие Sprint 5 maxi, готов к деплою).**
 
 ---
 
 ## ⚡ ВНИМАНИЕ: где сейчас стоит работа (читать перед стартом!)
 
-**Спринт 3 ЗАКРЫТ и развёрнут на prod.** Ветка `feature/crm`, working tree чистый после большого коммита Sprint 3.
+**Sprint 5 maxi ЗАКРЫТ локально (working tree dirty, миграции 0007/0008/0009 на dev применены, prod-деплой ЕЩЁ НЕ СДЕЛАН).** Ветка `feature/crm`. `npm run build` зелёный. Все 8 эпиков работают локально.
+
+Ждёт от Сани: smoke-тест локально → разрешение на коммит → деплой на prod (миграции 0007/0008/0009 на проде, env переменные `TELEGRAM_BOT_TOKEN`/`TELEGRAM_BOT_USERNAME` в `/opt/deztech-crm/.env`, опц. `TELEGRAM_WEBHOOK_SECRET`, после деплоя — `npx tsx tools/telegram-set-webhook.ts https://crm.дезтехюг.рф`).
+
+Sprint 5 maxi эпики (детали ниже): A дашборд+ B soft-delete + C Telegram + E пороги + F канбан-confirm + G master запрос переноса + D 10 отчётов + H CI/CD.
 
 ### Состояние ветки
-- Sprint 3 закрыт большим коммитом (см. последний `git log`). Ветка опережает `main`.
+- Sprint 5 maxi сделан локально, working tree содержит несколько изменённых/новых файлов. Не закоммичено.
 - Не мерджим в `main` — `feature/crm` остаётся живой веткой разработки CRM, не трогаем `main` (там — публичный сайт).
 
 ### ✅ Что закрыто в Спринте 3 (всё на prod, миграция 0003 применена)
@@ -219,7 +223,33 @@ DezTehUg.new-main/
 
 **Спринт 2 (2026-05-03):** редизайн CRM (light cyberpunk), смена пароля (миграция 0001), модуль клиентов с ИНН/ОГРН валидацией (23 unit-теста), модуль лидов + n8n integration + канбан на dnd-kit (миграция 0002), 6 DOCX-шаблонов с tools-builder, минимальная генерация контракта, активная n8n CRM-нода на проде. Закрыт коммитом `8c486ca`.
 
-**Спринт 3 (2026-05-04):** см. секцию ✅ выше. Migration 0003. Полный цикл лид→клиент→сделка→документ→выезд→акт. КП-flow прямо из канбана. Удаление документов. Email body шаблоны для всех типов. Master/Admin UI наполнены. 3 Playwright теста. LibreOffice в app-контейнере вместо отдельного. GitHub: https://github.com/nrgy13/DezTehUg.new-main/tree/feature/crm
+**Спринт 3 (2026-05-04):** Migration 0003. Полный цикл лид→клиент→сделка→документ→выезд→акт. КП-flow прямо из канбана. Удаление документов. Email body шаблоны для всех типов. Master/Admin UI наполнены. 3 Playwright теста. LibreOffice в app-контейнере вместо отдельного.
+
+**Спринт 4 (2026-05-09 → 2026-05-10):** Аналитика воронки (4 виджета recharts), cron stuck-leads (SMTP Yandex 360 + Linux cron), 6 заглушенных страниц (документы/календарь×2/завершено мастера/admin settings), редизайн календаря (FullCalendar v6 + light-cyberpunk), канбан сделок (@dnd-kit). Все на проде.
+
+**Спринт 5.0 (2026-05-10):** UX-фиксы календаря, time-of-day для сделок (миграция 0006), фикс body { zoom } ломал FullCalendar. Закоммичено `3ac3711`.
+
+**Спринт 5 maxi (2026-05-11):** см. ниже секцию «Sprint 5 maxi эпики». Миграции 0007/0008/0009. 3 новых виджета на дашборде + 6 quick-links. Soft-delete документов с admin approval queue. Telegram-бот (grammy + webhook + polling-tools, привязка через одноразовый токен, fallback email→TG). UI порогов зависания. Канбан confirm для destructive статусов. Запрос переноса дат от мастера с TG-уведомлением менеджеру. 10 отчётов + CSV. CI/CD GitHub Actions (test+deploy workflows).
+
+---
+
+## Sprint 5 maxi эпики (2026-05-11) — что закрыто
+
+**A. Дашборд менеджера v2** — `app/(crm)/manager/page.tsx` + `lib/dashboard/manager-stats.ts`. 10 виджетов (3 новых: Конверсия 30д, Ближайшие выезды 7д, Выручка 30д) + секция «Быстрые переходы» с 6 ссылками (Аналитика, Канбан воронки, Канбан сделок, Календарь, Документы, Клиенты). Старый `«в разработке»` текст удалён.
+
+**B. Soft-delete документов с approval-flow (миграция 0007).** `documents.deletion_status` enum (none/pending/approved/rejected) + 5 нужных колонок. Server actions: `requestDocumentDeletion` / `cancelDeletionRequest` (manager+admin) + `approveDocumentDeletion` / `rejectDocumentDeletion` (admin only). UI: вместо корзины в DocumentsTab — кнопка «Запросить удаление» → modal с textarea причины. Pending показывается inline-badge в строке документа. Новая страница `/admin/deletions` с queue (карточки + кнопки Удалить/Отклонить). Sidebar admin — бейдж pending count. Helper `executeDocumentDeletion` в `lib/documents/deletion.ts` (внутренний, чистит storage + запись). E2E проверено локально: Регина → запрос → Саня → одобрение → файл удалён.
+
+**C. Telegram-бот (миграция 0008).** Установлен grammy ^1.42.0. ENV `TELEGRAM_BOT_TOKEN=8591565062:...` (пока в .env.local), `TELEGRAM_BOT_USERNAME=DTUnvrsk_bot`. `lib/notifications/telegram.ts` — singleton Bot + sendTelegramMessage (с handling блокировок) + linkUserByToken. Schema users +5 колонок: telegram_username, telegram_linked_at, telegram_link_token, telegram_link_token_expires_at (telegram_chat_id уже был). Server actions в profile/actions.ts: `generateTelegramLinkToken` (срок жизни 30 мин), `unlinkTelegram`. UI: `/profile` → секция Telegram (привязать → deep-link → копировать/открыть → Сторе нажмёт Start в боте). `/api/telegram/webhook` (для prod) + `tools/telegram-polling.ts` (для dev) + `tools/telegram-set-webhook.ts` (для setup на проде). npm scripts: `telegram:dev`, `telegram:webhook:set/delete/info`. `runStuckLeadsCheck` расширен — если у юзера есть chatId, шлёт в TG (короткий формат «⚠️ Зависших: N» + список); fallback на email если TG заблокирован. Что осталось от Сани: открыть деплинк в TG, нажать Start → проверить что привязалось. На проде: добавить TELEGRAM_BOT_TOKEN/USERNAME в `/opt/deztech-crm/.env`, после деплоя — `npx tsx tools/telegram-set-webhook.ts https://crm.дезтехюг.рф` (опционально с TELEGRAM_WEBHOOK_SECRET).
+
+**E. UI-настройка порогов «зависания» (миграция 0009).** Generic table `app_settings (key text PK, value jsonb, updated_at, updated_by_id)`. `lib/notifications/thresholds.ts`: getThresholds/saveThresholds/resetThresholds, fallback на STALE_THRESHOLDS из lead-stages. `stuck-leads.ts` SQL CASE WHEN теперь генерируется динамически из getThresholds. UI: новая секция «Пороги зависания лидов» в `/admin/settings` с inputs warn/stale на каждую стадию + кнопки «Сохранить» / «Сбросить к дефолту». Server actions в `app/(crm)/admin/settings/actions.ts`.
+
+**F. Канбан подтверждение destructive переходов.** `DealBoardClient.tsx` — при drop сделки в `terminated` или `completed` показывается AlertDialog с информацией о сделке + кнопка подтверждения. Cancel — drop отменяется, состояние не меняется (optimistic update срабатывает только после confirm).
+
+**G. Календарь мастера: запрос переноса дат.** Master уже не мог drag-n-drop (canDragDates=false для /master/calendar). Теперь на странице сделки `/master/deals/[id]` добавлена кнопка «Попросить перенести даты» → modal с date-pickers (start/end) + textarea reason. Server action `requestDateChange` в `app/(crm)/master/deals/[id]/actions.ts`: пишет в activity_log (entity=deal, action=`deal.master_date_request`) + если у менеджера привязан Telegram — пушит уведомление сразу.
+
+**D. /manager/reports — 10 отчётов + CSV экспорт.** Sidebar убран `disabled: true`. `lib/reports/queries.ts` — 10 SQL-агрегатов (revenue by month, deals by master, conversion by source, manager activity, service usage, avg cheque, time-to-close, loss reasons, retention, master load). `lib/reports/csv.ts` — конвертер с UTF-8 BOM и `;` separator (для Excel в RU-локали). `app/(crm)/manager/reports/page.tsx` — server-rendered страница со всеми 10 секциями (KPI-чипами доход/сделок/средний чек сверху, период-switcher 30/90/365/all). `app/api/reports/[name]/csv/route.ts` — endpoint для CSV download.
+
+**H. CI/CD GitHub Actions.** `.github/workflows/test.yml` (push/PR в feature/crm и main): job `type-check` (tsc --noEmit + next lint, lint warnings не блокируют) + job `build` (postgres service, миграции через psql -f, npm run db:seed, npm run build). `.github/workflows/deploy.yml` — workflow_dispatch (ручной запуск) с inputs: branch (default feature/crm) + run_migrations (boolean). SSH через webfactory/ssh-agent + `git fetch + reset --hard + docker compose build/up`. Health-check после деплоя. Secrets нужны: `VPS_SSH_KEY` (приват ключ) + `VPS_HOST` (91.229.90.53). Опц. `TELEGRAM_BOT_TOKEN_DEV` / `TELEGRAM_BOT_USERNAME_DEV` для test build.
 
 ---
 

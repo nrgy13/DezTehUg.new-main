@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { eq, asc, desc } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { ArrowLeft, Briefcase } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
@@ -129,7 +130,9 @@ export default async function DealDetailPage({
     .where(eq(dealAddendums.dealId, id))
     .orderBy(asc(dealAddendums.number));
 
-  // Документы сделки
+  // Документы сделки + кто запросил/отклонил удаление (если есть)
+  const requester = alias(users, 'requester');
+  const resolver = alias(users, 'resolver');
   const docList = await db
     .select({
       id: documents.id,
@@ -140,8 +143,18 @@ export default async function DealDetailPage({
       docxS3Key: documents.docxS3Key,
       pdfS3Key: documents.pdfS3Key,
       createdAt: documents.createdAt,
+      deletionStatus: documents.deletionStatus,
+      deletionReason: documents.deletionReason,
+      deletionRequestedAt: documents.deletionRequestedAt,
+      deletionRequestedById: documents.deletionRequestedById,
+      deletionAdminNote: documents.deletionAdminNote,
+      deletionResolvedAt: documents.deletionResolvedAt,
+      requesterName: requester.fullName,
+      resolverName: resolver.fullName,
     })
     .from(documents)
+    .leftJoin(requester, eq(requester.id, documents.deletionRequestedById))
+    .leftJoin(resolver, eq(resolver.id, documents.deletionResolvedById))
     .where(eq(documents.dealId, id))
     .orderBy(desc(documents.createdAt));
 
@@ -247,6 +260,13 @@ export default async function DealDetailPage({
             pdfS3Key: d.pdfS3Key,
             createdAt: d.createdAt.toISOString(),
             templateVersion: null,
+            deletionStatus: d.deletionStatus,
+            deletionReason: d.deletionReason,
+            deletionRequestedAt: d.deletionRequestedAt?.toISOString() ?? null,
+            deletionAdminNote: d.deletionAdminNote,
+            deletionResolvedAt: d.deletionResolvedAt?.toISOString() ?? null,
+            requesterName: d.requesterName,
+            resolverName: d.resolverName,
           }))}
         />
       )}

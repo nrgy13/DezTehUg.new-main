@@ -1,22 +1,19 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import {
   deals,
   dealPriceItems,
   type DealStatus,
-  type Deal,
 } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { users } from '@/lib/db/schema/users';
 import { documents } from '@/lib/db/schema/documents';
 import { activityLog } from '@/lib/db/schema/activity';
 import { auth } from '@/lib/auth';
-import { getStorage } from '@/lib/storage';
 import {
   dealFormSchema,
   priceItemFormSchema,
@@ -531,18 +528,28 @@ function round2(n: number): number {
 }
 
 // =============================================================
-// DOCUMENTS
+// DOCUMENTS — request/cancel deletion (Sprint 5 эпик B)
 // =============================================================
 
 /**
- * Удалить документ полностью: файлы из storage (DOCX + PDF + signed_scan если есть)
- * + запись из БД. Действие необратимо.
- *
- * Доступно manager и admin. Если файла в storage нет — не падает (idempotent delete).
+ * Запросить удаление документа. Реальное удаление выполнит admin
+ * из /admin/deletions через approveDocumentDeletion. Manager не может
+ * удалить документ напрямую — только запросить.
  */
-export async function deleteDocument(id: string): Promise<Result> {
+export async function requestDocumentDeletion(
+  id: string,
+  reason: string,
+): Promise<Result> {
   const actor = await getActor();
   if (!actor) return { ok: false, error: 'Нет доступа' };
+
+  const trimmedReason = reason.trim();
+  if (trimmedReason.length < 5) {
+    return { ok: false, error: 'Опиши причину удаления (минимум 5 символов)' };
+  }
+  if (trimmedReason.length > 1000) {
+    return { ok: false, error: 'Причина слишком длинная (максимум 1000 символов)' };
+  }
 
   const rows = await db
     .select({
@@ -551,9 +558,7 @@ export async function deleteDocument(id: string): Promise<Result> {
       type: documents.type,
       dealId: documents.dealId,
       clientId: documents.clientId,
-      docxS3Key: documents.docxS3Key,
-      pdfS3Key: documents.pdfS3Key,
-      signedScanS3Key: documents.signedScanS3Key,
+      deletionStatus: documents.deletionStatus,
     })
     .from(documents)
     .where(eq(documents.id, id))
@@ -561,28 +566,93 @@ export async function deleteDocument(id: string): Promise<Result> {
   if (rows.length === 0) return { ok: false, error: 'Документ не найден' };
   const doc = rows[0];
 
-  // Удаляем файлы из storage. Если упадёт — логируем, но БД запись всё равно сносим
-  // (не оставляем "висячий" документ ради файла).
-  const storage = await getStorage();
-  for (const key of [doc.docxS3Key, doc.pdfS3Key, doc.signedScanS3Key]) {
-    if (!key) continue;
-    try {
-      await storage.delete(key);
-    } catch (err) {
-      console.warn(`[deleteDocument] storage.delete(${key}) failed:`, err);
-    }
+  if (doc.deletionStatus === 'pending') {
+    return { ok: false, error: 'Запрос на удаление уже отправлен и ждёт решения админа' };
   }
 
-  await db.delete(documents).where(eq(documents.id, id));
+  await db
+    .update(documents)
+    .set({
+      deletionStatus: 'pending',
+      deletionRequestedAt: new Date(),
+      deletionRequestedById: actor.id,
+      deletionReason: trimmedReason,
+      // Очищаем след предыдущего отклонения, если он был
+      deletionResolvedAt: null,
+      deletionResolvedById: null,
+      deletionAdminNote: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(documents.id, id));
 
-  await logActivity(actor.id, 'document.delete', doc.dealId ?? doc.clientId ?? id, {
+  await logActivity(actor.id, 'document.deletion_request', doc.dealId ?? doc.clientId ?? id, {
     documentId: id,
     number: doc.number,
     type: doc.type,
+    reason: trimmedReason,
   });
 
   if (doc.dealId) revalidatePath(`/manager/deals/${doc.dealId}`);
   if (doc.clientId) revalidatePath(`/manager/clients/${doc.clientId}`);
+  revalidatePath('/admin/deletions');
+  revalidatePath('/admin');
+
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Отменить свой запрос на удаление. Доступно тому кто запросил, либо admin.
+ * Работает только пока запрос pending — после approve/reject уже поздно.
+ */
+export async function cancelDeletionRequest(id: string): Promise<Result> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Нет доступа' };
+
+  const rows = await db
+    .select({
+      id: documents.id,
+      number: documents.number,
+      dealId: documents.dealId,
+      clientId: documents.clientId,
+      deletionStatus: documents.deletionStatus,
+      deletionRequestedById: documents.deletionRequestedById,
+    })
+    .from(documents)
+    .where(eq(documents.id, id))
+    .limit(1);
+  if (rows.length === 0) return { ok: false, error: 'Документ не найден' };
+  const doc = rows[0];
+
+  if (doc.deletionStatus !== 'pending') {
+    return { ok: false, error: 'Нет активного запроса на удаление' };
+  }
+
+  const isOwn = doc.deletionRequestedById === actor.id;
+  const isAdmin = actor.role === 'admin';
+  if (!isOwn && !isAdmin) {
+    return { ok: false, error: 'Отменить запрос может только автор или админ' };
+  }
+
+  await db
+    .update(documents)
+    .set({
+      deletionStatus: 'none',
+      deletionRequestedAt: null,
+      deletionRequestedById: null,
+      deletionReason: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(documents.id, id));
+
+  await logActivity(actor.id, 'document.deletion_cancel', doc.dealId ?? doc.clientId ?? id, {
+    documentId: id,
+    number: doc.number,
+  });
+
+  if (doc.dealId) revalidatePath(`/manager/deals/${doc.dealId}`);
+  if (doc.clientId) revalidatePath(`/manager/clients/${doc.clientId}`);
+  revalidatePath('/admin/deletions');
+  revalidatePath('/admin');
 
   return { ok: true, data: undefined };
 }

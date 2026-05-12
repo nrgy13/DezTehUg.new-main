@@ -12,6 +12,7 @@ import { users } from '@/lib/db/schema/users';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { DealStatusBadge } from '@/components/crm/DealStatusBadge';
 import { WorkLogForm } from './WorkLogForm';
+import { DateChangeRequestForm } from './DateChangeRequestForm';
 
 export const metadata = { title: 'Сделка — мастер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -103,11 +104,20 @@ export default async function MasterDealPage({
               {deal.contractNumber}
             </h1>
             <p className="text-content-muted text-sm">
-              {client?.shortName ?? '—'} · от {fmt(deal.contractDate)}
+              {client?.shortName ?? '—'} · от {fmt(deal.contractDate)} ·{' '}
+              <span className="text-content-secondary">
+                выезд {formatPeriod(deal.startDate, deal.endDate)}
+              </span>
             </p>
           </div>
           <DealStatusBadge status={deal.status} />
         </div>
+        <DateChangeRequestForm
+          dealId={deal.id}
+          contractNumber={deal.contractNumber}
+          currentStartDate={deal.startDate}
+          currentEndDate={deal.endDate}
+        />
       </div>
 
       {/* Контакты клиента */}
@@ -270,4 +280,10 @@ export default async function MasterDealPage({
 function fmt(d: string | null): string {
   if (!d) return '—';
   return d.split('-').reverse().join('.');
+}
+
+function formatPeriod(start: string | null, end: string | null): string {
+  if (!start && !end) return 'без дат';
+  if (start && end && start !== end) return `${fmt(start)} — ${fmt(end)}`;
+  return fmt(start ?? end!);
 }

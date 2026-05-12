@@ -13,9 +13,11 @@ import {
   Settings,
   LogOut,
   Inbox,
+  Bell,
   Wrench,
   BarChart3,
   UserCircle,
+  Trash2,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/db/schema/users';
 import { LogoText } from '@/components/layout/LogoText';
@@ -41,7 +43,8 @@ const NAV: NavItem[] = [
   { href: '/manager/analytics', label: 'Аналитика', icon: BarChart3, roles: ['manager'] },
   { href: '/manager/documents', label: 'Документы', icon: FileText, roles: ['manager'] },
   { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'] },
-  { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'], disabled: true },
+  { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'] },
+  { href: '/manager/inbox', label: 'Уведомления', icon: Bell, roles: ['manager'] },
 
   // Мастер
   { href: '/master', label: 'Мои выезды', icon: Wrench, roles: ['master'] },
@@ -53,6 +56,7 @@ const NAV: NavItem[] = [
   { href: '/admin/users', label: 'Пользователи', icon: Users, roles: ['admin'] },
   { href: '/admin/services', label: 'Услуги', icon: Wrench, roles: ['admin'] },
   { href: '/admin/templates', label: 'Шаблоны', icon: FileText, roles: ['admin'] },
+  { href: '/admin/deletions', label: 'Удаления', icon: Trash2, roles: ['admin'] },
   { href: '/admin/settings', label: 'Настройки', icon: Settings, roles: ['admin'] },
 ];
 
@@ -64,8 +68,12 @@ const ROLE_LABEL: Record<UserRole, string> = {
 
 export function Sidebar({
   user,
+  pendingDeletionsCount = 0,
+  inboxCount = 0,
 }: {
   user: { id: string; email: string; name: string; role: UserRole };
+  pendingDeletionsCount?: number;
+  inboxCount?: number;
 }) {
   const pathname = usePathname();
   const isProfile = pathname === '/profile' || pathname.startsWith('/profile/');
@@ -121,6 +129,14 @@ export function Sidebar({
                 </li>
               );
             }
+            const showDeletionsBadge =
+              item.href === '/admin/deletions' && pendingDeletionsCount > 0;
+            const showInboxBadge = item.href === '/manager/inbox' && inboxCount > 0;
+            const badgeValue = showDeletionsBadge
+              ? pendingDeletionsCount
+              : showInboxBadge
+                ? inboxCount
+                : null;
             return (
               <li key={item.href}>
                 <Link
@@ -134,7 +150,12 @@ export function Sidebar({
                   }`}
                 >
                   <Icon className="w-4 h-4 flex-shrink-0" />
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {badgeValue !== null && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-orbitron font-semibold bg-neon-orange text-white rounded">
+                      {badgeValue}
+                    </span>
+                  )}
                 </Link>
               </li>
             );

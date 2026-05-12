@@ -1,13 +1,29 @@
-import { Building2, FileSignature, Banknote, Phone, Lock, Code } from 'lucide-react';
+import { Building2, FileSignature, Banknote, Phone, Lock, Code, Bell } from 'lucide-react';
+import { eq } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth/helpers';
 import { CONTRACT_PROVIDER as P } from '@/lib/contract-provider';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
+import { db } from '@/lib/db';
+import { appSettings } from '@/lib/db/schema/settings';
+import { getThresholds, defaultThresholds, THRESHOLDS_KEY } from '@/lib/notifications/thresholds';
+import { NotificationThresholdsSection } from './NotificationThresholdsSection';
 
 export const metadata = { title: 'Настройки — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminSettingsPage() {
   await requireRole('admin');
+
+  const [thresholds, defaults, dbOverride] = await Promise.all([
+    getThresholds(),
+    Promise.resolve(defaultThresholds()),
+    db
+      .select({ key: appSettings.key })
+      .from(appSettings)
+      .where(eq(appSettings.key, THRESHOLDS_KEY))
+      .limit(1),
+  ]);
+  const isOverridden = dbOverride.length > 0;
 
   return (
     <div className="space-y-6">
@@ -59,6 +75,16 @@ export default async function AdminSettingsPage() {
       <Section icon={Phone} title="Контакты">
         <Row label="Телефон" value={P.phone} />
         <Row label="Email" value={P.email} />
+      </Section>
+
+      <Section icon={Bell} title="Пороги «зависания» лидов">
+        <div className="px-4 py-3">
+          <NotificationThresholdsSection
+            initial={thresholds}
+            defaults={defaults}
+            isOverridden={isOverridden}
+          />
+        </div>
       </Section>
 
       <Section icon={Code} title="Системные параметры (env)">

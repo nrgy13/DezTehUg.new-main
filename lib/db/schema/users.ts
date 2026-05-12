@@ -12,8 +12,16 @@ export const users = pgTable('users', {
   phone: varchar('phone', { length: 32 }),
   role: userRoleEnum('role').notNull(),
 
-  // Telegram для уведомлений (привязывается через бота)
+  // Telegram для уведомлений (привязывается через бота).
+  // Юзер генерит на /profile одноразовый telegram_link_token, переходит в @bot
+  // и шлёт /start <token>. Webhook сохраняет chat_id и обнуляет токен.
   telegramChatId: varchar('telegram_chat_id', { length: 64 }),
+  telegramUsername: varchar('telegram_username', { length: 64 }),
+  telegramLinkedAt: timestamp('telegram_linked_at', { withTimezone: true }),
+  telegramLinkToken: varchar('telegram_link_token', { length: 64 }),
+  telegramLinkTokenExpiresAt: timestamp('telegram_link_token_expires_at', {
+    withTimezone: true,
+  }),
 
   // Управление активностью
   isActive: boolean('is_active').notNull().default(true),

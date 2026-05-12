@@ -1,61 +1,28 @@
 import Link from 'next/link';
-import { count, eq, and, gte, inArray } from 'drizzle-orm';
-import { Inbox, Users, Briefcase, FileText, ArrowRight, AlertTriangle } from 'lucide-react';
+import {
+  Inbox,
+  Users,
+  Briefcase,
+  FileText,
+  ArrowRight,
+  AlertTriangle,
+  CalendarDays,
+  Wallet,
+  TrendingUp,
+  BarChart3,
+  KanbanSquare,
+  CalendarClock,
+} from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
-import { db } from '@/lib/db';
-import { leads } from '@/lib/db/schema/leads';
-import { clients } from '@/lib/db/schema/clients';
-import { deals } from '@/lib/db/schema/deals';
-import { documents } from '@/lib/db/schema/documents';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
-import { getStaleLeadsCount } from '@/lib/lead-stages-server';
+import { getManagerDashboardStats, formatRubShort } from '@/lib/dashboard/manager-stats';
 
 export const metadata = { title: 'Менеджер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
 
 export default async function ManagerDashboard() {
   const user = await requireRole('manager');
-
-  // Одним заходом — все нужные счётчики
-  const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-  const [
-    [{ newLeads }],
-    [{ myActive }],
-    [{ clientsCount }],
-    [{ activeDeals }],
-    [{ docsPreparing }],
-    [{ wonThisMonth }],
-    staleLeads,
-  ] = await Promise.all([
-    db
-      .select({ newLeads: count() })
-      .from(leads)
-      .where(eq(leads.status, 'new')),
-    db
-      .select({ myActive: count() })
-      .from(leads)
-      .where(
-        and(
-          eq(leads.assignedManagerId, user.id),
-          inArray(leads.status, ['contacted', 'proposal_sent', 'contract_signed', 'works_completed'])
-        )
-      ),
-    db.select({ clientsCount: count() }).from(clients),
-    db
-      .select({ activeDeals: count() })
-      .from(deals)
-      .where(inArray(deals.status, ['draft', 'sent', 'signed', 'active'])),
-    db
-      .select({ docsPreparing: count() })
-      .from(documents)
-      .where(eq(documents.status, 'draft')),
-    db
-      .select({ wonThisMonth: count() })
-      .from(leads)
-      .where(and(eq(leads.status, 'won'), gte(leads.updatedAt, monthAgo))),
-    getStaleLeadsCount(),
-  ]);
+  const stats = await getManagerDashboardStats(user.id);
 
   return (
     <div className="space-y-6">
@@ -68,80 +35,132 @@ export default async function ManagerDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <StatCard
           label="Новые заявки"
-          value={newLeads}
+          value={stats.newLeads}
           icon={Inbox}
           href="/manager/leads?status=new"
-          accent={newLeads > 0 ? 'orange' : 'muted'}
+          accent={stats.newLeads > 0 ? 'orange' : 'muted'}
         />
         <StatCard
           label="Мои в работе"
-          value={myActive}
+          value={stats.myActive}
           icon={Briefcase}
           href="/manager/leads?mine=1"
           hint="связались / КП / договор / реализована"
         />
         <StatCard
           label="Реализованы за 30 дней"
-          value={wonThisMonth}
+          value={stats.wonThisMonth}
           icon={FileText}
           href="/manager/leads?status=won"
-          accent={wonThisMonth > 0 ? 'green' : 'muted'}
+          accent={stats.wonThisMonth > 0 ? 'green' : 'muted'}
         />
-        <StatCard label="Клиенты в базе" value={clientsCount} icon={Users} href="/manager/clients" />
+        <StatCard
+          label="Конверсия за 30 дней"
+          value={stats.conversion30d !== null ? `${stats.conversion30d}%` : '—'}
+          icon={TrendingUp}
+          href="/manager/analytics"
+          hint="won / (won + lost) среди новых лидов"
+          accent={
+            stats.conversion30d === null
+              ? 'muted'
+              : stats.conversion30d >= 30
+                ? 'green'
+                : stats.conversion30d >= 15
+                  ? 'orange'
+                  : 'muted'
+          }
+        />
+        <StatCard
+          label="Ближайшие выезды (7д)"
+          value={stats.upcomingVisits7d}
+          icon={CalendarDays}
+          href="/manager/calendar"
+          hint="договоры в работе на этой неделе"
+          accent={stats.upcomingVisits7d > 0 ? 'orange' : 'muted'}
+        />
+        <StatCard
+          label="Выручка за 30 дней"
+          value={formatRubShort(stats.revenue30d)}
+          icon={Wallet}
+          href="/manager/analytics"
+          hint="по завершённым договорам"
+          accent={stats.revenue30d > 0 ? 'green' : 'muted'}
+        />
+        <StatCard
+          label="Клиенты в базе"
+          value={stats.clientsCount}
+          icon={Users}
+          href="/manager/clients"
+        />
         <StatCard
           label="Активные договоры"
-          value={activeDeals}
+          value={stats.activeDeals}
           icon={Briefcase}
           href="/manager/deals"
           hint="черновик / отправлен / подписан / в работе"
         />
         <StatCard
           label="Документов готовится"
-          value={docsPreparing}
+          value={stats.docsPreparing}
           icon={FileText}
-          href="/manager/deals"
+          href="/manager/documents"
           hint="DOCX/PDF в очереди генерации"
         />
         <StatCard
           label="Зависших лидов"
-          value={staleLeads}
+          value={stats.staleLeads}
           icon={AlertTriangle}
           href="/manager/leads/board"
           hint="превышен порог дней на стадии"
-          accent={staleLeads > 0 ? 'orange' : 'muted'}
+          accent={stats.staleLeads > 0 ? 'orange' : 'muted'}
         />
       </div>
 
       <CyberpunkCard variant="default" hoverEffect={false} className="p-6">
         <h2 className="text-base font-orbitron font-semibold tracking-wider text-content-primary mb-3 uppercase">
-          Что доступно прямо сейчас
+          Быстрые переходы
         </h2>
-        <ul className="text-sm text-content-secondary space-y-1.5 list-disc pl-5">
-          <li>
-            <Link href="/manager/leads/board" className="text-poison-green hover:underline">
-              Канбан воронки
-            </Link>{' '}
-            — drag-n-drop по 7 этапам, конвертация в клиента, причины потери
-          </li>
-          <li>
-            <Link href="/manager/leads" className="text-poison-green hover:underline">
-              Список заявок
-            </Link>{' '}
-            — фильтры, поиск, ручное создание
-          </li>
-          <li>
-            <Link href="/manager/clients" className="text-poison-green hover:underline">
-              База клиентов
-            </Link>{' '}
-            — реквизиты, объекты, история
-          </li>
-        </ul>
-        <p className="text-xs text-content-muted mt-4">
-          Договоры, документы и календарь — в разработке (Спринт 2–3).
-        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <QuickLink
+            href="/manager/analytics"
+            icon={BarChart3}
+            title="Аналитика воронки"
+            subtitle="Конверсии, время в стадиях, причины потери"
+          />
+          <QuickLink
+            href="/manager/leads/board"
+            icon={KanbanSquare}
+            title="Канбан воронки"
+            subtitle="Лиды по 7 этапам, drag-n-drop"
+          />
+          <QuickLink
+            href="/manager/deals/board"
+            icon={KanbanSquare}
+            title="Канбан сделок"
+            subtitle="Договоры по статусам жизненного цикла"
+          />
+          <QuickLink
+            href="/manager/calendar"
+            icon={CalendarClock}
+            title="Календарь выездов"
+            subtitle="Расписание мастеров, drag-n-drop переноса дат"
+          />
+          <QuickLink
+            href="/manager/documents"
+            icon={FileText}
+            title="Документы"
+            subtitle="Все договоры, акты, КП, ДС с фильтрами"
+          />
+          <QuickLink
+            href="/manager/clients"
+            icon={Users}
+            title="Клиенты"
+            subtitle="Реквизиты, объекты, история"
+          />
+        </div>
       </CyberpunkCard>
     </div>
   );
@@ -185,6 +204,34 @@ function StatCard({
         </div>
         {hint && <div className="text-[10px] text-content-muted mt-2">{hint}</div>}
       </CyberpunkCard>
+    </Link>
+  );
+}
+
+function QuickLink({
+  href,
+  icon: Icon,
+  title,
+  subtitle,
+}: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-start gap-3 rounded-md border border-border/40 bg-bg-card/40 px-3 py-2.5 transition-all hover:border-poison-green/60 hover:bg-bg-card/80"
+    >
+      <Icon className="w-5 h-5 text-content-muted group-hover:text-poison-green transition-colors mt-0.5 flex-shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-content-primary group-hover:text-poison-green transition-colors">
+          {title}
+        </div>
+        <div className="text-[11px] text-content-muted leading-snug mt-0.5">{subtitle}</div>
+      </div>
+      <ArrowRight className="w-4 h-4 text-content-muted/40 group-hover:text-poison-green group-hover:translate-x-0.5 transition-all flex-shrink-0 mt-0.5" />
     </Link>
   );
 }

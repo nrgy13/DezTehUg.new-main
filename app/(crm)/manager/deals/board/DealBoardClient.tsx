@@ -15,10 +15,25 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { Search, X, Wrench, User as UserIcon, Calendar as CalendarIcon } from 'lucide-react';
+import { Search, X, Wrench, User as UserIcon, Calendar as CalendarIcon, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { DealStatus } from '@/lib/db/schema/deals';
 import { updateDealStatus } from '../actions';
+
+const DESTRUCTIVE_STATUSES: ReadonlySet<DealStatus> = new Set<DealStatus>([
+  'terminated',
+  'completed',
+]);
 
 export type BoardDeal = {
   id: string;
@@ -93,11 +108,17 @@ const COLUMNS: ColumnDef[] = [
   },
 ];
 
+type PendingMove = {
+  deal: BoardDeal;
+  newStatus: DealStatus;
+};
+
 export function DealBoardClient({ initialDeals }: { initialDeals: BoardDeal[] }) {
   const router = useRouter();
   const [deals, setDeals] = useState<BoardDeal[]>(initialDeals);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -145,21 +166,15 @@ export function DealBoardClient({ initialDeals }: { initialDeals: BoardDeal[] })
     setActiveId(String(e.active.id));
   }
 
-  function handleDragEnd(e: DragEndEvent) {
-    setActiveId(null);
-    const { active, over } = e;
-    if (!over) return;
-    const dealId = String(active.id);
-    const newStatus = over.id as DealStatus;
-    const deal = deals.find((d) => d.id === dealId);
-    if (!deal || deal.status === newStatus) return;
-
+  function applyMove(deal: BoardDeal, newStatus: DealStatus) {
     // Optimistic update
     const prev = deals;
-    setDeals((cur) => cur.map((d) => (d.id === dealId ? { ...d, status: newStatus } : d)));
+    setDeals((cur) =>
+      cur.map((d) => (d.id === deal.id ? { ...d, status: newStatus } : d)),
+    );
 
     startTransition(async () => {
-      const res = await updateDealStatus(dealId, { status: newStatus });
+      const res = await updateDealStatus(deal.id, { status: newStatus });
       if (!res.ok) {
         toast.error(res.error ?? 'Не удалось');
         setDeals(prev);
@@ -169,6 +184,25 @@ export function DealBoardClient({ initialDeals }: { initialDeals: BoardDeal[] })
       toast.success(`Сделка → «${colLabel}»`);
       router.refresh();
     });
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    setActiveId(null);
+    const { active, over } = e;
+    if (!over) return;
+    const dealId = String(active.id);
+    const newStatus = over.id as DealStatus;
+    const deal = deals.find((d) => d.id === dealId);
+    if (!deal || deal.status === newStatus) return;
+
+    // Деструктивные статусы — спросить подтверждение, чтобы случайный drop
+    // не закрыл/расторг сделку (откатить можно только сменой статуса вручную).
+    if (DESTRUCTIVE_STATUSES.has(newStatus)) {
+      setPendingMove({ deal, newStatus });
+      return;
+    }
+
+    applyMove(deal, newStatus);
   }
 
   return (
@@ -210,6 +244,63 @@ export function DealBoardClient({ initialDeals }: { initialDeals: BoardDeal[] })
           {activeDeal ? <DealCard deal={activeDeal} isOverlay /> : null}
         </DragOverlay>
       </DndContext>
+
+      <AlertDialog
+        open={!!pendingMove}
+        onOpenChange={(open) => !open && setPendingMove(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle
+                className={`w-5 h-5 ${
+                  pendingMove?.newStatus === 'terminated'
+                    ? 'text-red-500'
+                    : 'text-emerald-600'
+                }`}
+              />
+              {pendingMove?.newStatus === 'terminated'
+                ? 'Расторгнуть сделку?'
+                : 'Закрыть сделку как выполненную?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              {pendingMove && (
+                <>
+                  <span className="block">
+                    <span className="font-mono text-content-primary">
+                      {pendingMove.deal.contractNumber}
+                    </span>
+                    {pendingMove.deal.clientShortName && (
+                      <span> · {pendingMove.deal.clientShortName}</span>
+                    )}
+                  </span>
+                  <span className="block text-xs">
+                    {pendingMove.newStatus === 'terminated'
+                      ? 'Сделка перейдёт в «Расторгнут». Откат — только ручной сменой статуса.'
+                      : 'Сделка закроется как «Выполнен». Документы и история сохранятся.'}
+                  </span>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingMove) applyMove(pendingMove.deal, pendingMove.newStatus);
+                setPendingMove(null);
+              }}
+              className={
+                pendingMove?.newStatus === 'terminated'
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }
+            >
+              {pendingMove?.newStatus === 'terminated' ? 'Расторгнуть' : 'Закрыть'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

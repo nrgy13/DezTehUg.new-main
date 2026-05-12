@@ -5,6 +5,8 @@ import { sql } from 'drizzle-orm';
 import { getMailer } from '@/lib/mailer';
 import { stuckLeadsDigestBody, type StuckLeadRow } from '@/lib/mailer/templates';
 import { STAGE_COLORS } from '@/lib/lead-stages';
+import { sendTelegramMessage } from '@/lib/notifications/telegram';
+import { getThresholds, THRESHOLD_STATUSES } from '@/lib/notifications/thresholds';
 import type { LeadStatus } from '@/lib/db/schema/leads';
 
 // SERVER-ONLY: проверка зависших лидов и рассылка дайджеста менеджерам.
@@ -24,11 +26,21 @@ type StuckLeadRaw = {
   assignedManagerId: string | null;
   managerEmail: string | null;
   managerName: string | null;
+  managerTelegramChatId: string | null;
   days: number;
 };
 
 /** Найти все «зависшие» лиды по всей системе. */
 export async function findStuckLeads(): Promise<StuckLeadRaw[]> {
+  const thresholds = await getThresholds();
+
+  // Динамически собираем CASE WHEN — пороги настраиваются в /admin/settings.
+  // Безопасно: статусы из whitelist (THRESHOLD_STATUSES), значения — числа.
+  const caseStatements = THRESHOLD_STATUSES
+    .map((s) => `WHEN '${s}' THEN ${thresholds[s].stale}`)
+    .join(' ');
+  const stalenessCase = sql.raw(`CASE l.status ${caseStatements} ELSE 999999 END`);
+
   const result = await db.execute<{
     id: string;
     contact_name: string | null;
@@ -38,6 +50,7 @@ export async function findStuckLeads(): Promise<StuckLeadRaw[]> {
     assigned_manager_id: string | null;
     manager_email: string | null;
     manager_name: string | null;
+    manager_telegram_chat_id: string | null;
     days: number;
   }>(sql`
     WITH latest AS (
@@ -52,21 +65,16 @@ export async function findStuckLeads(): Promise<StuckLeadRaw[]> {
       l.contact_email,
       l.status,
       l.assigned_manager_id,
-      u.email AS manager_email,
-      u.full_name AS manager_name,
+      u.email             AS manager_email,
+      u.full_name         AS manager_name,
+      u.telegram_chat_id  AS manager_telegram_chat_id,
       FLOOR(EXTRACT(EPOCH FROM (NOW() - latest.changed_at)) / 86400)::int AS days
     FROM leads l
     JOIN latest ON latest.lead_id = l.id
     LEFT JOIN users u ON u.id = l.assigned_manager_id
     WHERE
-      l.status NOT IN ('won', 'lost', 'contract_signed', 'qualified')
-      AND EXTRACT(EPOCH FROM (NOW() - latest.changed_at)) / 86400 >= CASE l.status
-        WHEN 'new' THEN 1
-        WHEN 'contacted' THEN 3
-        WHEN 'proposal_sent' THEN 7
-        WHEN 'works_completed' THEN 5
-        ELSE 999999
-      END
+      l.status NOT IN ('won', 'lost')
+      AND EXTRACT(EPOCH FROM (NOW() - latest.changed_at)) / 86400 >= ${stalenessCase}
     ORDER BY l.assigned_manager_id NULLS LAST, days DESC
   `);
 
@@ -79,6 +87,7 @@ export async function findStuckLeads(): Promise<StuckLeadRaw[]> {
     assigned_manager_id: string | null;
     manager_email: string | null;
     manager_name: string | null;
+    manager_telegram_chat_id: string | null;
     days: number;
   }>;
 
@@ -91,14 +100,22 @@ export async function findStuckLeads(): Promise<StuckLeadRaw[]> {
     assignedManagerId: r.assigned_manager_id,
     managerEmail: r.manager_email,
     managerName: r.manager_name,
+    managerTelegramChatId: r.manager_telegram_chat_id,
     days: r.days,
   }));
 }
 
 /** Получить активных менеджеров (для лидов без assigned_manager_id). */
-async function getActiveManagers(): Promise<{ id: string; email: string; name: string }[]> {
-  const result = await db.execute<{ id: string; email: string; full_name: string }>(sql`
-    SELECT id, email, full_name
+async function getActiveManagers(): Promise<
+  { id: string; email: string; name: string; telegramChatId: string | null }[]
+> {
+  const result = await db.execute<{
+    id: string;
+    email: string;
+    full_name: string;
+    telegram_chat_id: string | null;
+  }>(sql`
+    SELECT id, email, full_name, telegram_chat_id
     FROM users
     WHERE role = 'manager' AND is_active = true
   `);
@@ -106,14 +123,44 @@ async function getActiveManagers(): Promise<{ id: string; email: string; name: s
     id: string;
     email: string;
     full_name: string;
+    telegram_chat_id: string | null;
   }>;
-  return rows.map((r) => ({ id: r.id, email: r.email, name: r.full_name }));
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    name: r.full_name,
+    telegramChatId: r.telegram_chat_id,
+  }));
+}
+
+/** Краткий текст для Telegram-уведомления (plain text, без HTML). */
+function buildTelegramDigest(name: string, leads: StuckLeadRaw[]): string {
+  const TOP = 10;
+  const head = `⚠️ Привет, ${name}! Зависших лидов в воронке: ${leads.length}\n\n`;
+  const items = leads
+    .slice(0, TOP)
+    .map((l, i) => {
+      const who = l.contactName || l.contactPhone || l.contactEmail || 'Без имени';
+      const stage = STAGE_COLORS[l.status]?.label ?? l.status;
+      return `${i + 1}. ${who} — ${l.days} дн. в стадии «${stage}»`;
+    })
+    .join('\n');
+  const more = leads.length > TOP ? `\n\n…и ещё ${leads.length - TOP}.` : '';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crm.дезтехюг.рф';
+  const footer = `\n\nКанбан: ${appUrl}/manager/leads/board`;
+  return head + items + more + footer;
 }
 
 export type StuckLeadsRunResult = {
   totalStuck: number;
   emailsSent: number;
-  recipients: Array<{ email: string; name: string; leadCount: number }>;
+  telegramSent: number;
+  recipients: Array<{
+    email: string;
+    name: string;
+    leadCount: number;
+    channel: 'telegram' | 'email';
+  }>;
   errors: Array<{ email: string; error: string }>;
 };
 
@@ -130,7 +177,13 @@ export async function runStuckLeadsCheck(
   const stuck = await findStuckLeads();
 
   if (stuck.length === 0) {
-    return { totalStuck: 0, emailsSent: 0, recipients: [], errors: [] };
+    return {
+      totalStuck: 0,
+      emailsSent: 0,
+      telegramSent: 0,
+      recipients: [],
+      errors: [],
+    };
   }
 
   // Группируем: assignedManagerId → лиды.
@@ -143,22 +196,23 @@ export async function runStuckLeadsCheck(
     byManager.set(key, arr);
   }
 
-  // Подготовка списка получателей: { email, name, leads[] }
-  type Recipient = { email: string; name: string; leads: StuckLeadRaw[] };
+  type Recipient = {
+    email: string;
+    name: string;
+    telegramChatId: string | null;
+    leads: StuckLeadRaw[];
+  };
   const recipients: Recipient[] = [];
 
   // 1. Лиды с назначенным менеджером — шлём только ему
-  // Array.from чтобы избежать downlevelIteration требования для Map.entries()
   for (const [managerId, leads] of Array.from(byManager.entries())) {
     if (managerId == null) continue;
     const first = leads[0];
-    if (!first.managerEmail || !first.managerName) {
-      // менеджер удалён / без email — пропускаем
-      continue;
-    }
+    if (!first.managerEmail || !first.managerName) continue; // менеджер удалён
     recipients.push({
       email: first.managerEmail,
       name: first.managerName,
+      telegramChatId: first.managerTelegramChatId,
       leads,
     });
   }
@@ -172,7 +226,12 @@ export async function runStuckLeadsCheck(
       if (existing) {
         existing.leads = [...existing.leads, ...orphanLeads];
       } else {
-        recipients.push({ email: m.email, name: m.name, leads: orphanLeads });
+        recipients.push({
+          email: m.email,
+          name: m.name,
+          telegramChatId: m.telegramChatId,
+          leads: orphanLeads,
+        });
       }
     }
   }
@@ -181,57 +240,91 @@ export async function runStuckLeadsCheck(
     return {
       totalStuck: stuck.length,
       emailsSent: 0,
+      telegramSent: 0,
       recipients: recipients.map((r) => ({
         email: r.email,
         name: r.name,
         leadCount: r.leads.length,
+        channel: r.telegramChatId ? ('telegram' as const) : ('email' as const),
       })),
       errors: [],
     };
   }
 
-  // Отправка
+  // Отправка. Если у юзера есть TG → шлём в TG. Иначе fallback на email.
+  // Email-канал остаётся «резервом», ничего не дублируем.
   const mailer = await getMailer();
   const errors: Array<{ email: string; error: string }> = [];
-  let sent = 0;
+  let emailsSent = 0;
+  let telegramSent = 0;
 
   for (const r of recipients) {
-    const tableRows: StuckLeadRow[] = r.leads.map((l) => ({
-      id: l.id,
-      contactName: l.contactName,
-      contactPhone: l.contactPhone,
-      contactEmail: l.contactEmail,
-      statusLabel: STAGE_COLORS[l.status]?.label ?? l.status,
-      days: l.days,
-    }));
-    const { text, html } = stuckLeadsDigestBody({
-      managerName: r.name,
-      leads: tableRows,
-    });
-    try {
-      await mailer.send({
-        to: r.email,
-        subject: `Зависших лидов в воронке: ${r.leads.length}`,
-        text,
-        html,
-      });
-      sent++;
-    } catch (err) {
-      errors.push({
-        email: r.email,
-        error: err instanceof Error ? err.message : String(err),
-      });
+    if (r.telegramChatId) {
+      const text = buildTelegramDigest(r.name, r.leads);
+      try {
+        const ok = await sendTelegramMessage(r.telegramChatId, text, {
+          disableWebPagePreview: true,
+        });
+        if (ok) {
+          telegramSent++;
+        } else {
+          // TG отказал (заблокировали бота, чат удалён) — fallback на email
+          await sendEmailDigest(mailer, r);
+          emailsSent++;
+        }
+      } catch (err) {
+        errors.push({
+          email: r.email,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    } else {
+      try {
+        await sendEmailDigest(mailer, r);
+        emailsSent++;
+      } catch (err) {
+        errors.push({
+          email: r.email,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 
   return {
     totalStuck: stuck.length,
-    emailsSent: sent,
+    emailsSent,
+    telegramSent,
     recipients: recipients.map((r) => ({
       email: r.email,
       name: r.name,
       leadCount: r.leads.length,
+      channel: r.telegramChatId ? ('telegram' as const) : ('email' as const),
     })),
     errors,
   };
+}
+
+async function sendEmailDigest(
+  mailer: Awaited<ReturnType<typeof getMailer>>,
+  r: { email: string; name: string; leads: StuckLeadRaw[] },
+): Promise<void> {
+  const tableRows: StuckLeadRow[] = r.leads.map((l) => ({
+    id: l.id,
+    contactName: l.contactName,
+    contactPhone: l.contactPhone,
+    contactEmail: l.contactEmail,
+    statusLabel: STAGE_COLORS[l.status]?.label ?? l.status,
+    days: l.days,
+  }));
+  const { text, html } = stuckLeadsDigestBody({
+    managerName: r.name,
+    leads: tableRows,
+  });
+  await mailer.send({
+    to: r.email,
+    subject: `Зависших лидов в воронке: ${r.leads.length}`,
+    text,
+    html,
+  });
 }

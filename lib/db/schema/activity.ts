@@ -77,6 +77,13 @@ export const activityLog = pgTable(
     ip: varchar('ip', { length: 45 }), // IPv4 или IPv6
     userAgent: text('user_agent'),
 
+    // Inbox: отметка «прочитано» (только для action'ов которые требуют реакции,
+    // например `deal.master_date_request`). NULL = не обработано.
+    acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+    acknowledgedById: uuid('acknowledged_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

@@ -1,0 +1,93 @@
+name: Test
+
+on:
+  push:
+    branches: [feature/crm, main]
+  pull_request:
+    branches: [feature/crm, main]
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  type-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Next lint
+        run: npx next lint --max-warnings=0
+        continue-on-error: true
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: type-check
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: deztech
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: deztech_crm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U deztech"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://deztech:ci_password@localhost:5432/deztech_crm
+      AUTH_SECRET: ci-test-secret-not-for-production-use-only
+      AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_NAME: DezTehYug CRM
+      STORAGE_DRIVER: local
+      STORAGE_ROOT: ./storage
+      MAILER_TRANSPORT: noop
+      N8N_INBOUND_SECRET: ci-test-n8n
+      CRON_SECRET: ci-test-cron
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN_DEV || '' }}
+      TELEGRAM_BOT_USERNAME: ${{ secrets.TELEGRAM_BOT_USERNAME_DEV || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply migrations
+        run: |
+          for f in drizzle/migrations/*.sql; do
+            echo "Applying $f"
+            PGPASSWORD=ci_password psql -h localhost -U deztech -d deztech_crm -f "$f"
+          done
+
+      - name: Seed test data
+        run: npx tsx lib/db/seed.ts
+
+      - name: Build
+        run: npm run build

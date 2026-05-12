@@ -51,6 +51,7 @@ export async function POST(request: Request) {
       changesJson: {
         totalStuck: result.totalStuck,
         emailsSent: result.emailsSent,
+        telegramSent: result.telegramSent,
         recipientsCount: result.recipients.length,
         errors: result.errors.length,
       },
