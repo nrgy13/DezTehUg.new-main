@@ -1,42 +1,65 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
-import { eq, and, gte, lte, isNotNull, desc, asc, or } from 'drizzle-orm';
-import { deals, type DealStatus } from '@/lib/db/schema/deals';
+import { eq, and, gte, or, asc } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { deals, dealPriceItems, dealWorkLogs } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
+import { clientObjects } from '@/lib/db/schema/objects';
+import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
 
-// SERVER-ONLY: запросы для календарей выездов.
-// Для /manager/calendar — все сделки c assignedManagerId === user.id (или все, если admin)
-// Для /master/calendar — все сделки с assignedMasterId === user.id
+// SERVER-ONLY: запросы для календарей.
+// Sprint 6: календарь показывает ВЫЕЗДЫ (work_logs), не периоды сделок.
+// Каждое событие = один work_log по позиции прайса. Длительность по умолчанию
+// 2 часа от plannedAt (или startedAt/performedAt — в зависимости от статуса).
+//
+// Для /manager/calendar — выезды всех сделок, где он assignedManager (admin видит всё).
+// Для /master/calendar — выезды этого мастера.
+
+export type VisitStatus = 'planned' | 'in_progress' | 'completed';
 
 export type DealEvent = {
+  /** workLogId — событие = выезд, не сделка. */
   id: string;
+  /** dealId — для href и tooltip ссылки. */
+  dealId: string;
   contractNumber: string;
+  /** Дата только (YYYY-MM-DD), синтезируется из plannedAt/performedAt для backward-compat MiniCalendar. */
   startDate: Date | null;
   endDate: Date | null;
-  /** Точный timestamp начала (UTC). Если is_all_day=true — время = 00:00 МСК. */
+  /** Точный timestamp начала выезда (planned/started/performed). */
   startAt: Date | null;
-  /** Точный timestamp окончания (UTC). Если is_all_day=true — время = 23:59 МСК. */
+  /** start + 2 часа (default duration) или performedAt для completed. */
   endAt: Date | null;
+  /** Всегда false — выезды позиционные, с конкретным временем. */
   isAllDay: boolean;
-  status: DealStatus;
+  /** workLog status. */
+  status: VisitStatus;
   clientId: string | null;
   clientShortName: string | null;
   clientPhone: string | null;
   masterName: string | null;
   managerName: string | null;
-  /** «Период» в человекочитаемом виде, e.g. "10 — 15 мая" */
+  /** Заголовок: услуга + объект. */
+  serviceTitle: string;
+  objectName: string | null;
   periodLabel: string;
-  /** Здоровье: past / today / soon (≤7 дней) / future */
   health: 'past' | 'today' | 'soon' | 'future' | 'no-date';
 };
 
+const DEFAULT_VISIT_HOURS = 2;
+
+function addHours(d: Date, h: number): Date {
+  return new Date(d.getTime() + h * 60 * 60 * 1000);
+}
+
 function formatPeriod(start: Date | null, end: Date | null): string {
   if (!start && !end) return 'Без даты';
-  const fmt = (d: Date) => d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  const fmt = (d: Date) =>
+    d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   if (start && end) {
-    if (start.getTime() === end.getTime()) return fmt(start);
+    if (Math.abs(end.getTime() - start.getTime()) < 60_000) return fmt(start);
     return `${fmt(start)} — ${fmt(end)}`;
   }
   return start ? `с ${fmt(start)}` : `до ${fmt(end!)}`;
@@ -72,82 +95,105 @@ type Mode =
   | { kind: 'manager'; userId: string; isAdmin: boolean };
 
 export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
-  const masterAlias = users;
-
-  // Берём окно: от 60 дней назад до 365 вперёд.
+  // Окно: 60 дней назад – 365 вперёд (по плановой дате выезда).
   const since = new Date();
   since.setDate(since.getDate() - 60);
-  const until = new Date();
-  until.setDate(until.getDate() + 365);
+
+  const masterAlias = alias(users, 'master_user');
+  const managerAlias = alias(users, 'manager_user');
 
   const conditions = [] as Array<ReturnType<typeof eq>>;
 
   if (mode.kind === 'master') {
-    conditions.push(eq(deals.assignedMasterId, mode.userId));
+    conditions.push(eq(dealWorkLogs.masterId, mode.userId));
   } else if (mode.kind === 'manager' && !mode.isAdmin) {
     conditions.push(eq(deals.assignedManagerId, mode.userId));
   }
 
-  // Берём только сделки с хотя бы одной датой в окне (или вообще без дат — покажем секцией)
+  // Берём только выезды с датой в окне (или вообще без даты — покажем в «no-date»)
   conditions.push(
     or(
-      and(isNotNull(deals.startDate), gte(deals.startDate, since.toISOString().slice(0, 10))),
-      and(isNotNull(deals.endDate), gte(deals.endDate, since.toISOString().slice(0, 10))),
+      gte(dealWorkLogs.plannedAt, since),
+      gte(dealWorkLogs.startedAt, since),
+      gte(dealWorkLogs.performedAt, since),
+      gte(dealWorkLogs.finalizedAt, since),
     )!,
   );
 
   const rows = await db
     .select({
-      id: deals.id,
+      workLogId: dealWorkLogs.id,
+      status: dealWorkLogs.status,
+      plannedAt: dealWorkLogs.plannedAt,
+      startedAt: dealWorkLogs.startedAt,
+      performedAt: dealWorkLogs.performedAt,
+      finalizedAt: dealWorkLogs.finalizedAt,
+      dealId: deals.id,
       contractNumber: deals.contractNumber,
-      startDate: deals.startDate,
-      endDate: deals.endDate,
-      startAt: deals.startAt,
-      endAt: deals.endAt,
-      isAllDay: deals.isAllDay,
-      status: deals.status,
+      assignedMasterId: deals.assignedMasterId,
+      assignedManagerId: deals.assignedManagerId,
       clientId: clients.id,
       clientShortName: clients.shortName,
       clientPhone: clients.phone,
-      assignedMasterId: deals.assignedMasterId,
-      assignedManagerId: deals.assignedManagerId,
+      serviceShortName: services.shortName,
+      serviceName: services.name,
+      customName: dealPriceItems.customName,
+      objectName: clientObjects.name,
+      masterFullName: masterAlias.fullName,
+      managerFullName: managerAlias.fullName,
     })
-    .from(deals)
+    .from(dealWorkLogs)
+    .leftJoin(deals, eq(deals.id, dealWorkLogs.dealId))
     .leftJoin(clients, eq(clients.id, deals.clientId))
+    .leftJoin(dealPriceItems, eq(dealPriceItems.id, dealWorkLogs.priceItemId))
+    .leftJoin(services, eq(services.id, dealPriceItems.serviceId))
+    .leftJoin(clientObjects, eq(clientObjects.id, dealPriceItems.objectId))
+    .leftJoin(masterAlias, eq(masterAlias.id, deals.assignedMasterId))
+    .leftJoin(managerAlias, eq(managerAlias.id, deals.assignedManagerId))
     .where(and(...conditions))
-    .orderBy(asc(deals.startDate), asc(deals.contractDate));
-
-  // Подтягиваем имена ответственных одним запросом
-  const userIds = new Set<string>();
-  for (const r of rows) {
-    if (r.assignedMasterId) userIds.add(r.assignedMasterId);
-    if (r.assignedManagerId) userIds.add(r.assignedManagerId);
-  }
-  const userMap = new Map<string, string>();
-  if (userIds.size > 0) {
-    const usersRows = await db
-      .select({ id: masterAlias.id, name: masterAlias.fullName })
-      .from(masterAlias);
-    for (const u of usersRows) userMap.set(u.id, u.name);
-  }
+    .orderBy(asc(dealWorkLogs.plannedAt));
 
   return rows.map((r) => {
-    const start = r.startDate ? new Date(r.startDate) : null;
-    const end = r.endDate ? new Date(r.endDate) : null;
+    // Выбираем start для отображения исходя из статуса:
+    // - planned: plannedAt
+    // - in_progress: startedAt (если есть) или plannedAt
+    // - completed: performedAt/finalizedAt (если есть) или startedAt/plannedAt
+    const status = r.status as VisitStatus;
+    let start: Date | null = null;
+    let end: Date | null = null;
+
+    if (status === 'completed') {
+      start = r.performedAt ?? r.startedAt ?? r.plannedAt;
+      end = r.finalizedAt ?? (start ? addHours(start, DEFAULT_VISIT_HOURS) : null);
+    } else if (status === 'in_progress') {
+      start = r.startedAt ?? r.plannedAt;
+      end = start ? addHours(start, DEFAULT_VISIT_HOURS) : null;
+    } else {
+      start = r.plannedAt;
+      end = start ? addHours(start, DEFAULT_VISIT_HOURS) : null;
+    }
+
+    const serviceTitle =
+      r.customName || r.serviceShortName || r.serviceName || 'Без услуги';
+
     return {
-      id: r.id,
-      contractNumber: r.contractNumber,
+      id: r.workLogId,
+      dealId: r.dealId ?? '',
+      contractNumber: r.contractNumber ?? '—',
+      // startDate/endDate — для MiniCalendar (highlight days с событиями).
       startDate: start,
       endDate: end,
-      startAt: r.startAt ?? null,
-      endAt: r.endAt ?? null,
-      isAllDay: r.isAllDay ?? true,
-      status: r.status,
+      startAt: start,
+      endAt: end,
+      isAllDay: false,
+      status,
       clientId: r.clientId,
       clientShortName: r.clientShortName,
       clientPhone: r.clientPhone,
-      masterName: r.assignedMasterId ? userMap.get(r.assignedMasterId) ?? null : null,
-      managerName: r.assignedManagerId ? userMap.get(r.assignedManagerId) ?? null : null,
+      masterName: r.masterFullName,
+      managerName: r.managerFullName,
+      serviceTitle,
+      objectName: r.objectName,
       periodLabel: formatPeriod(start, end),
       health: computeHealth(start, end),
     };
@@ -158,10 +204,10 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
 export function serializeForClient(events: DealEvent[]) {
   return events.map((e) => ({
     id: e.id,
+    dealId: e.dealId,
     contractNumber: e.contractNumber,
-    startDate: e.startDate ? e.startDate.toISOString().slice(0, 10) : null,
-    endDate: e.endDate ? e.endDate.toISOString().slice(0, 10) : null,
-    /** ISO 8601 с UTC offset (или null). FullCalendar парсит в timeZone='Europe/Moscow'. */
+    startDate: e.startDate ? toLocalDateISO(e.startDate) : null,
+    endDate: e.endDate ? toLocalDateISO(e.endDate) : null,
     startAt: e.startAt ? e.startAt.toISOString() : null,
     endAt: e.endAt ? e.endAt.toISOString() : null,
     isAllDay: e.isAllDay,
@@ -170,8 +216,17 @@ export function serializeForClient(events: DealEvent[]) {
     clientPhone: e.clientPhone,
     masterName: e.masterName,
     managerName: e.managerName,
+    serviceTitle: e.serviceTitle,
+    objectName: e.objectName,
     health: e.health,
   }));
+}
+
+function toLocalDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export type EventGroup = {
@@ -191,8 +246,7 @@ export function groupByWeek(events: DealEvent[]): EventGroup[] {
       map.set('no-date', arr);
       continue;
     }
-    // понедельник этой недели
-    const day = ref.getDay() === 0 ? 7 : ref.getDay(); // sun=7
+    const day = ref.getDay() === 0 ? 7 : ref.getDay();
     const monday = new Date(ref);
     monday.setDate(ref.getDate() - (day - 1));
     monday.setHours(0, 0, 0, 0);

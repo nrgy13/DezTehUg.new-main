@@ -15,7 +15,7 @@ export default async function MasterCalendarPage() {
       <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
         Мой календарь
       </h1>
-      <CalendarFull events={serialized} dealHrefBase="/master/deals" />
+      <CalendarFull events={serialized} dealHrefBase="/master/visits" />
     </div>
   );
 }

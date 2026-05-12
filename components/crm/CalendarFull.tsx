@@ -10,14 +10,17 @@ import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import ruLocale from '@fullcalendar/core/locales/ru';
 import type { EventClickArg, EventContentArg, EventDropArg, DatesSetArg } from '@fullcalendar/core';
-import { Search, X, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Phone, Wrench, User as UserIcon } from 'lucide-react';
+import { Search, X, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Phone, Wrench, User as UserIcon, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
-import { updateDealDates } from '@/app/(crm)/manager/deals/actions';
+import { updateVisitPlannedAt } from '@/app/(crm)/manager/deals/[id]/visits-actions';
 import './calendar.css';
 
 // ─── Types ───────────────────────────────────────────────────
+// Sprint 6: события календаря = выезды (work_logs), не периоды договоров.
+// id = workLogId, dealId = для href на карточку сделки.
 export type SerializedDealEvent = {
   id: string;
+  dealId: string;
   contractNumber: string;
   startDate: string | null;
   endDate: string | null;
@@ -25,53 +28,38 @@ export type SerializedDealEvent = {
   startAt: string | null;
   endAt: string | null;
   isAllDay: boolean;
+  /** Статус выезда: planned | in_progress | completed. */
   status: string;
   clientShortName: string | null;
   clientPhone: string | null;
   masterName: string | null;
   managerName: string | null;
+  /** Название услуги (короткое). */
+  serviceTitle: string;
+  /** Объект работ (адрес). */
+  objectName: string | null;
   health: 'past' | 'today' | 'soon' | 'future' | 'no-date';
 };
 
 const CALENDAR_TZ = 'Europe/Moscow';
 
-/** Date → 'YYYY-MM-DD' в TZ='Europe/Moscow'. */
-function toMoscowDateISO(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: CALENDAR_TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
-}
-
-
-// ─── Маппинги цвет/иконка ────────────────────────────────────
+// ─── Маппинги цвет/иконка (статусы ВЫЕЗДА, не сделки) ─────────
 const STATUS_BORDER: Record<string, string> = {
-  draft: '#94a3b8',
-  sent: '#06b6d4',
-  signed: '#8b5cf6',
-  active: '#FF6B35',
-  completed: '#10b981',
-  terminated: '#ef4444',
+  planned: '#f59e0b', // amber — запланирован
+  in_progress: '#06b6d4', // cyan — в работе
+  completed: '#10b981', // green — выполнен
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  draft: 'Черновик',
-  sent: 'Отправлен',
-  signed: 'Подписан',
-  active: 'В работе',
+  planned: 'Запланирован',
+  in_progress: 'В работе',
   completed: 'Выполнен',
-  terminated: 'Расторгнут',
 };
 
 const STATUS_ICON: Record<string, string> = {
-  draft: '○',
-  sent: '◐',
-  signed: '✓',
-  active: '⚡',
-  completed: '★',
-  terminated: '✕',
+  planned: '○',
+  in_progress: '⚡',
+  completed: '✓',
 };
 
 const HEALTH_BG: Record<SerializedDealEvent['health'], string> = {
@@ -169,7 +157,8 @@ export function CalendarFull({
     return events.filter((e) => {
       if (search.trim()) {
         const q = search.trim().toLowerCase();
-        const haystack = `${e.contractNumber} ${e.clientShortName ?? ''} ${e.clientPhone ?? ''}`.toLowerCase();
+        const haystack =
+          `${e.contractNumber} ${e.clientShortName ?? ''} ${e.clientPhone ?? ''} ${e.serviceTitle} ${e.objectName ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       if (statusFilter.size > 0 && !statusFilter.has(e.status)) return false;
@@ -202,7 +191,7 @@ export function CalendarFull({
           }
           return {
             id: e.id,
-            title: `${e.contractNumber} · ${e.clientShortName ?? '—'}`,
+            title: `${e.serviceTitle} · ${e.objectName ?? e.clientShortName ?? '—'}`,
             start,
             end,
             allDay,
@@ -268,10 +257,17 @@ export function CalendarFull({
     setCurrentDate(date);
   }
 
-  // Event click → открыть сделку
+  // Event click → открыть выезд (для master) или сделку (для manager)
   function handleEventClick(arg: EventClickArg) {
     hideTooltip();
-    router.push(`${dealHrefBase}/${arg.event.id}`);
+    const ext = arg.event.extendedProps as SerializedDealEvent;
+    // dealHrefBase: '/manager/deals' → переходим на сделку с табом «Выезды»
+    //              '/master/visits' → переходим на саму страницу выезда
+    if (dealHrefBase === '/master/visits') {
+      router.push(`/master/visits/${arg.event.id}`);
+    } else {
+      router.push(`${dealHrefBase}/${ext.dealId}?tab=visits`);
+    }
   }
 
   // Drag-n-drop переноса даты/времени — поддержка allDay и точечных событий
@@ -294,48 +290,26 @@ export function CalendarFull({
       return;
     }
 
-    const isAllDay = info.event.allDay;
-    let payload: {
-      startAt: string | null;
-      endAt: string | null;
-      isAllDay: boolean;
-    };
-    let toastLabel: string;
-
-    if (isAllDay) {
-      // event.start в TZ календаря (Europe/Moscow), 00:00. Конвертируем в UTC ISO.
-      // FullCalendar end exclusive → -1 день для отображения.
-      const startMSK = toMoscowDateISO(start);
-      const startAtUTC = new Date(`${startMSK}T00:00:00+03:00`).toISOString();
-      let endAtUTC: string | null = null;
-      if (end) {
-        const eDate = new Date(end);
-        eDate.setDate(eDate.getDate() - 1);
-        const endMSK = toMoscowDateISO(eDate);
-        endAtUTC = new Date(`${endMSK}T23:59:59+03:00`).toISOString();
-      }
-      payload = { startAt: startAtUTC, endAt: endAtUTC, isAllDay: true };
-      toastLabel = `Перенесено на ${startMSK}`;
-    } else {
-      // Точечное событие с временем — start/end это Date в локальной TZ браузера,
-      // но соответствуют моменту в Europe/Moscow. .toISOString() = верный UTC.
-      const startAtUTC = start.toISOString();
-      const endAtUTC = end ? end.toISOString() : null;
-      const fmt = new Intl.DateTimeFormat('ru-RU', {
-        timeZone: CALENDAR_TZ,
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      toastLabel = `Перенесено на ${fmt.format(start)} (МСК)`;
-      payload = { startAt: startAtUTC, endAt: endAtUTC, isAllDay: false };
-    }
+    // Sprint 6: всегда точечное событие выезда (work_log).
+    // start/end это Date в локальной TZ браузера, соответствуют моменту МСК.
+    const startAtUTC = start.toISOString();
+    const endAtUTC = end ? end.toISOString() : null;
+    const fmt = new Intl.DateTimeFormat('ru-RU', {
+      timeZone: CALENDAR_TZ,
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const toastLabel = `Перенесено на ${fmt.format(start)} (МСК)`;
 
     setIsSavingDrop(true);
     startTransition(async () => {
       try {
-        const res = await updateDealDates(info.event.id, payload);
+        const res = await updateVisitPlannedAt(info.event.id, {
+          startAtIso: startAtUTC,
+          endAtIso: endAtUTC,
+        });
         if (!res.ok) {
           toast.error(res.error ?? 'Не удалось перенести');
           info.revert();
@@ -348,8 +322,7 @@ export function CalendarFull({
         info.revert();
       } finally {
         // Отпускаем lock с небольшой задержкой, чтобы router.refresh успел
-        // пересоздать FC events с актуальными данными (иначе следующий drag
-        // может работать со stale событиями).
+        // пересоздать FC events с актуальными данными.
         setTimeout(() => setIsSavingDrop(false), 350);
       }
     });
@@ -372,8 +345,10 @@ export function CalendarFull({
         onMouseLeave={hideTooltip}
         onMouseDown={hideTooltip}
       >
-        <span className="fc-event-chip__num">{ext.contractNumber}</span>
-        <span className="fc-event-chip__client">{ext.clientShortName ?? '—'}</span>
+        <span className="fc-event-chip__num">{ext.serviceTitle}</span>
+        <span className="fc-event-chip__client">
+          {ext.objectName ?? ext.clientShortName ?? '—'}
+        </span>
         <span className="fc-event-chip__icon" style={{ color: STATUS_BORDER[ext.status] }}>
           {icon}
         </span>
@@ -560,7 +535,7 @@ export function CalendarFull({
             </div>
           </div>
 
-          {/* Сделки без дат */}
+          {/* Выезды без дат */}
           {noDateEvents.length > 0 && (
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-3 flex items-center gap-2">
@@ -568,20 +543,28 @@ export function CalendarFull({
                 Без планируемых дат · {noDateEvents.length}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {noDateEvents.map((e) => (
-                  <a
-                    key={e.id}
-                    href={`${dealHrefBase}/${e.id}`}
-                    className="block px-3 py-2 rounded border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors text-sm"
-                    style={{ borderLeftWidth: 3, borderLeftColor: STATUS_BORDER[e.status] ?? '#94a3b8' }}
-                  >
-                    <div className="font-mono text-xs text-content-primary truncate flex items-center gap-1.5">
-                      <span style={{ color: STATUS_BORDER[e.status] }}>{STATUS_ICON[e.status] ?? '·'}</span>
-                      {e.contractNumber}
-                    </div>
-                    <div className="text-xs text-content-muted truncate">{e.clientShortName ?? '—'}</div>
-                  </a>
-                ))}
+                {noDateEvents.map((e) => {
+                  const href =
+                    dealHrefBase === '/master/visits'
+                      ? `/master/visits/${e.id}`
+                      : `${dealHrefBase}/${e.dealId}?tab=visits`;
+                  return (
+                    <a
+                      key={e.id}
+                      href={href}
+                      className="block px-3 py-2 rounded border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors text-sm"
+                      style={{ borderLeftWidth: 3, borderLeftColor: STATUS_BORDER[e.status] ?? '#94a3b8' }}
+                    >
+                      <div className="text-xs text-content-primary truncate flex items-center gap-1.5">
+                        <span style={{ color: STATUS_BORDER[e.status] }}>{STATUS_ICON[e.status] ?? '·'}</span>
+                        {e.serviceTitle}
+                      </div>
+                      <div className="text-xs text-content-muted truncate">
+                        {e.objectName ?? e.clientShortName ?? '—'}
+                      </div>
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -646,22 +629,33 @@ function CursorTooltip({
           className="inline-block w-2 h-2 rounded-full"
           style={{ backgroundColor: STATUS_BORDER[ev.status] }}
         />
-        <span className="font-mono font-semibold text-content-primary">{ev.contractNumber}</span>
+        <span className="font-semibold text-content-primary">{ev.serviceTitle}</span>
         <span className="ml-auto text-[10px] uppercase tracking-wider text-content-muted font-orbitron">
           {STATUS_LABEL[ev.status] ?? ev.status}
         </span>
       </div>
-      <div className="text-content-primary font-medium">{ev.clientShortName ?? '—'}</div>
+      {ev.objectName && (
+        <div className="flex items-center gap-1.5 text-content-primary">
+          <MapPin className="w-3 h-3 text-content-muted" />
+          {ev.objectName}
+        </div>
+      )}
+      <div className="text-content-secondary">
+        {ev.clientShortName ?? '—'}
+        <span className="ml-1.5 text-content-muted font-mono text-[10px]">
+          · {ev.contractNumber}
+        </span>
+      </div>
       {ev.clientPhone && (
         <div className="flex items-center gap-1.5 text-content-secondary">
           <Phone className="w-3 h-3" />
           {ev.clientPhone}
         </div>
       )}
-      {(ev.startDate || ev.endDate) && (
+      {(ev.startAt || ev.endAt) && (
         <div className="flex items-center gap-1.5 text-content-secondary">
           <CalendarIcon className="w-3 h-3" />
-          {formatPeriod(ev.startDate, ev.endDate)}
+          {formatVisitWhen(ev.startAt, ev.endAt)}
         </div>
       )}
       {ev.masterName && (
@@ -686,23 +680,26 @@ function CursorTooltip({
         >
           {HEALTH_LABEL[ev.health]}
         </span>
-        <span className="ml-2">Клик — открыть сделку</span>
+        <span className="ml-2">Клик — открыть выезд</span>
       </div>
     </div>,
     document.body,
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────
-function formatPeriod(start: string | null, end: string | null): string {
-  if (!start && !end) return 'Без даты';
-  const fmt = (d: string) =>
-    new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
-  if (start && end) {
-    if (start === end) return fmt(start);
-    return `${fmt(start)} — ${fmt(end)}`;
+function formatVisitWhen(startAt: string | null, endAt: string | null): string {
+  if (!startAt && !endAt) return '';
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString('ru-RU', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  if (startAt && endAt) {
+    return `${fmt(startAt)} — ${new Date(endAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
   }
-  return start ? `с ${fmt(start)}` : `до ${fmt(end!)}`;
+  return fmt(startAt ?? endAt!);
 }
 
 function StatChip({
