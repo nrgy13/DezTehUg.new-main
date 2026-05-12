@@ -1,20 +1,25 @@
 # DezTehYug CRM — память проекта
 
 > Файл читается Claude автоматически в начале каждой сессии в этом проекте.
-> Обновляй при больших изменениях. Последнее обновление: **2026-05-11 (закрытие Sprint 5 maxi, готов к деплою).**
+> Обновляй при больших изменениях. Последнее обновление: **2026-05-12 (Sprint 6 развёрнут на prod).**
 
 ---
 
 ## ⚡ ВНИМАНИЕ: где сейчас стоит работа (читать перед стартом!)
 
-**Sprint 5 maxi ЗАКРЫТ локально (working tree dirty, миграции 0007/0008/0009 на dev применены, prod-деплой ЕЩЁ НЕ СДЕЛАН).** Ветка `feature/crm`. `npm run build` зелёный. Все 8 эпиков работают локально.
+**Sprint 6 РАЗВЁРНУТ НА PROD (2026-05-12, коммит `40925ca`).** Ветка `feature/crm`, working tree чистый. Миграции 0011 (push_subscriptions) и 0012 (workLogs+checklists) применены на проде. VAPID keys сгенерены на dev/prod в `.env` обоих. App-контейнер пересобран и работает. Smoke: manifest.webmanifest 200, icons 200, sw.js 42KB, login 200, apple-touch 200.
 
-Ждёт от Сани: smoke-тест локально → разрешение на коммит → деплой на prod (миграции 0007/0008/0009 на проде, env переменные `TELEGRAM_BOT_TOKEN`/`TELEGRAM_BOT_USERNAME` в `/opt/deztech-crm/.env`, опц. `TELEGRAM_WEBHOOK_SECRET`, после деплоя — `npx tsx tools/telegram-set-webhook.ts https://crm.дезтехюг.рф`).
+**Sprint 6 эпики:**
+- Эпик 1 PWA: next-pwa + web-push + sharp; иконки ДТЮ 192/512/maskable; manifest; гамбургер sidebar; адаптив /master; push-инфра (VAPID + lib/push/server+client + 2 API endpoints + UI в /profile + кастомный push-sw.js); 3 push-интеграции (assignMaster, requestDateChange, markDealCompleted); install banner для Android+iOS
+- Эпик 2 Чеклисты: workLogs расширен (priceItemId, status enum planned/in_progress/completed, planned/started/finalized_at, description+performedAt nullable); таблицы service_checklists + deal_checklist_items + 3 enum; lib/visits/create (seedPlannedVisitsForDeal); Admin UI шаблонов в /admin/services (ChecklistDialog); Manager UI таб «Выезды» в /manager/deals/[id]; Master UI /master со списком выездов; /master/visits/[id] с чеклистом + фото-загрузка до 5×5МБ + finalize + read-only после; /api/storage/checklist/[...path] для раздачи фото
 
-Sprint 5 maxi эпики (детали ниже): A дашборд+ B soft-delete + C Telegram + E пороги + F канбан-confirm + G master запрос переноса + D 10 отчётов + H CI/CD.
+**Что осталось от Сани (вручную):**
+- Установить PWA на телефоне Регины через Chrome (Android) или Safari → "На экран Домой" (iOS 16.4+)
+- Включить push в `/profile` → секция «Push-уведомления»
+- Проверить полный flow: менеджер назначает мастера → у master автоматически появляются planned-выезды → master начинает выезд → отмечает чеклист + фото → finalize → менеджер видит в табе «Выезды»
 
 ### Состояние ветки
-- Sprint 5 maxi сделан локально, working tree содержит несколько изменённых/новых файлов. Не закоммичено.
+- Sprint 6 закоммичен и развёрнут (`40925ca`). Working tree чистый.
 - Не мерджим в `main` — `feature/crm` остаётся живой веткой разработки CRM, не трогаем `main` (там — публичный сайт).
 
 ### ✅ Что закрыто в Спринте 3 (всё на prod, миграция 0003 применена)
