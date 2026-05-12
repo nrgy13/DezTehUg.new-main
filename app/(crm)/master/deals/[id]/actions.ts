@@ -167,6 +167,19 @@ export async function requestDateChange(
         const dealUrl = `${appUrl}/manager/deals/${dealId}`;
         const inboxUrl = `${appUrl}/manager/inbox`;
 
+        // Web push на устройство менеджера (не блокирует TG/email).
+        try {
+          const { sendPushToUser } = await import('@/lib/push/server');
+          await sendPushToUser(deal.managerId, {
+            title: 'Запрос переноса',
+            body: `${actor.name} по сделке ${deal.contractNumber}: ${oldDates} → ${newDates}`,
+            url: `/manager/inbox`,
+            tag: `date-request-${dealId}`,
+          });
+        } catch (err) {
+          console.warn('[requestDateChange] push failed:', err);
+        }
+
         let tgSent = false;
         if (mgr.chatId) {
           const { sendTelegramMessage } = await import('@/lib/notifications/telegram');
@@ -236,7 +249,13 @@ export async function markDealCompleted(dealId: string): Promise<Result> {
   if (!actor) return { ok: false, error: 'Нет доступа' };
 
   const dealRows = await db
-    .select({ id: deals.id, masterId: deals.assignedMasterId, status: deals.status })
+    .select({
+      id: deals.id,
+      masterId: deals.assignedMasterId,
+      managerId: deals.assignedManagerId,
+      contractNumber: deals.contractNumber,
+      status: deals.status,
+    })
     .from(deals)
     .where(eq(deals.id, dealId))
     .limit(1);
@@ -253,6 +272,21 @@ export async function markDealCompleted(dealId: string): Promise<Result> {
   await logActivity(actor.id, 'deal.mark_completed', dealId, {
     from: dealRows[0].status,
   });
+
+  // Push менеджеру — мастер завершил выезд, можно генерить акт.
+  if (dealRows[0].managerId) {
+    try {
+      const { sendPushToUser } = await import('@/lib/push/server');
+      await sendPushToUser(dealRows[0].managerId, {
+        title: 'Сделка завершена',
+        body: `${actor.name} закрыл выезд по ${dealRows[0].contractNumber}`,
+        url: `/manager/deals/${dealId}`,
+        tag: `deal-completed-${dealId}`,
+      });
+    } catch (err) {
+      console.warn('[markDealCompleted] push failed:', err);
+    }
+  }
 
   revalidatePath(`/master/deals/${dealId}`);
   revalidatePath(`/master`);

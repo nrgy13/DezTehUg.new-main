@@ -208,28 +208,64 @@ export default async function MasterDealPage({
             План работ не задан.
           </p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-bg-secondary/50 border-b border-gray-200">
-              <tr className="text-[10px] uppercase font-orbitron tracking-wider text-content-muted">
-                <th className="text-left px-4 py-2">Объект</th>
-                <th className="text-left px-4 py-2">Услуга</th>
-                <th className="text-right px-4 py-2 w-16">м²</th>
-                <th className="text-left px-4 py-2 w-32">Способ</th>
-                <th className="text-left px-4 py-2 w-32">Периодичность</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+          <>
+            {/* Mobile: карточки */}
+            <ul className="md:hidden divide-y divide-gray-100">
               {priceItems.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-4 py-2 text-content-secondary text-xs">{p.objectName || '—'}</td>
-                  <td className="px-4 py-2 text-content-primary">{p.service}</td>
-                  <td className="px-4 py-2 text-right text-content-secondary">{p.areaM2}</td>
-                  <td className="px-4 py-2 text-content-secondary text-xs">{p.method || '—'}</td>
-                  <td className="px-4 py-2 text-content-secondary text-xs">{p.frequency || '—'}</td>
-                </tr>
+                <li key={p.id} className="px-4 py-3 space-y-1">
+                  <div className="font-medium text-content-primary">{p.service}</div>
+                  {p.objectName && (
+                    <div className="text-xs text-content-secondary">{p.objectName}</div>
+                  )}
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-content-muted">
+                    <span>
+                      <span className="opacity-60">Площадь:</span> {p.areaM2} м²
+                    </span>
+                    {p.method && (
+                      <span>
+                        <span className="opacity-60">Способ:</span> {p.method}
+                      </span>
+                    )}
+                    {p.frequency && (
+                      <span>
+                        <span className="opacity-60">Периодичность:</span> {p.frequency}
+                      </span>
+                    )}
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+
+            {/* Desktop: таблица */}
+            <table className="hidden md:table w-full text-sm">
+              <thead className="bg-bg-secondary/50 border-b border-gray-200">
+                <tr className="text-[10px] uppercase font-orbitron tracking-wider text-content-muted">
+                  <th className="text-left px-4 py-2">Объект</th>
+                  <th className="text-left px-4 py-2">Услуга</th>
+                  <th className="text-right px-4 py-2 w-16">м²</th>
+                  <th className="text-left px-4 py-2 w-32">Способ</th>
+                  <th className="text-left px-4 py-2 w-32">Периодичность</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {priceItems.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-4 py-2 text-content-secondary text-xs">
+                      {p.objectName || '—'}
+                    </td>
+                    <td className="px-4 py-2 text-content-primary">{p.service}</td>
+                    <td className="px-4 py-2 text-right text-content-secondary">{p.areaM2}</td>
+                    <td className="px-4 py-2 text-content-secondary text-xs">
+                      {p.method || '—'}
+                    </td>
+                    <td className="px-4 py-2 text-content-secondary text-xs">
+                      {p.frequency || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </CyberpunkCard>
 
@@ -251,13 +287,17 @@ export default async function MasterDealPage({
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <div className="text-xs text-content-muted">
-                      {new Date(w.performedAt).toLocaleString('ru-RU', {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      })}{' '}
+                      {w.performedAt
+                        ? new Date(w.performedAt).toLocaleString('ru-RU', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          })
+                        : '—'}{' '}
                       · {w.masterName ?? 'неизвестно'}
                     </div>
-                    <div className="text-sm text-content-primary mt-1">{w.description}</div>
+                    <div className="text-sm text-content-primary mt-1">
+                      {w.description ?? ''}
+                    </div>
                     {w.notes && (
                       <div className="text-xs text-content-secondary mt-1 italic">{w.notes}</div>
                     )}

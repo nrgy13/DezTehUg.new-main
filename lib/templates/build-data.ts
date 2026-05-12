@@ -217,8 +217,10 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       };
       data.workLogs = workLogs.map((w, i) => ({
         index: i + 1,
-        date: formatHumanDate(w.performedAt.toISOString().slice(0, 10)),
-        description: w.description,
+        date: w.performedAt
+          ? formatHumanDate(w.performedAt.toISOString().slice(0, 10))
+          : '',
+        description: w.description ?? '',
         area: w.areaM2 ?? '',
         master: w.masterName ?? '',
         notes: w.notes ?? '',

@@ -1,5 +1,5 @@
 import { requireAuth } from '@/lib/auth/helpers';
-import { Sidebar } from '@/components/crm/Sidebar';
+import { CrmShell } from '@/components/crm/CrmShell';
 import { CrmProviders } from '@/components/crm/CrmProviders';
 import { Toaster } from '@/components/ui/sonner';
 import { getPendingDeletionsCount } from '@/lib/documents/deletion';
@@ -24,20 +24,14 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
       {/* data-crm-root → отключает body { zoom: 0.9 } публичного сайта,
           иначе FullCalendar в timeGrid ломает позиционирование событий
           (offsetTop unscaled vs getBoundingClientRect scaled). */}
-      <div
-        data-crm-root
-        className="min-h-screen flex bg-bg-secondary text-content-primary"
-      >
-        <Sidebar
+      <div data-crm-root>
+        <CrmShell
           user={user}
           pendingDeletionsCount={pendingDeletionsCount}
           inboxCount={inboxCount}
-        />
-        <main className="flex-1 overflow-x-hidden">
-          <div className="px-6 py-6 max-w-7xl mx-auto">
-            {children}
-          </div>
-        </main>
+        >
+          {children}
+        </CrmShell>
       </div>
       <Toaster theme="light" position="top-right" richColors />
     </CrmProviders>

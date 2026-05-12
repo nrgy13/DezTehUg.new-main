@@ -8,3 +8,5 @@ export * from './services';
 export * from './deals';
 export * from './documents';
 export * from './activity';
+export * from './push';
+export * from './checklists';

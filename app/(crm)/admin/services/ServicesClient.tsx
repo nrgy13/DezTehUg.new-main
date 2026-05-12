@@ -1,18 +1,22 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus, ListChecks } from 'lucide-react';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { ServiceFormDialog } from './ServiceFormDialog';
+import { ChecklistDialog } from './ChecklistDialog';
 import { toggleServiceActive } from './actions';
 import type { Service } from '@/lib/db/schema/services';
 
-export function ServicesClient({ services }: { services: Service[] }) {
+type ServiceWithChecklist = Service & { checklistCount: number };
+
+export function ServicesClient({ services }: { services: ServiceWithChecklist[] }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editService, setEditService] = useState<Service | null>(null);
+  const [checklistFor, setChecklistFor] = useState<ServiceWithChecklist | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -77,14 +81,28 @@ export function ServicesClient({ services }: { services: Service[] }) {
                   />
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => setEditService(service)}
-                    className="p-2 text-content-muted hover:text-neon-orange transition-colors"
-                    aria-label="Редактировать"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setChecklistFor(service)}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs text-content-secondary hover:text-neon-orange hover:bg-neon-orange/5 rounded transition-colors"
+                      aria-label="Чек-лист"
+                      title="Шаблон чек-листа для мастера"
+                    >
+                      <ListChecks className="w-3.5 h-3.5" />
+                      <span className="font-mono text-[11px]">
+                        {service.checklistCount}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditService(service)}
+                      className="p-2 text-content-muted hover:text-neon-orange transition-colors"
+                      aria-label="Редактировать"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -110,6 +128,15 @@ export function ServicesClient({ services }: { services: Service[] }) {
           mode={{ kind: 'edit', service: editService }}
           open={true}
           onOpenChange={(open) => !open && setEditService(null)}
+        />
+      )}
+      {checklistFor && (
+        <ChecklistDialog
+          key={checklistFor.id}
+          serviceId={checklistFor.id}
+          serviceName={checklistFor.shortName ?? checklistFor.name}
+          open={true}
+          onOpenChange={(open) => !open && setChecklistFor(null)}
         />
       )}
     </div>

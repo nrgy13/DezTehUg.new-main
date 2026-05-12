@@ -89,8 +89,9 @@ export function Sidebar({
 
   const homeHref = `/${user.role === 'admin' ? 'admin' : user.role === 'manager' ? 'manager' : 'master'}`;
 
+  // Внутренняя обёртка сайдбара. Sticky/responsive — на уровне CrmShell <aside>.
   return (
-    <aside className="w-64 bg-bg-primary border-r border-gray-200 flex flex-col h-screen sticky top-0">
+    <div className="w-64 bg-bg-primary border-r border-gray-200 flex flex-col h-full">
       {/* Логотип */}
       <div className="px-5 py-5 border-b border-gray-200">
         <Link href={homeHref} className="block">
@@ -102,8 +103,8 @@ export function Sidebar({
       </div>
 
       {/* Навигация */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3">
-        <ul className="space-y-1">
+      <nav className="flex-1 overflow-y-auto py-3 px-3">
+        <ul className="space-y-0.5">
           {visibleItems.map((item) => {
             const Icon = item.icon;
             // Для root-страниц роли (/manager, /admin, /master) — строгое равенство.
@@ -122,7 +123,7 @@ export function Sidebar({
                   <span
                     title="Скоро"
                     aria-disabled="true"
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-content-muted/60 cursor-not-allowed select-none ${item.stageBorder ?? ''}`}
+                    className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm text-content-muted/60 cursor-not-allowed select-none ${item.stageBorder ?? ''}`}
                   >
                     <Icon className="w-4 h-4 flex-shrink-0 opacity-60" />
                     <span className="flex-1">{item.label}</span>
@@ -145,7 +146,7 @@ export function Sidebar({
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${
                     item.stageBorder ?? ''
                   } ${
                     isActive
@@ -178,7 +179,7 @@ export function Sidebar({
         </div>
         <Link
           href="/profile"
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+          className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${
             isProfile
               ? 'bg-neon-orange/10 text-neon-orange font-medium border-l-2 border-neon-orange pl-[10px]'
               : 'text-content-secondary hover:bg-poison-green/10 hover:text-poison-green'
@@ -189,12 +190,12 @@ export function Sidebar({
         </Link>
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-content-secondary hover:bg-red-50 hover:text-red-600 transition-all duration-200"
+          className="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm text-content-secondary hover:bg-red-50 hover:text-red-600 transition-all duration-200"
         >
           <LogOut className="w-4 h-4" />
           Выйти
         </button>
       </div>
-    </aside>
+    </div>
   );
 }

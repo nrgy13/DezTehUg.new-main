@@ -5,7 +5,8 @@ import { alias } from 'drizzle-orm/pg-core';
 import { ArrowLeft, Briefcase } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
-import { deals, dealPriceItems, dealAddendums } from '@/lib/db/schema/deals';
+import { deals, dealPriceItems, dealAddendums, dealWorkLogs } from '@/lib/db/schema/deals';
+import { dealChecklistItems } from '@/lib/db/schema/checklists';
 import { documents } from '@/lib/db/schema/documents';
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
@@ -19,6 +20,7 @@ import { PriceItemsTable } from './PriceItemsTable';
 import { DealRequisitesTab } from './DealRequisitesTab';
 import { DocumentsTab } from './DocumentsTab';
 import { AddendumsTab } from './AddendumsTab';
+import { VisitsTab, type PriceItemGroup } from './VisitsTab';
 
 export const metadata = { title: 'Сделка — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -26,6 +28,7 @@ export const dynamic = 'force-dynamic';
 const TABS = [
   { key: 'requisites', label: 'Реквизиты' },
   { key: 'prices', label: 'Прайс' },
+  { key: 'visits', label: 'Выезды' },
   { key: 'documents', label: 'Документы' },
   { key: 'addendums', label: 'ДС' },
   { key: 'history', label: 'История' },
@@ -171,6 +174,77 @@ export default async function DealDetailPage({
     .where(eq(activityLog.entityId, id))
     .orderBy(asc(activityLog.createdAt));
 
+  // Выезды (work_logs) и пункты их чеклистов. Грузим всегда — count маленький.
+  const workLogRows = await db
+    .select({
+      id: dealWorkLogs.id,
+      priceItemId: dealWorkLogs.priceItemId,
+      status: dealWorkLogs.status,
+      plannedAt: dealWorkLogs.plannedAt,
+      startedAt: dealWorkLogs.startedAt,
+      finalizedAt: dealWorkLogs.finalizedAt,
+      performedAt: dealWorkLogs.performedAt,
+      masterName: users.fullName,
+    })
+    .from(dealWorkLogs)
+    .leftJoin(users, eq(users.id, dealWorkLogs.masterId))
+    .where(eq(dealWorkLogs.dealId, id))
+    .orderBy(desc(dealWorkLogs.createdAt));
+
+  const wlIds = workLogRows.map((w) => w.id);
+  // Пункты чеклистов всех выездов сразу — фильтруем in-memory по workLogId.
+  const allItems =
+    wlIds.length > 0
+      ? await db
+          .select()
+          .from(dealChecklistItems)
+          .orderBy(asc(dealChecklistItems.position))
+      : [];
+  const wlIdSet = new Set(wlIds);
+  const itemsByWorkLog = new Map<string, typeof allItems>();
+  for (const it of allItems) {
+    if (!wlIdSet.has(it.workLogId)) continue;
+    const arr = itemsByWorkLog.get(it.workLogId) ?? [];
+    arr.push(it);
+    itemsByWorkLog.set(it.workLogId, arr);
+  }
+
+  // Группировка work_logs по price_item для VisitsTab
+  const svcMap = new Map(allServices.map((s) => [s.id, s.shortName ?? s.name]));
+  const objMap = new Map(objects.map((o) => [o.id, o]));
+  const visitGroups: PriceItemGroup[] = priceItems.map((pi) => {
+    const obj = pi.objectId ? objMap.get(pi.objectId) : null;
+    const visits = workLogRows
+      .filter((w) => w.priceItemId === pi.id)
+      .map((w) => ({
+        id: w.id,
+        status: w.status as 'planned' | 'in_progress' | 'completed',
+        plannedAt: w.plannedAt?.toISOString() ?? null,
+        startedAt: w.startedAt?.toISOString() ?? null,
+        finalizedAt: w.finalizedAt?.toISOString() ?? null,
+        performedAt: w.performedAt?.toISOString() ?? null,
+        masterName: w.masterName,
+        items: (itemsByWorkLog.get(w.id) ?? []).map((it) => ({
+          id: it.id,
+          source: it.source as 'template' | 'manager' | 'master',
+          position: it.position,
+          title: it.title,
+          description: it.description,
+          required: it.required,
+          status: it.status as 'pending' | 'done' | 'na',
+          note: it.note,
+          photosCount: Array.isArray(it.photos) ? it.photos.length : 0,
+        })),
+      }));
+    return {
+      id: pi.id,
+      service: pi.customName || (pi.serviceId ? svcMap.get(pi.serviceId) ?? '—' : '—'),
+      objectName: obj?.name ?? null,
+      areaM2: pi.areaM2,
+      visits,
+    };
+  });
+
   return (
     <div className="space-y-6">
       <Link
@@ -244,6 +318,14 @@ export default async function DealDetailPage({
             totalWithVat={totalWithVat}
           />
         </CyberpunkCard>
+      )}
+
+      {tab === 'visits' && (
+        <VisitsTab
+          dealId={deal.id}
+          groups={visitGroups}
+          hasMaster={!!deal.assignedMasterId}
+        />
       )}
 
       {tab === 'documents' && (

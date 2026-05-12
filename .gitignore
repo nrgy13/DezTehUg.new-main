@@ -60,3 +60,13 @@ next-env.d.ts
 *.swp
 __pycache__/
 .claude/worktrees/
+.claude/scheduled_tasks.lock
+
+# next-pwa generated artifacts (пересоздаются при каждом next build)
+/public/sw.js
+/public/sw.js.map
+/public/workbox-*.js
+/public/workbox-*.js.map
+/public/swe-worker-*.js
+/public/swe-worker-*.js.map
+/public/fallback-*.js

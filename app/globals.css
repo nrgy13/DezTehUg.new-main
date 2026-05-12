@@ -746,10 +746,72 @@
   ::-webkit-scrollbar {
     display: none;
   }
-  
+
   * {
     scrollbar-width: none;
   }
+}
+
+/* =================================== */
+/* CRM SCROLLBAR — нейтральный, неброский */
+/* Перекрывает глобальный cyberpunk-скроллбар внутри CRM-роутов */
+/* (любой элемент-потомок [data-crm-root]). Кислотно-зелёный остаётся */
+/* только для публичного сайта. */
+/* =================================== */
+
+[data-crm-root] ::-webkit-scrollbar,
+[data-crm-root]::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-crm-root] ::-webkit-scrollbar-track,
+[data-crm-root]::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+[data-crm-root] ::-webkit-scrollbar-thumb,
+[data-crm-root]::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: padding-box;
+  box-shadow: none;
+  transition: background-color 0.2s ease;
+  transform: none;
+}
+
+[data-crm-root] ::-webkit-scrollbar-thumb:hover,
+[data-crm-root]::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.32);
+  background-clip: padding-box;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+[data-crm-root] ::-webkit-scrollbar-thumb:active,
+[data-crm-root]::-webkit-scrollbar-thumb:active {
+  background: rgba(15, 23, 42, 0.45);
+  background-clip: padding-box;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+[data-crm-root] ::-webkit-scrollbar-corner,
+[data-crm-root]::-webkit-scrollbar-corner {
+  background: transparent;
+  border: none;
+}
+
+[data-crm-root],
+[data-crm-root] * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.25) transparent;
 }
 
 /* =================================== */

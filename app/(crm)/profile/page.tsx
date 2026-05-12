@@ -5,6 +5,7 @@ import { users } from '@/lib/db/schema/users';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { PasswordForm } from './PasswordForm';
 import { TelegramSection } from './TelegramSection';
+import { PushSection } from './PushSection';
 import { getBotUsername } from '@/lib/notifications/telegram';
 
 export const dynamic = 'force-dynamic';
@@ -77,6 +78,20 @@ export default async function ProfilePage() {
               : null
           }
         />
+      </CyberpunkCard>
+
+      <CyberpunkCard variant="default" hoverEffect={false} className="p-6">
+        <div className="mb-5">
+          <h2 className="text-lg font-orbitron font-semibold text-content-primary mb-1 uppercase tracking-wider">
+            Push-уведомления
+          </h2>
+          <p className="text-sm text-content-muted">
+            Уведомления прямо на это устройство — приходят даже когда CRM
+            закрыта. На iPhone работает только после «Установить на главный
+            экран» в Safari (iOS 16.4+).
+          </p>
+        </div>
+        <PushSection />
       </CyberpunkCard>
 
       <CyberpunkCard variant="default" hoverEffect={false} className="p-6">

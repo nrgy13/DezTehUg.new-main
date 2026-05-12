@@ -29,6 +29,14 @@ export const dealStatusEnum = pgEnum('deal_status', [
   'terminated',  // расторгнут
 ]);
 
+// Sprint 6 — статус «выезда» (запись в deal_work_logs стала полноценным
+// выездом по позиции прайса). Старые записи получили 'completed' через DEFAULT.
+export const workLogStatusEnum = pgEnum('work_log_status', [
+  'planned',
+  'in_progress',
+  'completed',
+]);
+
 // Договор (сделка)
 export const deals = pgTable('deals', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
@@ -143,7 +151,9 @@ export const dealAddendums = pgTable('deal_addendums', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Журнал выполненных работ мастером по сделке (для акта работ)
+// Журнал выполненных работ мастером по сделке (для акта работ).
+// Sprint 6: расширен до «выезда» — со статусом и привязкой к позиции прайса.
+// Старые записи имеют status='completed' (через DEFAULT в миграции 0012).
 export const dealWorkLogs = pgTable(
   'deal_work_logs',
   {
@@ -156,8 +166,27 @@ export const dealWorkLogs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
 
-    performedAt: timestamp('performed_at', { withTimezone: true }).notNull().defaultNow(),
-    description: text('description').notNull(),
+    // На какую позицию прайса этот выезд (Sprint 6).
+    // NULL — историческая «свободная запись» (legacy записи, плюс ручные мастеровские).
+    priceItemId: uuid('price_item_id').references(() => dealPriceItems.id, {
+      onDelete: 'set null',
+    }),
+
+    // Статус выезда. planned → in_progress → completed.
+    status: workLogStatusEnum('status').notNull().default('completed'),
+
+    // Когда запланирован (для planned/in_progress). Может быть null если без даты.
+    plannedAt: timestamp('planned_at', { withTimezone: true }),
+    // Когда мастер нажал «Начать выезд».
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    // Когда мастер нажал «Завершить выезд» — после этого read-only.
+    finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+
+    // Фактическая дата выполнения. Для planned может быть null.
+    performedAt: timestamp('performed_at', { withTimezone: true }),
+    // Свободное описание (legacy). Для planned может быть null, мастер пишет
+    // через чеклист и заметки.
+    description: text('description'),
     areaM2: integer('area_m2'),
     notes: text('notes'),
 
@@ -166,8 +195,12 @@ export const dealWorkLogs = pgTable(
   (t) => ({
     dealIdx: index('deal_work_logs_deal_id_idx').on(t.dealId),
     masterIdx: index('deal_work_logs_master_id_idx').on(t.masterId),
+    statusIdx: index('deal_work_logs_status_idx').on(t.status),
+    priceItemIdx: index('deal_work_logs_price_item_idx').on(t.priceItemId),
   }),
 );
+
+export type WorkLogStatus = (typeof workLogStatusEnum.enumValues)[number];
 
 export type DealStatus = (typeof dealStatusEnum.enumValues)[number];
 export type Deal = typeof deals.$inferSelect;

@@ -390,6 +390,19 @@ export async function assignMaster(
     }
   }
 
+  // Текущее состояние сделки до изменения — нужно чтобы понять,
+  // что это именно «новое назначение» (а не смена с одного мастера на другого).
+  const [dealBefore] = await db
+    .select({
+      contractNumber: deals.contractNumber,
+      prevMasterId: deals.assignedMasterId,
+      clientId: deals.clientId,
+      startDate: deals.startDate,
+    })
+    .from(deals)
+    .where(eq(deals.id, id))
+    .limit(1);
+
   await db
     .update(deals)
     .set({ assignedMasterId: masterId, updatedAt: new Date() })
@@ -397,7 +410,41 @@ export async function assignMaster(
 
   await logActivity(actor.id, 'deal.assign_master', id, { masterId });
 
+  // Push мастеру + автосоздание planned-выездов — только если назначен НОВЫЙ
+  // человек (не отменили и не оставили того же).
+  if (masterId && masterId !== dealBefore?.prevMasterId) {
+    // Авто-seed planned visits по каждой позиции прайса. Идемпотентно: уже
+    // существующие активные выезды не дублируются.
+    try {
+      const { seedPlannedVisitsForDeal } = await import('@/lib/visits/create');
+      await seedPlannedVisitsForDeal(id, masterId);
+    } catch (err) {
+      console.warn('[assignMaster] seed visits failed:', err);
+    }
+
+    try {
+      const { sendPushToUser } = await import('@/lib/push/server');
+      const [client] = await db
+        .select({ shortName: clients.shortName })
+        .from(clients)
+        .where(eq(clients.id, dealBefore!.clientId))
+        .limit(1);
+      const datePart = dealBefore?.startDate
+        ? ` · ${dealBefore.startDate.split('-').reverse().join('.')}`
+        : '';
+      await sendPushToUser(masterId, {
+        title: 'Новый выезд',
+        body: `${dealBefore!.contractNumber}${datePart}${client?.shortName ? ` · ${client.shortName}` : ''}`,
+        url: `/master/deals/${id}`,
+        tag: `deal-assigned-${id}`,
+      });
+    } catch (err) {
+      console.warn('[assignMaster] push failed:', err);
+    }
+  }
+
   revalidatePath(`/manager/deals/${id}`);
+  revalidatePath(`/master`);
   return { ok: true, data: undefined };
 }
 
