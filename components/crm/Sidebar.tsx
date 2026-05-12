@@ -18,6 +18,7 @@ import {
   BarChart3,
   UserCircle,
   Trash2,
+  BookOpen,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/db/schema/users';
 import { LogoText } from '@/components/layout/LogoText';
@@ -45,11 +46,13 @@ const NAV: NavItem[] = [
   { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'] },
   { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'] },
   { href: '/manager/inbox', label: 'Уведомления', icon: Bell, roles: ['manager'] },
+  { href: '/manual', label: 'Инструкция', icon: BookOpen, roles: ['manager'] },
 
   // Мастер
   { href: '/master', label: 'Мои выезды', icon: Wrench, roles: ['master'] },
   { href: '/master/calendar', label: 'Календарь', icon: Calendar, roles: ['master'] },
   { href: '/master/completed', label: 'Выполнено', icon: ListChecks, roles: ['master'] },
+  { href: '/manual', label: 'Инструкция', icon: BookOpen, roles: ['master'] },
 
   // Админ
   { href: '/admin', label: 'Дашборд', icon: LayoutDashboard, roles: ['admin'] },
@@ -58,6 +61,7 @@ const NAV: NavItem[] = [
   { href: '/admin/templates', label: 'Шаблоны', icon: FileText, roles: ['admin'] },
   { href: '/admin/deletions', label: 'Удаления', icon: Trash2, roles: ['admin'] },
   { href: '/admin/settings', label: 'Настройки', icon: Settings, roles: ['admin'] },
+  { href: '/manual', label: 'Инструкция', icon: BookOpen, roles: ['admin'] },
 ];
 
 const ROLE_LABEL: Record<UserRole, string> = {

@@ -58,6 +58,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 # DOCX-шаблоны (fallback если БД пустая)
 COPY --from=builder --chown=nextjs:nodejs /app/templates ./templates
 
+# Markdown-методички (читаются из /manual в CRM через lib/manual/loader.ts)
+COPY --from=builder --chown=nextjs:nodejs /app/docs/manual ./docs/manual
+
 # Папки для LibreOffice profile и storage (storage = named volume на prod)
 RUN mkdir -p /tmp/lo-profile /app/storage && \
     chown -R nextjs:nodejs /tmp/lo-profile /app/storage
