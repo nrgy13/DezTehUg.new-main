@@ -23,15 +23,24 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
-      - name: Add VPS host to known_hosts
+      - name: Configure SSH to skip strict host check (Beget firewall режет ssh-keyscan)
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps
+            HostName ${{ secrets.VPS_HOST }}
+            User root
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ConnectTimeout 30
+            ServerAliveInterval 15
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Create backups on VPS
         run: |
           STAMP=$(date +%Y%m%d-%H%M)
-          ssh root@${{ secrets.VPS_HOST }} "set -e
+          ssh vps "set -e
             mkdir -p /opt/deztech-crm/backups
             echo '── pg_dump ──'
             docker exec deztech-crm-postgres pg_dump -U deztech deztech_crm | gzip > /opt/deztech-crm/backups/prod-db-${STAMP}-${{ inputs.label }}.sql.gz
@@ -40,8 +49,8 @@ jobs:
             ls -lh /opt/deztech-crm/backups/ | tail -5
           "
           # Скачаем последние артефакты
-          scp root@${{ secrets.VPS_HOST }}:/opt/deztech-crm/backups/prod-db-${STAMP}-${{ inputs.label }}.sql.gz ./prod-db.sql.gz
-          scp root@${{ secrets.VPS_HOST }}:/opt/deztech-crm/backups/prod-storage-${STAMP}-${{ inputs.label }}.tar.gz ./prod-storage.tar.gz
+          scp vps:/opt/deztech-crm/backups/prod-db-${STAMP}-${{ inputs.label }}.sql.gz ./prod-db.sql.gz
+          scp vps:/opt/deztech-crm/backups/prod-storage-${STAMP}-${{ inputs.label }}.tar.gz ./prod-storage.tar.gz
 
       - name: Upload as artifacts
         uses: actions/upload-artifact@v4

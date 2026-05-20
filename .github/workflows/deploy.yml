@@ -29,14 +29,23 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
-      - name: Add VPS host to known_hosts
+      - name: Configure SSH config (skip strict host check)
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps
+            HostName ${{ secrets.VPS_HOST }}
+            User root
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ConnectTimeout 30
+            ServerAliveInterval 15
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Pull and rebuild on VPS
         run: |
-          ssh root@${{ secrets.VPS_HOST }} "set -e
+          ssh vps "set -e
             cd /opt/deztech-crm
             echo '── git fetch + reset ──'
             git fetch origin '${{ inputs.branch }}'
@@ -50,7 +59,7 @@ jobs:
       - name: Apply migrations
         if: ${{ inputs.run_migrations }}
         run: |
-          ssh root@${{ secrets.VPS_HOST }} "set -e
+          ssh vps "set -e
             cd /opt/deztech-crm
             for f in drizzle/migrations/*.sql; do
               fname=\$(basename \"\$f\")
