@@ -1,0 +1,50 @@
+name: Debug SSH
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Inspect secret content
+        run: |
+          echo "VPS_HOST raw bytes:"
+          printf '%s' "${{ secrets.VPS_HOST }}" | xxd | head -2
+          echo "---"
+          echo "Length of VPS_HOST: $(printf '%s' "${{ secrets.VPS_HOST }}" | wc -c)"
+          echo "---"
+          # Check if it parses as valid IP
+          getent hosts "${{ secrets.VPS_HOST }}" 2>&1 || true
+          echo "---"
+
+      - name: TCP probe to port 22
+        run: |
+          set +e
+          # nc test if port is open
+          nc -zv -w 10 "${{ secrets.VPS_HOST }}" 22 2>&1
+          NC_EXIT=$?
+          echo "nc exit: $NC_EXIT"
+          echo "---"
+          # curl test for port 22 (SSH banner)
+          curl -v --max-time 10 "telnet://${{ secrets.VPS_HOST }}:22" 2>&1 | head -20
+          echo "---"
+          # ping
+          ping -c 3 -W 5 "${{ secrets.VPS_HOST }}" 2>&1 | head -10
+
+      - name: Try ssh -v with options
+        run: |
+          set +e
+          ssh -v -o ConnectTimeout=20 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            root@${{ secrets.VPS_HOST }} 'echo "WORKS"' 2>&1 | head -40
+          echo "ssh exit: $?"
+
+      - name: Public IP of runner
+        run: curl -s ifconfig.me; echo
