@@ -10,10 +10,15 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        'orbitron': ['Orbitron', 'monospace'],
+        // next/font подключает Orbitron и Inter через CSS-переменные
+        // (генерирует уникальное hash-имя, ссылаться напрямую по 'Orbitron' нельзя).
+        // См. app/fonts.ts и app/layout.tsx
+        'orbitron': ['var(--font-orbitron)', 'Orbitron', 'monospace'],
+        'inter': ['var(--font-inter)', 'Inter', 'sans-serif'],
+        // Остальные пока остаются на резерве — будут на fallback если ОС не имеет шрифта.
+        // Если понадобятся реально — подключить через next/font/google по той же схеме.
         'space-mono': ['Space Mono', 'monospace'],
         'jetbrains': ['JetBrains Mono', 'monospace'],
-        'inter': ['Inter', 'sans-serif'],
         'bebas': ['Bebas Neue', 'sans-serif'],
         'oswald': ['Oswald', 'sans-serif'],
         'roboto-condensed': ['Roboto Condensed', 'sans-serif'],

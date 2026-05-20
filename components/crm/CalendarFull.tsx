@@ -358,9 +358,9 @@ export function CalendarFull({
 
   return (
     <>
-      <div className="flex gap-4 items-stretch">
+      <div className="flex flex-col lg:flex-row gap-4 lg:items-stretch">
         {/* ─── Сайдбар ────────────────────────────────── */}
-        <aside className="w-64 flex-shrink-0 flex flex-col gap-4">
+        <aside className="w-full lg:w-64 lg:flex-shrink-0 flex flex-col gap-4">
           {/* Stats — компактный inline-формат */}
           <div className="bg-white rounded-lg border border-gray-200 p-3">
             <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2">

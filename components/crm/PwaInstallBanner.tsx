@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Download, X } from 'lucide-react';
 
 // Chrome/Edge: beforeinstallprompt event с .prompt()/.userChoice.
@@ -14,11 +15,27 @@ const DISMISS_KEY = 'pwa-install-dismissed-at';
 const DISMISS_DAYS = 7;
 
 /**
+ * Высота баннера + safe-area + запас. Используется для body padding-bottom,
+ * чтобы контент мог проскроллиться выше баннера и не оказался под ним.
+ */
+const BANNER_OFFSET_PX = 112;
+
+/**
+ * Страницы где баннер скрываем — мастер сосредоточенно работает с чеклистом
+ * выезда, баннер закрывает нижние пункты и мешает.
+ */
+const HIDE_ON_PATTERNS = [/^\/master\/visits\//];
+
+/**
  * Баннер «Установить ДТЮ CRM» — показывается мастеру на мобиле,
  * если PWA не установлена. Закрытие — на неделю (localStorage).
  *
  * На Android: при наличии beforeinstallprompt — кнопка вызывает нативный prompt.
  * На iOS: показывается инструкция «Поделиться → На экран Домой».
+ *
+ * Когда баннер виден — добавляет padding-bottom на body, чтобы контент
+ * мог проскроллиться выше баннера. На страницах /master/visits/* скрыт
+ * полностью, чтобы не мешать работе с чеклистом.
  */
 export function PwaInstallBanner() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(
@@ -26,6 +43,8 @@ export function PwaInstallBanner() {
   );
   const [showIosHint, setShowIosHint] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const pathname = usePathname();
+  const hiddenOnRoute = HIDE_ON_PATTERNS.some((re) => re.test(pathname));
 
   useEffect(() => {
     // Уже установлено как PWA? — не показываем.
@@ -68,7 +87,20 @@ export function PwaInstallBanner() {
     return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, []);
 
+  // Резервируем место внизу body когда баннер реально на экране,
+  // чтобы нижние элементы (последний пункт чеклиста, кнопки) не закрывались.
+  const visibleOnScreen = !dismissed && !hiddenOnRoute && (!!installEvent || showIosHint);
+  useEffect(() => {
+    if (!visibleOnScreen) return;
+    const prev = document.body.style.paddingBottom;
+    document.body.style.paddingBottom = `${BANNER_OFFSET_PX}px`;
+    return () => {
+      document.body.style.paddingBottom = prev;
+    };
+  }, [visibleOnScreen]);
+
   if (dismissed) return null;
+  if (hiddenOnRoute) return null;
   if (!installEvent && !showIosHint) return null;
 
   function dismiss() {

@@ -1,0 +1,89 @@
+name: Import Regina clients to PROD
+
+on:
+  workflow_dispatch:
+    inputs:
+      payload_b64:
+        description: 'gzip+base64 от tmp/regina-clients.json (~18K)'
+        required: true
+        type: string
+      reset:
+        description: 'Снести ВСЕХ клиентов перед импортом? (опасно!)'
+        required: true
+        default: false
+        type: boolean
+      with_test:
+        description: 'Создать тестового менеджера + 5 тестовых клиентов?'
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: import-regina-prod
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Decode payload and upload
+        run: |
+          # decode base64+gzip → JSON
+          echo "${{ inputs.payload_b64 }}" | base64 -d | gunzip > /tmp/regina-clients.json
+          echo "── decoded ──"
+          wc -l /tmp/regina-clients.json
+          head -c 200 /tmp/regina-clients.json
+          echo
+          # upload to VPS
+          scp /tmp/regina-clients.json root@${{ secrets.VPS_HOST }}:/tmp/regina-clients.json
+
+      - name: Run import inside app container
+        run: |
+          FLAGS=""
+          if [ "${{ inputs.reset }}" = "true" ]; then FLAGS="$FLAGS --reset"; fi
+          if [ "${{ inputs.with_test }}" = "true" ]; then FLAGS="$FLAGS --with-test"; fi
+          echo "── Flags: $FLAGS ──"
+          ssh root@${{ secrets.VPS_HOST }} "set -e
+            cd /opt/deztech-crm
+            # Перенесём JSON в проектную tmp/
+            mkdir -p tmp
+            cp /tmp/regina-clients.json tmp/regina-clients.json
+            # Запустим импорт через временный one-shot контейнер
+            docker compose -f docker-compose.prod.yml --env-file .env run --rm \
+              -v \$(pwd)/tmp/regina-clients.json:/app/tmp/regina-clients.json:ro \
+              app sh -c 'cd /app && node -e \"require(\\\"./node_modules/tsx/dist/cli.mjs\\\").main([\\\"tools/import-regina-clients.ts\\\"$(echo $FLAGS | sed 's/--/, \\\"--/g; s/$/\\\"/')])'
+          " || {
+            # Fallback — другой способ запуска tsx
+            echo '── Fallback: запуск tsx напрямую ──'
+            ssh root@${{ secrets.VPS_HOST }} "set -e
+              cd /opt/deztech-crm
+              docker compose -f docker-compose.prod.yml --env-file .env run --rm \
+                -v \$(pwd)/tmp/regina-clients.json:/app/tmp/regina-clients.json:ro \
+                app npx tsx tools/import-regina-clients.ts $FLAGS
+            "
+          }
+
+      - name: Verify import
+        run: |
+          ssh root@${{ secrets.VPS_HOST }} "
+            docker exec deztech-crm-postgres psql -U deztech deztech_crm -c \"
+              SELECT u.email AS manager, COUNT(DISTINCT c.id) AS clients
+              FROM users u
+              LEFT JOIN clients c ON c.assigned_manager_id = u.id
+              WHERE u.role = 'manager'
+              GROUP BY u.email
+              ORDER BY clients DESC;
+            \"
+          "

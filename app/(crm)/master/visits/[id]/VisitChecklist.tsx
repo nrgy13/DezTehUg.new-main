@@ -232,7 +232,10 @@ export function VisitChecklist({
   }
 
   return (
-    <div className="space-y-3">
+    // pb-24 lg:pb-0 — резерв снизу под fixed-кнопку «Завершить выезд» (только на mobile,
+    // на desktop кнопка в обычном потоке). Без этого последний пункт чек-листа
+    // и поле «Свой пункт» закрываются кнопкой при скролле.
+    <div className={`space-y-3 ${!readOnly ? 'pb-24 lg:pb-0' : ''}`}>
       {/* Status header */}
       {status === 'planned' && !readOnly && (
         <CyberpunkCard

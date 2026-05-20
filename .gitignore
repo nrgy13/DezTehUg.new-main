@@ -70,3 +70,11 @@ __pycache__/
 /public/swe-worker-*.js
 /public/swe-worker-*.js.map
 /public/fallback-*.js
+
+# Реальные договоры клиентов Регины — sensitive, НЕ В РЕПО
+/DTU_docs_clients/
+
+# Артефакты тестовых скриншотов в корне (Playwright дамп) — не нужны в репо
+/master-*.png
+/manager-*.png
+/admin-*.png
