@@ -1,0 +1,53 @@
+name: Backup PROD (DB + Storage)
+
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: 'Метка бэкапа (попадёт в имя файла)'
+        required: false
+        default: 'manual'
+
+concurrency:
+  group: backup-prod
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create backups on VPS
+        run: |
+          STAMP=$(date +%Y%m%d-%H%M)
+          ssh root@${{ secrets.VPS_HOST }} "set -e
+            mkdir -p /opt/deztech-crm/backups
+            echo '── pg_dump ──'
+            docker exec deztech-crm-postgres pg_dump -U deztech deztech_crm | gzip > /opt/deztech-crm/backups/prod-db-${STAMP}-${{ inputs.label }}.sql.gz
+            echo '── tar storage ──'
+            docker run --rm -v deztech-crm_app-storage:/data -v /opt/deztech-crm/backups:/backup alpine tar czf /backup/prod-storage-${STAMP}-${{ inputs.label }}.tar.gz -C /data .
+            ls -lh /opt/deztech-crm/backups/ | tail -5
+          "
+          # Скачаем последние артефакты
+          scp root@${{ secrets.VPS_HOST }}:/opt/deztech-crm/backups/prod-db-${STAMP}-${{ inputs.label }}.sql.gz ./prod-db.sql.gz
+          scp root@${{ secrets.VPS_HOST }}:/opt/deztech-crm/backups/prod-storage-${STAMP}-${{ inputs.label }}.tar.gz ./prod-storage.tar.gz
+
+      - name: Upload as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-backup-${{ github.run_id }}
+          path: |
+            prod-db.sql.gz
+            prod-storage.tar.gz
+          retention-days: 30
