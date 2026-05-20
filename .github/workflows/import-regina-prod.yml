@@ -33,21 +33,28 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
-      - name: Add VPS host to known_hosts
+      - name: Configure SSH config (skip strict host check)
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps
+            HostName ${{ secrets.VPS_HOST }}
+            User root
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ConnectTimeout 30
+            ServerAliveInterval 15
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Decode payload and upload
         run: |
-          # decode base64+gzip → JSON
           echo "${{ inputs.payload_b64 }}" | base64 -d | gunzip > /tmp/regina-clients.json
           echo "── decoded ──"
           wc -l /tmp/regina-clients.json
           head -c 200 /tmp/regina-clients.json
           echo
-          # upload to VPS
-          scp /tmp/regina-clients.json root@${{ secrets.VPS_HOST }}:/tmp/regina-clients.json
+          scp /tmp/regina-clients.json vps:/tmp/regina-clients.json
 
       - name: Run import inside app container
         run: |
@@ -55,29 +62,21 @@ jobs:
           if [ "${{ inputs.reset }}" = "true" ]; then FLAGS="$FLAGS --reset"; fi
           if [ "${{ inputs.with_test }}" = "true" ]; then FLAGS="$FLAGS --with-test"; fi
           echo "── Flags: $FLAGS ──"
-          ssh root@${{ secrets.VPS_HOST }} "set -e
+          ssh vps "set -e
             cd /opt/deztech-crm
-            # Перенесём JSON в проектную tmp/
+            git fetch origin feature/crm
+            git reset --hard origin/feature/crm
             mkdir -p tmp
             cp /tmp/regina-clients.json tmp/regina-clients.json
-            # Запустим импорт через временный one-shot контейнер
+            # Запустим импорт через one-shot контейнер с tsx
             docker compose -f docker-compose.prod.yml --env-file .env run --rm \
               -v \$(pwd)/tmp/regina-clients.json:/app/tmp/regina-clients.json:ro \
-              app sh -c 'cd /app && node -e \"require(\\\"./node_modules/tsx/dist/cli.mjs\\\").main([\\\"tools/import-regina-clients.ts\\\"$(echo $FLAGS | sed 's/--/, \\\"--/g; s/$/\\\"/')])'
-          " || {
-            # Fallback — другой способ запуска tsx
-            echo '── Fallback: запуск tsx напрямую ──'
-            ssh root@${{ secrets.VPS_HOST }} "set -e
-              cd /opt/deztech-crm
-              docker compose -f docker-compose.prod.yml --env-file .env run --rm \
-                -v \$(pwd)/tmp/regina-clients.json:/app/tmp/regina-clients.json:ro \
-                app npx tsx tools/import-regina-clients.ts $FLAGS
-            "
-          }
+              app npx tsx tools/import-regina-clients.ts $FLAGS
+          "
 
       - name: Verify import
         run: |
-          ssh root@${{ secrets.VPS_HOST }} "
+          ssh vps "
             docker exec deztech-crm-postgres psql -U deztech deztech_crm -c \"
               SELECT u.email AS manager, COUNT(DISTINCT c.id) AS clients
               FROM users u
