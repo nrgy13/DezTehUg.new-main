@@ -28,7 +28,7 @@
 
 /* Заголовки дней недели — Orbitron, uppercase */
 .fc-deztech-wrapper .fc-col-header-cell-cushion {
-  font-family: 'Orbitron', monospace;
+  font-family: var(--font-orbitron), 'Orbitron', monospace;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -44,7 +44,7 @@
 
 /* Заголовок месяца/недели — крупно, элегантно */
 .fc-deztech-wrapper .fc-toolbar-title {
-  font-family: 'Orbitron', monospace;
+  font-family: var(--font-orbitron), 'Orbitron', monospace;
   font-size: 18px !important;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -229,7 +229,7 @@
 
 .fc-deztech-wrapper .fc-list-day-cushion {
   background: #fafbfc !important;
-  font-family: 'Orbitron', monospace;
+  font-family: var(--font-orbitron), 'Orbitron', monospace;
   font-size: 11px !important;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -285,7 +285,7 @@
 
 /* «Весь день» — мельче, чтобы влезало в узкую ячейку axis */
 .fc-deztech-wrapper .fc-timegrid-axis-cushion {
-  font-family: 'Orbitron', monospace;
+  font-family: var(--font-orbitron), 'Orbitron', monospace;
   font-size: 9px !important;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -396,4 +396,56 @@
 
 .deztech-tooltip-fade {
   animation: deztech-tooltip-fade 220ms ease-out;
+}
+
+/* ┌───────────────────────────────────────────────────────────────┐
+   │ MOBILE (≤640px) — toolbar в колонку, кнопки wrap               │
+   │ Без этого "Май 2026 Г." переносится на 3 строки, а 4 кнопки    │
+   │ вьюшек (Месяц/Неделя/День/Список) вылезают за экран.           │
+   └───────────────────────────────────────────────────────────────┘ */
+@media (max-width: 640px) {
+  /* Toolbar вертикально: prev/next/today → title → вьюшки, каждый на своей строке */
+  .fc-deztech-wrapper .fc-header-toolbar.fc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  /* Каждый chunk центрирован и переносит кнопки при нехватке места */
+  .fc-deztech-wrapper .fc-toolbar-chunk {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Заголовок месяца — на свою строку по центру, в одну линию */
+  .fc-deztech-wrapper .fc-toolbar-title {
+    font-size: 16px !important;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  /* Кнопки компактнее — чтобы 4 вьюшки помещались в 1-2 ряда */
+  .fc-deztech-wrapper .fc-button {
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
+
+  /* Сетка дней — мельче на узком экране */
+  .fc-deztech-wrapper .fc-daygrid-day-number {
+    font-size: 11px;
+    padding: 4px 5px;
+  }
+
+  .fc-deztech-wrapper .fc-col-header-cell-cushion {
+    font-size: 9px;
+    padding: 6px 2px !important;
+  }
+
+  /* Меньше внутренний padding обёртки — больше места под календарь */
+  .fc-deztech-wrapper {
+    padding: 0 !important;
+  }
 }
