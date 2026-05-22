@@ -37,6 +37,9 @@ import { serviceChecklists, dealChecklistItems } from '../lib/db/schema/checklis
 
 const RESET = process.argv.includes('--reset');
 const WITH_TEST = process.argv.includes('--with-test');
+// --only-new: импортировать только клиентов, чьего ИНН ещё нет в БД.
+// Не делает reset, не трогает существующих (и правки Регины). Для дозаливки.
+const ONLY_NEW = process.argv.includes('--only-new');
 const DRY = process.argv.includes('--dry-run');
 
 const MANAGER_EMAIL = 'deztexug@yandex.ru'; // Регина
@@ -416,8 +419,20 @@ async function main() {
   const inns = Object.keys(groups);
   console.log(`  Найдено ${inns.length} клиентов в JSON`);
 
-  const stats = { clients: 0, objects: 0, priceItems: 0, addendums: 0, errors: 0 };
+  // --only-new: набор уже существующих ИНН, чтобы не задваивать и не трогать правки Регины
+  const existingInns = new Set<string>();
+  if (ONLY_NEW) {
+    const rows = await db.select({ inn: clients.inn }).from(clients);
+    for (const r of rows) if (r.inn) existingInns.add(r.inn);
+    console.log(`  (--only-new) в БД уже ${existingInns.size} клиентов с ИНН — их пропустим`);
+  }
+
+  const stats = { clients: 0, objects: 0, priceItems: 0, addendums: 0, errors: 0, skipped: 0 };
   for (const inn of inns) {
+    if (ONLY_NEW && existingInns.has(inn)) {
+      stats.skipped++;
+      continue;
+    }
     try {
       const result = await importReginaClient(inn, groups[inn], regina.id, servicesByCode);
       stats.clients++;
@@ -436,6 +451,7 @@ async function main() {
   console.log(`  objects:     ${stats.objects}`);
   console.log(`  price_items: ${stats.priceItems}`);
   console.log(`  addendums:   ${stats.addendums}`);
+  if (stats.skipped) console.log(`  skipped (--only-new): ${stats.skipped}`);
   if (stats.errors) console.log(`  ⚠ errors:    ${stats.errors}`);
   console.log('\n✅ Импорт завершён');
 
