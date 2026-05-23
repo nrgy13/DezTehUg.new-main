@@ -40,7 +40,13 @@ const WITH_TEST = process.argv.includes('--with-test');
 // --only-new: импортировать только клиентов, чьего ИНН ещё нет в БД.
 // Не делает reset, не трогает существующих (и правки Регины). Для дозаливки.
 const ONLY_NEW = process.argv.includes('--only-new');
+// --fill-blanks: БЕЗОПАСНЫЙ режим обновления. Для существующих клиентов дозаполняет
+// только ПУСТЫЕ поля (директор, ОГРН/КПП/банк, тип ИП), не трогая заполненное
+// (правки Регины). Новых клиентов (НМТП, Славянский) — создаёт.
+const FILL_BLANKS = process.argv.includes('--fill-blanks');
 const DRY = process.argv.includes('--dry-run');
+
+const EXTRA_JSON_PATH = path.join(__dirname, '..', 'tmp', 'extra-clients.json');
 
 const MANAGER_EMAIL = 'deztexug@yandex.ru'; // Регина
 const TEST_MANAGER_EMAIL = 'test-manager@deztexug.ru'; // Александр (тестер)
@@ -100,13 +106,54 @@ type ClientGroup = {
   addendums: ParsedAddendum[];
   all_objects: ParsedObject[];
   all_price_items: ParsedPriceItem[];
+  // для «ручных» клиентов из extra-clients.json (НМТП/Славянский), где общая сумма
+  // контракта известна, а разбивки цен по позициям нет
+  _contract_total_with_vat?: number;
 };
 
 function loadJson(): Record<string, ClientGroup> {
   if (!fs.existsSync(JSON_PATH)) {
     throw new Error(`Не найден ${JSON_PATH}. Сначала: python3 tools/parse-regina-contracts.py`);
   }
-  return JSON.parse(fs.readFileSync(JSON_PATH, 'utf-8'));
+  const base: Record<string, ClientGroup> = JSON.parse(fs.readFileSync(JSON_PATH, 'utf-8'));
+  // Мердж «ручных» клиентов (НМТП, Славянский Техникум и т.п.), извлечённых не из .docx
+  if (fs.existsSync(EXTRA_JSON_PATH)) {
+    const extra: Record<string, ClientGroup> = JSON.parse(fs.readFileSync(EXTRA_JSON_PATH, 'utf-8'));
+    let added = 0;
+    for (const [inn, grp] of Object.entries(extra)) {
+      base[inn] = grp; // extra имеет приоритет (полная запись клиента)
+      added++;
+    }
+    console.log(`  (extra-clients.json) домержено ${added} ручных клиентов (НМТП/Славянский)`);
+  }
+  return base;
+}
+
+// Тип клиента: ИП → individual, остальное (ООО/АО/ГБПОУ/...) → legal
+function clientTypeFor(c: ParsedClient): 'individual' | 'legal' {
+  const ot = (c.org_type || '').toUpperCase();
+  const sn = (c.short_name || '');
+  if (ot === 'ИП' || /^ИП\s/.test(sn) || /индивидуальн/i.test(c.full_name || '')) {
+    return 'individual';
+  }
+  return 'legal';
+}
+
+// Подписант для deals.signatoryClient: ИП → «ИП ФИО», ООО → «Роль ФИО»
+function buildSignatory(contract: ParsedContract | undefined, isIndividual: boolean): string | null {
+  if (!contract?.director_name) return null;
+  if (isIndividual) return `ИП ${contract.director_name}`;
+  return contract.director_role
+    ? `${contract.director_role} ${contract.director_name}`
+    : contract.director_name;
+}
+
+// Берёт контракт с заполненным директором (обычно первый, но 2025-мониторинги без него)
+function contractWithDirector(group: ClientGroup): ParsedContract | undefined {
+  for (const ct of group.contracts) {
+    if (ct.contract?.director_name) return ct.contract;
+  }
+  return group.contracts[0]?.contract;
 }
 
 async function ensureUser(email: string, fullName: string, role: 'manager' | 'master' | 'admin') {
@@ -164,12 +211,14 @@ async function importReginaClient(
   const c = group.client;
   // Объединённый адрес
   const legal = c.legal_address || c.actual_address || '';
+  const isIndividual = clientTypeFor(c) === 'individual';
+  const dirContract = contractWithDirector(group);
 
   // Создаём клиента
   const [created] = await db
     .insert(clients)
     .values({
-      type: 'legal',
+      type: isIndividual ? 'individual' : 'legal',
       shortName: c.short_name,
       fullName: c.full_name ?? null,
       phone: c.phone ?? null,
@@ -177,7 +226,11 @@ async function importReginaClient(
       inn: c.inn,
       kpp: c.kpp ?? null,
       ogrn: c.ogrn ?? null,
-      // схема не имеет ogrnip отдельно — кладём в ogrn если ogrn пуст, иначе в extra_data
+      // Подписант юрлица/ИП — каноничное место (используется в карточке клиента и генерации документов)
+      directorName: dirContract?.director_name ?? null,
+      directorRole: dirContract?.director_role ?? null,
+      actingBasis: dirContract?.acting_basis ?? null,
+      // схема не имеет ogrnip отдельно — кладём в extra_data
       legalAddress: legal || null,
       postalAddress: c.actual_address ?? null,
       bankName: c.bank_name ?? null,
@@ -218,12 +271,15 @@ async function importReginaClient(
     `ДТЮ-${new Date().getFullYear()}-${c.inn.slice(-4)}`;
   const contractDate = firstContract?.date || new Date().toISOString().slice(0, 10);
 
-  // Сумма по прайсу (для total_amount)
+  // Сумма: явная сумма контракта (для «ручных» с единой ценой), иначе из прайса
   const totalNoVat = group.all_price_items.reduce(
     (s, p) => s + (p.price_no_vat || 0),
     0,
   );
-  const totalWithVat = totalNoVat * 1.05;
+  const totalWithVat =
+    typeof group._contract_total_with_vat === 'number'
+      ? group._contract_total_with_vat
+      : totalNoVat * 1.05;
 
   const [deal] = await db
     .insert(deals)
@@ -241,10 +297,7 @@ async function importReginaClient(
       totalAmount: totalWithVat.toFixed(2),
       currency: 'RUB',
       signatoryExecutor: 'ИП Белавина Ольга Владимировна',
-      signatoryClient:
-        firstContract?.director_role && firstContract?.director_name
-          ? `${firstContract.director_role} ${firstContract.director_name}`
-          : null,
+      signatoryClient: buildSignatory(dirContract, isIndividual),
       notes: null,
       createdById: managerId,
     })
@@ -253,7 +306,9 @@ async function importReginaClient(
   // Прайс-позиции
   let sortOrder = 0;
   for (const p of group.all_price_items) {
-    if (!p.price_no_vat) continue;
+    if (!p.service_name) continue; // совсем пустая строка
+    // price_no_vat может быть null (госконтракт без разбивки по позициям — Славянский) → 0, Регина впишет
+    const priceNoVat = p.price_no_vat ?? 0;
     const code = p.service_code || serviceCodeForName(p.service_name);
     const serviceId = code ? servicesByCode.get(code) : null;
     // Сматчить объект из прайса с одним из созданных
@@ -273,8 +328,8 @@ async function importReginaClient(
       areaM2: Math.max(0, Math.round(areaM2)),
       method: null,
       frequency: p.frequency ?? null,
-      priceNoVat: p.price_no_vat.toFixed(2),
-      priceWithVat: (p.price_no_vat * 1.05).toFixed(2),
+      priceNoVat: priceNoVat.toFixed(2),
+      priceWithVat: (priceNoVat * 1.05).toFixed(2),
       vatRate: '5.00',
       sortOrder: sortOrder++,
     });
@@ -369,10 +424,86 @@ async function seedTestClientsForTester(testerId: string, masterId: string, serv
   console.log(`  ✓ Создано ${scenarios.length} тестовых клиентов под тестера`);
 }
 
+/**
+ * Безопасное дозаполнение существующего клиента: трогаем ТОЛЬКО пустые поля
+ * (не затираем правки Регины). Возвращает список обновлённых полей и кол-во сделок.
+ */
+async function fillBlanksForClient(
+  existing: typeof clients.$inferSelect,
+  group: ClientGroup,
+): Promise<{ clientFields: string[]; dealsUpdated: number }> {
+  const c = group.client;
+  const dirContract = contractWithDirector(group);
+  const isIndividual = clientTypeFor(c) === 'individual';
+
+  const updates: Record<string, any> = {};
+  const changed: string[] = [];
+  const fill = (field: keyof typeof clients.$inferSelect, value: any) => {
+    if (value == null || value === '') return;
+    const cur = (existing as any)[field];
+    if (cur == null || cur === '') {
+      updates[field] = value;
+      changed.push(field as string);
+    }
+  };
+  fill('directorName', dirContract?.director_name);
+  fill('directorRole', dirContract?.director_role);
+  fill('actingBasis', dirContract?.acting_basis);
+  fill('fullName', c.full_name);
+  fill('kpp', c.kpp);
+  fill('ogrn', c.ogrn);
+  fill('legalAddress', c.legal_address || c.actual_address);
+  fill('postalAddress', c.actual_address);
+  fill('bankName', c.bank_name);
+  fill('bankAccount', c.bank_account);
+  fill('bankBik', c.bank_bik);
+  fill('bankCorrAccount', c.bank_corr_account);
+  fill('phone', c.phone);
+  fill('email', c.email);
+
+  // Коррекция типа: ИП, импортированные ранее как legal
+  if (isIndividual && existing.type === 'legal') {
+    updates.type = 'individual';
+    changed.push('type(legal→individual)');
+  }
+  // ОГРНИП в extra_data — если ещё нет
+  if (c.ogrnip) {
+    const extra = (existing.extraData as any) || {};
+    if (!extra.ogrnip) {
+      updates.extraData = { ...extra, ogrnip: c.ogrnip };
+      changed.push('ogrnip');
+    }
+  }
+
+  if (changed.length && !DRY) {
+    updates.updatedAt = new Date();
+    await db.update(clients).set(updates).where(eq(clients.id, existing.id));
+  }
+
+  // Подписант в сделках клиента — только где пусто
+  let dealsUpdated = 0;
+  const signatory = buildSignatory(dirContract, isIndividual);
+  if (signatory) {
+    const clientDeals = await db.select().from(deals).where(eq(deals.clientId, existing.id));
+    for (const d of clientDeals) {
+      if (!d.signatoryClient) {
+        if (!DRY) {
+          await db
+            .update(deals)
+            .set({ signatoryClient: signatory, updatedAt: new Date() })
+            .where(eq(deals.id, d.id));
+        }
+        dealsUpdated++;
+      }
+    }
+  }
+  return { clientFields: changed, dealsUpdated };
+}
+
 async function main() {
   const dbUrl = process.env.DATABASE_URL || 'postgresql://deztech:dev_password_change_me@localhost:5432/deztech_crm';
   console.log(`📦 DB: ${dbUrl.replace(/:[^:]*@/, ':***@')}`);
-  console.log(`Mode: reset=${RESET}, with-test=${WITH_TEST}, dry-run=${DRY}\n`);
+  console.log(`Mode: reset=${RESET}, with-test=${WITH_TEST}, only-new=${ONLY_NEW}, fill-blanks=${FILL_BLANKS}, dry-run=${DRY}\n`);
 
   // 1. Users
   console.log('👤 Users:');
@@ -401,7 +532,7 @@ async function main() {
     await nukeClients();
   }
 
-  if (DRY) {
+  if (DRY && !FILL_BLANKS) {
     console.log('\n(dry-run, дальше не пойдём)');
     await pool.end();
     return;
@@ -418,6 +549,57 @@ async function main() {
   const groups = loadJson();
   const inns = Object.keys(groups);
   console.log(`  Найдено ${inns.length} клиентов в JSON`);
+
+  // ── FILL-BLANKS: безопасное дозаполнение + создание новых (без reset) ──
+  if (FILL_BLANKS) {
+    console.log('\n🩹 FILL-BLANKS (дозаполняю пустые поля существующих, создаю новых):');
+    const existingByInn = new Map<string, typeof clients.$inferSelect>();
+    for (const r of await db.select().from(clients)) {
+      if (r.inn) existingByInn.set(r.inn, r);
+    }
+    const fb = { updated: 0, fields: 0, deals: 0, created: 0, untouched: 0, errors: 0 };
+    for (const inn of inns) {
+      const g = groups[inn];
+      try {
+        const existing = existingByInn.get(inn);
+        if (existing) {
+          const res = await fillBlanksForClient(existing, g);
+          if (res.clientFields.length || res.dealsUpdated) {
+            fb.updated++;
+            fb.fields += res.clientFields.length;
+            fb.deals += res.dealsUpdated;
+            console.log(
+              `  ~ ${inn} | ${g.client.short_name}: [${res.clientFields.join(', ') || '—'}]` +
+                (res.dealsUpdated ? ` +${res.dealsUpdated} сделок(подписант)` : ''),
+            );
+          } else {
+            fb.untouched++;
+          }
+        } else if (DRY) {
+          fb.created++;
+          console.log(`  + (dry-run) создать ${inn} | ${g.client.short_name}`);
+        } else {
+          const result = await importReginaClient(inn, g, regina.id, servicesByCode);
+          fb.created++;
+          console.log(
+            `  + СОЗДАН ${inn} | ${g.client.short_name} (obj=${result.objects}, price=${result.priceItems})`,
+          );
+        }
+      } catch (e: any) {
+        fb.errors++;
+        console.error(`  ✗ ${inn} | ${g?.client?.short_name}: ${e.message}`);
+      }
+    }
+    console.log('\n📊 FILL-BLANKS ИТОГ:');
+    console.log(`  обновлено клиентов:  ${fb.updated} (полей всего: ${fb.fields})`);
+    console.log(`  подписант в сделках: ${fb.deals}`);
+    console.log(`  создано новых:       ${fb.created}`);
+    console.log(`  без изменений:       ${fb.untouched}`);
+    if (fb.errors) console.log(`  ⚠ errors:            ${fb.errors}`);
+    console.log('\n✅ Fill-blanks завершён');
+    await pool.end();
+    return;
+  }
 
   // --only-new: набор уже существующих ИНН, чтобы не задваивать и не трогать правки Регины
   const existingInns = new Set<string>();

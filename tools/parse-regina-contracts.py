@@ -70,11 +70,68 @@ def to_nominative(word):
     return out
 
 
+def _detect_gender(words):
+    """Пол по отчеству (последнее слово ФИО). Нужен чтобы корректно склонять фамилию:
+    «Мирошева Алексея Владимировича» — мужчина (Владимир-ВИЧ), значит «Мирошева» это
+    род.п. от «Мирошев», а НЕ им.п. женской фамилии. Без пола pymorphy ошибается."""
+    if not words:
+        return None
+    patr = words[-1].lower()
+    if 'вич' in patr:                       # Владимирович/а/у/ем
+        return 'masc'
+    if 'вн' in patr or 'чн' in patr:        # Юрьевна/ы, Ильинична
+        return 'femn'
+    return None
+
+
+def _word_nomn(word, prefer_tags=(), gender=None):
+    """Слово → им.п. Предпочитает разборы с нужными граммемами (Surn/Name/Patr) и полом."""
+    if not _MORPH or not word:
+        return word
+    variants = _MORPH.parse(word)
+    if not variants:
+        return word
+    cand = variants
+    if prefer_tags:
+        tagged = [v for v in variants if any(t in v.tag for t in prefer_tags)]
+        if tagged:
+            cand = tagged
+    if gender:
+        gendered = [v for v in cand if gender in v.tag]
+        if gendered:
+            cand = gendered
+    # Слово уже в им.п. ед.ч. (несклоняемые фамилии «Шупик», «Азатян») — не трогаем
+    for v in cand:
+        if 'nomn' in v.tag and 'sing' in v.tag:
+            return word
+    best = cand[0]
+    nomn = best.inflect({'nomn'})
+    out = nomn.word if nomn else word
+    if word and word[0].isupper():
+        out = out[0].upper() + out[1:]
+    return out
+
+
 def fio_to_nominative(fio):
-    """«Башкировой Татьяны Юрьевны» → «Башкирова Татьяна Юрьевна»."""
+    """«Мирошева Алексея Владимировича» → «Мирошев Алексей Владимирович».
+    Фамилию (1-е слово) склоняем с учётом пола по отчеству; имя/отчество — по своим граммемам.
+    Также используется для роли («Генерального директора» → «Генеральный директор»)."""
     if not fio:
         return fio
-    return ' '.join(to_nominative(w) for w in fio.split())
+    words = fio.split()
+    gender = _detect_gender(words)
+    out = []
+    n = len(words)
+    for i, w in enumerate(words):
+        if i == 0 and n >= 2:
+            out.append(_word_nomn(w, prefer_tags=('Surn',), gender=gender))
+        elif i == n - 1 and n >= 3:
+            out.append(_word_nomn(w, prefer_tags=('Patr',), gender=gender))
+        elif n >= 3:
+            out.append(_word_nomn(w, prefer_tags=('Name',), gender=gender))
+        else:
+            out.append(_word_nomn(w))
+    return ' '.join(out)
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -554,16 +611,52 @@ def parse_contract_meta(doc):
     if m:
         place = m.group(1).strip().rstrip('.')
 
-    # Директор: «в лице <должность> <ФИО>, действующ<...> на основании <основание>»
+    # ── Директор ЗАКАЗЧИКА ──────────────────────────────────────────────
+    # КРИТИЧНО: первый блок преамбулы = Исполнитель (ИП Белавина О.В., Регина):
+    #   «...в лице Индивидуального предпринимателя Белавиной Ольги Владимировны
+    #    (далее – Исполнитель), действующий на основании лицензии...».
+    # Заказчик идёт ПОСЛЕ «..., с одной стороны, и ...». Отрезаем блок Исполнителя,
+    # иначе ловим Белавину вместо реального заказчика.
+    ogrnip = None
+    zone = text_top
+    m_split = re.search(r'с одной стороны', text_top)
+    if m_split:
+        zone = text_top[m_split.end():]
+    else:
+        m_exec = re.search(r'Исполнител', text_top)
+        if m_exec:
+            zone = text_top[m_exec.end():]
+
+    # Вариант ООО: «в лице [Генерального ]директора ФИО(род.п.), действующ... на основании Устава».
+    # Роль может начинаться с заглавной («Генерального директора») — раньше regex её терял.
     m = re.search(
-        r'в лице\s+([а-яё\s]+?)\s+([А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)?)\s*,?\s*действующ\w+\s+на основании\s+([А-Яа-яё\s]+?)(?:,|\.|$)',
-        text_top,
+        r'в лице\s+((?:[А-Яа-яё][а-яё]+\s+)*директор\w*)\s+'
+        r'([А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)?)'
+        r'\s*,?\s*действующ\w+\s+на\s+основании\s+([А-Яа-яё\s]+?)(?:,|\.|$)',
+        zone,
     )
     if m:
-        # Должность и ФИО в договорах в винительном/род.п. — приводим к именительному.
-        director_role = to_nominative(m.group(1).strip().capitalize())
+        # Роль и ФИО заказчика-ООО в род./вин. падеже → приводим к именительному.
+        role = fio_to_nominative(m.group(1).strip())
+        director_role = (role[0].upper() + role[1:]) if role else role
         director_name = fio_to_nominative(m.group(2).strip())
         acting_basis = m.group(3).strip().rstrip('.')
+    else:
+        # Вариант ИП: «и Индивидуальный предприниматель ФИО(им.п.), действующ...
+        #   на основании ОГРНИП: NNN». ФИО уже в ИМЕНИТЕЛЬНОМ — НЕ склоняем!
+        m = re.search(
+            r'Индивидуальн\w+\s+предпринимател\w+\s+'
+            r'([А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+)'
+            r'\s*,?\s*действующ\w+\s+на\s+основании\s+([^,\.]+)',
+            zone,
+        )
+        if m:
+            director_role = 'Индивидуальный предприниматель'
+            director_name = m.group(1).strip()
+            acting_basis = m.group(2).strip().rstrip('.')
+            mo = re.search(r'ОГРНИП[:\s]*(\d{13,15})', m.group(2))
+            if mo:
+                ogrnip = mo.group(1)
 
     return {
         'number': number,
@@ -572,6 +665,7 @@ def parse_contract_meta(doc):
         'director_name': director_name,
         'director_role': director_role,
         'acting_basis': acting_basis,
+        'ogrnip': ogrnip,
     }
 
 
@@ -636,6 +730,10 @@ def parse_one(docx_path):
     if not contract_meta['date'] and fname_date:
         contract_meta['date'] = fname_date
 
+    # ОГРНИП из преамбулы (заказчик-ИП) — если в реквизитах-таблице не нашёлся
+    if not client.get('ogrnip') and contract_meta.get('ogrnip'):
+        client['ogrnip'] = contract_meta['ogrnip']
+
     # 5. Подсказка из имени файла → доп. объект
     if fname_object and not objects:
         objects.append({'name': fname_object, 'address': None, 'source': 'filename'})
@@ -665,7 +763,10 @@ def main():
         return
 
     files = sorted(glob(os.path.join(SOURCE_DIR, '*.docx')))
-    print(f"Found {len(files)} .docx files", file=sys.stderr)
+    # Исключаем отменённые договоры («ОТМЕНА ...») — клиент недействующий, не импортируем
+    skipped = [f for f in files if os.path.basename(f).upper().startswith('ОТМЕНА')]
+    files = [f for f in files if not os.path.basename(f).upper().startswith('ОТМЕНА')]
+    print(f"Found {len(files)} .docx files (skipped {len(skipped)} ОТМЕНА)", file=sys.stderr)
     results = []
     for f in files:
         r = parse_one(f)
