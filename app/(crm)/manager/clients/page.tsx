@@ -160,7 +160,8 @@ export default async function ClientsListPage({
         </CyberpunkCard>
       ) : (
         <CyberpunkCard variant="default" hoverEffect={false} className="overflow-hidden">
-          <table className="w-full text-sm">
+          {/* Desktop: таблица */}
+          <table className="hidden md:table w-full text-sm">
             <thead className="bg-bg-tertiary border-b border-gray-200">
               <tr className="text-left">
                 <Th>Название</Th>
@@ -201,6 +202,32 @@ export default async function ClientsListPage({
               ))}
             </tbody>
           </table>
+
+          {/* Mobile: карточки */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {rows.map((c) => (
+              <Link
+                key={c.id}
+                href={`/manager/clients/${c.id}`}
+                className="block p-4 hover:bg-poison-green/5 active:bg-poison-green/10 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <span className="font-medium text-content-primary line-clamp-2">{c.shortName}</span>
+                  <ClientStatusBadge status={c.status} />
+                </div>
+                <div className="flex items-center flex-wrap gap-2 mb-1.5">
+                  <ClientTypeBadge type={c.type} />
+                  {c.inn && (
+                    <span className="font-mono text-xs text-content-muted">ИНН {c.inn}</span>
+                  )}
+                </div>
+                <div className="text-xs text-content-secondary">
+                  {c.phone ?? '—'}
+                  {c.email && <span className="text-content-muted"> · {c.email}</span>}
+                </div>
+              </Link>
+            ))}
+          </div>
         </CyberpunkCard>
       )}
 

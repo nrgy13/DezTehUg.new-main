@@ -61,7 +61,8 @@ export function PriceItemsTable({
         </CyberpunkButton>
       </div>
 
-      <table className="w-full text-sm">
+      {/* Desktop: таблица */}
+      <table className="hidden md:table w-full text-sm">
         <thead className="bg-bg-secondary/50 border-b border-gray-200">
           <tr className="text-[10px] uppercase font-orbitron tracking-wider text-content-muted">
             <th className="text-left px-4 py-2">Объект</th>
@@ -108,13 +109,6 @@ export function PriceItemsTable({
               </tr>
             );
           })}
-          {items.length === 0 && (
-            <tr>
-              <td colSpan={9} className="px-4 py-10 text-center text-content-muted">
-                Нет прайс-позиций. Нажми «Добавить позицию» чтобы начать.
-              </td>
-            </tr>
-          )}
         </tbody>
         {items.length > 0 && (
           <tfoot className="bg-bg-secondary/50 border-t border-gray-200">
@@ -134,6 +128,59 @@ export function PriceItemsTable({
           </tfoot>
         )}
       </table>
+
+      {/* Mobile: карточки */}
+      <div className="md:hidden divide-y divide-gray-100">
+        {items.map((it) => {
+          const obj = objects.find((o) => o.id === it.objectId);
+          const svc = services.find((s) => s.id === it.serviceId);
+          const name = it.customName || svc?.name || '—';
+          return (
+            <div key={it.id} className="p-3">
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <span className="font-medium text-content-primary">{name}</span>
+                <button
+                  onClick={() => setEditing(it)}
+                  className="p-1 -mt-0.5 -mr-0.5 text-content-muted hover:text-neon-orange shrink-0"
+                  aria-label="Редактировать"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </div>
+              {obj && <div className="text-xs text-content-muted mb-1">{obj.name}</div>}
+              <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-content-secondary mb-1.5">
+                <span>{it.areaM2} м²</span>
+                {it.method && <span>{it.method}</span>}
+                {it.frequency && <span>{it.frequency}</span>}
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-content-muted">
+                  без НДС {fmt(it.priceNoVat)} · НДС {Number(it.vatRate)}%
+                </span>
+                <span className="text-sm font-medium text-content-primary">
+                  {fmt(it.priceWithVat)} ₽
+                </span>
+              </div>
+            </div>
+          );
+        })}
+        {items.length > 0 && (
+          <div className="flex items-center justify-between p-3 bg-bg-secondary/50">
+            <span className="text-xs uppercase font-orbitron tracking-wider text-content-muted">
+              Итого
+            </span>
+            <span className="font-orbitron font-bold text-content-primary">
+              {fmt(totalWithVat)} ₽
+            </span>
+          </div>
+        )}
+      </div>
+
+      {items.length === 0 && (
+        <div className="px-4 py-10 text-center text-content-muted">
+          Нет прайс-позиций. Нажми «Добавить позицию» чтобы начать.
+        </div>
+      )}
 
       {(adding || editing) && (
         <PriceItemDialog
@@ -233,7 +280,7 @@ function PriceItemDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="objectId">Объект</Label>
               <select
@@ -282,7 +329,7 @@ function PriceItemDialog({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <Label htmlFor="areaM2">Площадь, м²</Label>
               <NeonInput
@@ -317,7 +364,7 @@ function PriceItemDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <Label htmlFor="priceNoVat">Цена без НДС, ₽</Label>
               <NeonInput

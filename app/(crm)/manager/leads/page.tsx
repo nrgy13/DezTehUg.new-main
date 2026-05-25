@@ -197,7 +197,8 @@ export default async function LeadsListPage({
         </CyberpunkCard>
       ) : (
         <CyberpunkCard variant="default" hoverEffect={false} className="overflow-hidden">
-          <table className="w-full text-sm">
+          {/* Desktop: таблица */}
+          <table className="hidden md:table w-full text-sm">
             <thead className="bg-bg-tertiary border-b border-gray-200">
               <tr className="text-left">
                 <Th>Контакт</Th>
@@ -246,6 +247,43 @@ export default async function LeadsListPage({
               ))}
             </tbody>
           </table>
+
+          {/* Mobile: карточки */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {rows.map((l) => (
+              <Link
+                key={l.id}
+                href={`/manager/leads/${l.id}`}
+                className="block p-4 hover:bg-poison-green/5 active:bg-poison-green/10 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <span className="font-medium text-content-primary line-clamp-1">
+                    {l.contactName ?? '— без имени —'}
+                  </span>
+                  <LeadStatusBadge status={l.status} />
+                </div>
+                <div className="text-xs text-content-secondary mb-1">
+                  {l.contactPhone ?? '—'}
+                  {l.contactEmail && <span className="text-content-muted"> · {l.contactEmail}</span>}
+                </div>
+                {l.requestedAddress && (
+                  <div className="text-xs text-content-muted mb-1.5 line-clamp-2">
+                    {l.requestedAddress}
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-2">
+                  <DaysCell status={l.status} days={daysMap[l.id] ?? 0} />
+                  <span className="text-xs text-content-muted">{dateFmt.format(l.createdAt)}</span>
+                </div>
+                {(l.channel || l.managerName) && (
+                  <div className="flex items-center gap-2 mt-1.5 text-[11px] text-content-muted">
+                    {l.channel && <span className="font-mono">{l.channel}</span>}
+                    {l.managerName && <span className="ml-auto truncate">мен.: {l.managerName}</span>}
+                  </div>
+                )}
+              </Link>
+            ))}
+          </div>
         </CyberpunkCard>
       )}
 

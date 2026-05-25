@@ -278,13 +278,13 @@ export default async function DealDetailPage({
         <DealStatusControl dealId={deal.id} status={deal.status} />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
+      {/* Tabs — на мобиле горизонтальный скролл (6 табов не влезают по ширине) */}
+      <div className="flex gap-2 border-b border-gray-200 overflow-x-auto">
         {TABS.map((t) => (
           <Link
             key={t.key}
             href={`/manager/deals/${id}?tab=${t.key}`}
-            className={`px-3 py-2 text-xs font-orbitron uppercase tracking-wider border-b-2 -mb-[1px] ${
+            className={`px-3 py-2 text-xs font-orbitron uppercase tracking-wider border-b-2 -mb-[1px] whitespace-nowrap ${
               tab === t.key
                 ? 'border-neon-orange text-neon-orange'
                 : 'border-transparent text-content-muted hover:text-content-primary'
@@ -369,7 +369,8 @@ export default async function DealDetailPage({
 
       {tab === 'history' && (
         <CyberpunkCard variant="default" hoverEffect={false} className="p-0 overflow-hidden">
-          <table className="w-full text-sm">
+          {/* Desktop: таблица */}
+          <table className="hidden md:table w-full text-sm">
             <thead className="bg-bg-secondary border-b border-gray-200">
               <tr className="text-xs uppercase font-orbitron tracking-wider text-content-muted">
                 <th className="text-left px-4 py-3 w-44">Когда</th>
@@ -392,15 +393,29 @@ export default async function DealDetailPage({
                   </td>
                 </tr>
               ))}
-              {history.length === 0 && (
-                <tr>
-                  <td colSpan={2} className="px-4 py-8 text-center text-content-muted">
-                    История пуста.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
+
+          {/* Mobile: карточки */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {history.map((h) => (
+              <div key={h.id} className="p-3">
+                <div className="text-[11px] text-content-muted mb-0.5">
+                  {new Date(h.createdAt).toLocaleString('ru-RU')}
+                </div>
+                <div className="font-mono text-xs text-content-secondary">{h.action}</div>
+                {h.changesJson != null ? (
+                  <pre className="mt-1 text-[10px] text-content-muted whitespace-pre-wrap break-all">
+                    {JSON.stringify(h.changesJson, null, 2)}
+                  </pre>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          {history.length === 0 && (
+            <div className="px-4 py-8 text-center text-content-muted">История пуста.</div>
+          )}
         </CyberpunkCard>
       )}
     </div>

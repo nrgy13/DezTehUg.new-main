@@ -52,7 +52,9 @@ export default async function DealsBoardPage() {
             Канбан сделок
           </h1>
           <p className="text-content-muted mt-1 text-sm">
-            Перетаскивай сделки между колонками для смены статуса. Изменения применяются мгновенно.
+            <span className="hidden lg:inline">Перетаскивай сделки между колонками для смены статуса.</span>
+            <span className="lg:hidden">Меняй статус сделки кнопкой «Переместить» на карточке.</span>{' '}
+            Изменения применяются мгновенно.
           </p>
         </div>
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-1">

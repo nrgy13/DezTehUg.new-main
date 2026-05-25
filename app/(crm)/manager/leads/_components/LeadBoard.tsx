@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import type { LeadStatus, LeadLostReason } from '@/lib/db/schema/leads';
 import { KanbanColumn, type ColumnDef } from './KanbanColumn';
 import { LeadCard, type BoardLead } from './LeadCard';
+import { MobileLeadBoard } from './MobileLeadBoard';
 import { LostReasonModal } from './LostReasonModal';
 import { ConvertOnDropModal } from './ConvertOnDropModal';
 import { ProposalDialog, type ProposalSubmitInput } from './ProposalDialog';
@@ -101,13 +102,10 @@ export function LeadBoard({
     setActiveId(String(e.active.id));
   };
 
-  const handleDragEnd = (e: DragEndEvent) => {
-    setActiveId(null);
-    const { active, over } = e;
-    if (!over) return;
-
-    const leadId = String(active.id);
-    const newStatus = over.id as LeadStatus;
+  // Единая точка смены статуса лида — её зовут и drag (desktop), и dropdown
+  // «Переместить» в мобильном борде. Спец-переходы (lost / convert /
+  // proposal) открывают свои модалки, остальные применяются оптимистично.
+  const requestStatusChange = (leadId: string, newStatus: LeadStatus) => {
     const lead = leads.find((l) => l.id === leadId);
     if (!lead || lead.status === newStatus) return;
 
@@ -158,6 +156,13 @@ export function LeadBoard({
       toast.success('Статус обновлён');
       router.refresh();
     });
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveId(null);
+    const { active, over } = e;
+    if (!over) return;
+    requestStatusChange(String(active.id), over.id as LeadStatus);
   };
 
   const closePending = () => setPendingDrop(null);
@@ -262,21 +267,36 @@ export function LeadBoard({
   };
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 pb-4">
-        {COLUMNS.map((c) => (
-          <KanbanColumn
-            key={c.id}
-            column={c}
-            leads={grouped[c.id]}
-            summary={columnSummaries?.[c.id]}
-          />
-        ))}
+    <>
+      {/* Desktop (lg+): drag-n-drop канбан в колонки */}
+      <div className="hidden lg:block">
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-7 gap-2 pb-4">
+            {COLUMNS.map((c) => (
+              <KanbanColumn
+                key={c.id}
+                column={c}
+                leads={grouped[c.id]}
+                summary={columnSummaries?.[c.id]}
+              />
+            ))}
+          </div>
+
+          <DragOverlay dropAnimation={null}>
+            {activeLead ? <LeadCard lead={activeLead} isOverlay /> : null}
+          </DragOverlay>
+        </DndContext>
       </div>
 
-      <DragOverlay dropAnimation={null}>
-        {activeLead ? <LeadCard lead={activeLead} isOverlay /> : null}
-      </DragOverlay>
+      {/* Mobile (<lg): вертикальные секции + dropdown смены статуса */}
+      <div className="lg:hidden">
+        <MobileLeadBoard
+          columns={COLUMNS}
+          grouped={grouped}
+          summaries={columnSummaries}
+          onMove={requestStatusChange}
+        />
+      </div>
 
       <LostReasonModal
         open={pendingDrop?.kind === 'lost'}
@@ -300,6 +320,6 @@ export function LeadBoard({
         onSubmit={submitProposal}
         isPending={isPending}
       />
-    </DndContext>
+    </>
   );
 }

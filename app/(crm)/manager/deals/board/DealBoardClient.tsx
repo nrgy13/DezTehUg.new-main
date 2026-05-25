@@ -15,7 +15,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { Search, X, Wrench, User as UserIcon, Calendar as CalendarIcon, AlertTriangle } from 'lucide-react';
+import { Search, X, Wrench, User as UserIcon, Calendar as CalendarIcon, AlertTriangle, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -27,6 +27,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import type { DealStatus } from '@/lib/db/schema/deals';
 import { updateDealStatus } from '../actions';
 
@@ -186,23 +194,25 @@ export function DealBoardClient({ initialDeals }: { initialDeals: BoardDeal[] })
     });
   }
 
-  function handleDragEnd(e: DragEndEvent) {
-    setActiveId(null);
-    const { active, over } = e;
-    if (!over) return;
-    const dealId = String(active.id);
-    const newStatus = over.id as DealStatus;
+  // Единая точка смены статуса — её зовут и drag (desktop), и dropdown
+  // «Переместить» в мобильном борде. Деструктивные статусы (terminated/
+  // completed) спрашивают подтверждение, чтобы случайное действие не закрыло/
+  // не расторгло сделку (откатить можно только сменой статуса вручную).
+  function requestStatusChange(dealId: string, newStatus: DealStatus) {
     const deal = deals.find((d) => d.id === dealId);
     if (!deal || deal.status === newStatus) return;
-
-    // Деструктивные статусы — спросить подтверждение, чтобы случайный drop
-    // не закрыл/расторг сделку (откатить можно только сменой статуса вручную).
     if (DESTRUCTIVE_STATUSES.has(newStatus)) {
       setPendingMove({ deal, newStatus });
       return;
     }
-
     applyMove(deal, newStatus);
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    setActiveId(null);
+    const { active, over } = e;
+    if (!over) return;
+    requestStatusChange(String(active.id), over.id as DealStatus);
   }
 
   return (
@@ -233,17 +243,25 @@ export function DealBoardClient({ initialDeals }: { initialDeals: BoardDeal[] })
         </div>
       </div>
 
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {COLUMNS.map((c) => (
-            <DealColumn key={c.id} column={c} deals={grouped[c.id]} />
-          ))}
-        </div>
+      {/* Desktop (lg+): drag-n-drop канбан в колонки */}
+      <div className="hidden lg:block">
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-6 gap-3">
+            {COLUMNS.map((c) => (
+              <DealColumn key={c.id} column={c} deals={grouped[c.id]} />
+            ))}
+          </div>
 
-        <DragOverlay dropAnimation={null}>
-          {activeDeal ? <DealCard deal={activeDeal} isOverlay /> : null}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay dropAnimation={null}>
+            {activeDeal ? <DealCard deal={activeDeal} isOverlay /> : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
+
+      {/* Mobile (<lg): вертикальные секции + dropdown смены статуса */}
+      <div className="lg:hidden">
+        <MobileDealBoard columns={COLUMNS} grouped={grouped} onMove={requestStatusChange} />
+      </div>
 
       <AlertDialog
         open={!!pendingMove}
@@ -398,6 +416,20 @@ function DealCard({
         ${isOverlay ? 'shadow-xl ring-2 ring-neon-orange/40 rotate-1 scale-105' : ''}
       `}
     >
+      <DealCardBody deal={deal} />
+    </div>
+  );
+}
+
+/**
+ * Презентационное тело карточки сделки (без drag) — переиспользуется
+ * в desktop-канбане (внутри draggable DealCard) и в мобильном вертикальном
+ * списке (MobileDealBoard). Номер договора — ссылка на детальную; на десктопе
+ * stopPropagation не даёт клику по ссылке стартовать drag.
+ */
+function DealCardBody({ deal }: { deal: BoardDeal }) {
+  return (
+    <>
       <div className="flex items-start justify-between gap-2 mb-1">
         <Link
           href={`/manager/deals/${deal.id}`}
@@ -434,7 +466,7 @@ function DealCard({
           </span>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -447,4 +479,108 @@ function formatPeriod(start: string | null, end: string | null): string {
     return `${fmt(start)} — ${fmt(end)}`;
   }
   return start ? `с ${fmt(start)}` : `до ${fmt(end!)}`;
+}
+
+// ─── Mobile board (<lg) ──────────────────────────────────────
+// Колонки → вертикальные секции по статусам. Статус меняется через dropdown
+// «Переместить» (зовёт ту же requestStatusChange, что и drag), деструктивные
+// переходы открывают тот же confirm-диалог.
+function MobileDealBoard({
+  columns,
+  grouped,
+  onMove,
+}: {
+  columns: ColumnDef[];
+  grouped: Record<DealStatus, BoardDeal[]>;
+  onMove: (dealId: string, newStatus: DealStatus) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      {columns.map((col) => {
+        const list = grouped[col.id] ?? [];
+        return (
+          <section key={col.id}>
+            <header
+              className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border-b-2"
+              style={{ borderColor: col.accent, backgroundColor: col.bgWash }}
+            >
+              <div className="min-w-0">
+                <div
+                  className="text-xs font-orbitron font-semibold uppercase tracking-wider truncate"
+                  style={{ color: col.textColor }}
+                >
+                  {col.label}
+                </div>
+                <div className="text-[10px] text-content-muted truncate">{col.description}</div>
+              </div>
+              <span
+                className="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 rounded text-[11px] font-orbitron font-bold tabular-nums shrink-0"
+                style={{ backgroundColor: col.accent, color: '#ffffff' }}
+              >
+                {list.length}
+              </span>
+            </header>
+
+            <div className="mt-1.5 space-y-1.5">
+              {list.length === 0 ? (
+                <div className="text-[11px] text-content-muted/60 italic px-2 py-2">пусто</div>
+              ) : (
+                list.map((deal) => (
+                  <MobileDealRow key={deal.id} deal={deal} columns={columns} onMove={onMove} />
+                ))
+              )}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function MobileDealRow({
+  deal,
+  columns,
+  onMove,
+}: {
+  deal: BoardDeal;
+  columns: ColumnDef[];
+  onMove: (dealId: string, newStatus: DealStatus) => void;
+}) {
+  const accent = columns.find((c) => c.id === deal.status)?.accent ?? '#94a3b8';
+  return (
+    <div
+      className="bg-white rounded-lg border border-gray-200 border-l-[3px] p-2.5"
+      style={{ borderLeftColor: accent }}
+    >
+      <DealCardBody deal={deal} />
+      <div className="mt-2 pt-2 border-t border-gray-100 flex justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-content-secondary bg-bg-secondary border border-gray-200 hover:border-neon-orange/40 active:bg-gray-100"
+            >
+              Переместить
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Переместить в</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {columns
+              .filter((c) => c.id !== deal.status)
+              .map((c) => (
+                <DropdownMenuItem
+                  key={c.id}
+                  onClick={() => onMove(deal.id, c.id)}
+                  className="cursor-pointer"
+                >
+                  {c.label}
+                </DropdownMenuItem>
+              ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
 }

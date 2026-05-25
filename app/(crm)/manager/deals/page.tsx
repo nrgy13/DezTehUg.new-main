@@ -116,8 +116,8 @@ export default async function DealsListPage({
         </div>
       </div>
 
-      {/* Tabs по статусам */}
-      <div className="flex flex-wrap gap-2 border-b border-gray-200">
+      {/* Tabs по статусам — на мобиле горизонтальный скролл, на desktop перенос */}
+      <div className="flex gap-2 border-b border-gray-200 overflow-x-auto md:flex-wrap">
         <StatusTab
           href={buildHref(sp, { status: 'all', page: undefined })}
           active={!filterStatus}
@@ -136,7 +136,7 @@ export default async function DealsListPage({
       </div>
 
       {/* Поиск + mine */}
-      <form className="flex gap-2" method="get">
+      <form className="flex flex-col sm:flex-row gap-2" method="get">
         {filterStatus && <input type="hidden" name="status" value={filterStatus} />}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
@@ -168,7 +168,8 @@ export default async function DealsListPage({
 
       {/* Список */}
       <CyberpunkCard variant="default" hoverEffect={false} className="p-0 overflow-hidden">
-        <table className="w-full text-sm">
+        {/* Desktop: таблица */}
+        <table className="hidden md:table w-full text-sm">
           <thead className="bg-bg-secondary border-b border-gray-200">
             <tr className="text-xs uppercase font-orbitron tracking-wider text-content-muted">
               <th className="text-left px-4 py-3 w-44">Номер</th>
@@ -210,19 +211,45 @@ export default async function DealsListPage({
                 </td>
               </tr>
             ))}
-            {list.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-content-muted">
-                  <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  <p>Сделок пока нет.</p>
-                  <p className="text-xs mt-1">
-                    Создай сделку из карточки клиента или конвертируй лид в воронке.
-                  </p>
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
+
+        {/* Mobile: карточки */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {list.map((d) => (
+            <Link
+              key={d.id}
+              href={`/manager/deals/${d.id}`}
+              className="block p-4 hover:bg-bg-secondary/50 active:bg-bg-secondary"
+            >
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="font-mono text-xs text-neon-orange font-semibold truncate">
+                  {d.contractNumber}
+                </span>
+                <DealStatusBadge status={d.status} />
+              </div>
+              <div className="text-sm text-content-primary mb-1.5 line-clamp-2">
+                {d.clientShortName ?? <span className="text-content-muted">— без клиента —</span>}
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-content-muted">{formatDate(d.contractDate)}</span>
+                <span className="text-content-secondary font-medium">
+                  {d.totalAmount ? `${formatMoney(d.totalAmount)} ₽` : '—'}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        {list.length === 0 && (
+          <div className="px-4 py-12 text-center text-content-muted">
+            <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            <p>Сделок пока нет.</p>
+            <p className="text-xs mt-1">
+              Создай сделку из карточки клиента или конвертируй лид в воронке.
+            </p>
+          </div>
+        )}
       </CyberpunkCard>
 
       {totalPages > 1 && (
@@ -266,7 +293,7 @@ function StatusTab({
   return (
     <Link
       href={href}
-      className={`px-3 py-2 text-xs font-orbitron uppercase tracking-wider border-b-2 -mb-[1px] ${
+      className={`px-3 py-2 text-xs font-orbitron uppercase tracking-wider border-b-2 -mb-[1px] whitespace-nowrap ${
         active
           ? 'border-neon-orange text-neon-orange'
           : 'border-transparent text-content-muted hover:text-content-primary'

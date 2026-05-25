@@ -76,7 +76,8 @@ export default async function LeadsBoardPage() {
           </h1>
           <p className="text-content-muted mt-1 text-sm">
             Всего: <span className="font-semibold text-content-primary">{initialLeads.length}</span>{' '}
-            · Перетаскивай карточки между колонками — статус меняется сам.
+            · <span className="hidden lg:inline">Перетаскивай карточки между колонками — статус меняется сам.</span>
+            <span className="lg:hidden">Меняй статус кнопкой «Переместить» на карточке.</span>
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

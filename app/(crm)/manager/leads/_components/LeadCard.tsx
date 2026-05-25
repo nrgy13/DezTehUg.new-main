@@ -56,6 +56,20 @@ export function LeadCard({ lead, isOverlay = false }: { lead: BoardLead; isOverl
           : 'hover:shadow-md hover:border-poison-green/40 cursor-grab active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-neon-orange/40'
       }`}
     >
+      <LeadCardBody lead={lead} />
+    </div>
+  );
+}
+
+/**
+ * Презентационное тело карточки лида (без drag/click) — переиспользуется
+ * в desktop-канбане (внутри draggable LeadCard) и в мобильном вертикальном
+ * списке (MobileLeadBoard). Имя подсвечивается на group-hover, поэтому
+ * родитель должен иметь класс `group`.
+ */
+export function LeadCardBody({ lead }: { lead: BoardLead }) {
+  return (
+    <>
       <div className="flex items-start justify-between gap-1 mb-0.5">
         <div className="font-medium text-xs text-content-primary group-hover:text-neon-orange transition-colors line-clamp-1 flex-1">
           {lead.contactName ?? '— без имени —'}
@@ -98,7 +112,7 @@ export function LeadCard({ lead, isOverlay = false }: { lead: BoardLead; isOverl
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
