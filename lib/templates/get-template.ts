@@ -58,6 +58,7 @@ const DEFAULT_FILENAME: Record<DocumentType, string> = {
   act_inspection: 'inspection-report.docx',
   invoice: 'invoice.docx',
   commercial_offer: 'commercial-offer.docx',
+  upd: 'upd.docx',
   other: 'contract-services.docx', // не должно использоваться, но не падаем
 };
 

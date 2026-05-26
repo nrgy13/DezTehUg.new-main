@@ -56,7 +56,7 @@ export function LeadStatusBadge({ status }: { status: LeadStatus }) {
   const s = STATUS_STYLE[status];
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-orbitron font-semibold uppercase tracking-wider border ${s.bg} ${s.text} ${s.border}`}
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-orbitron font-medium uppercase tracking-tight border ${s.bg} ${s.text} ${s.border}`}
     >
       {s.label}
     </span>

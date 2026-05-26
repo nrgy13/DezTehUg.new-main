@@ -19,6 +19,7 @@ export const DOCUMENT_PREFIX: Record<DocumentType, string> = {
   act_inspection: 'АО',
   invoice: 'СЧ',
   commercial_offer: 'КП',
+  upd: 'УПД',
   other: 'ДОК',
 };
 

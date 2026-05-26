@@ -44,6 +44,7 @@ export const priceItemFormSchema = z
     customName: z.string().max(255).optional().or(z.literal('')),
 
     areaM2: z.coerce.number().int().min(0).max(1_000_000),
+    unit: z.enum(['m2', 'pcs']).default('m2'),
     method: z.string().max(128).optional().or(z.literal('')),
     frequency: z.string().max(64).optional().or(z.literal('')),
 

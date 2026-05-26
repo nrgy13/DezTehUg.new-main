@@ -25,6 +25,7 @@ const TYPE_LABEL: Record<DocumentType, string> = {
   act_inspection: 'Акт обследования',
   invoice: 'Счёт',
   commercial_offer: 'Коммерческое предложение',
+  upd: 'УПД',
   other: 'Другой документ',
 };
 

@@ -25,6 +25,7 @@ export const documentTypeEnum = pgEnum('document_type', [
   'act_inspection',    // акт обследования
   'invoice',           // счёт
   'commercial_offer',  // КП
+  'upd',               // Универсальный передаточный документ (Sprint 8)
   'other',
 ]);
 

@@ -99,7 +99,7 @@ export default async function ReportsPage({
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+          <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
             Отчёты
           </h1>
           <p className="text-content-muted mt-1 text-sm">

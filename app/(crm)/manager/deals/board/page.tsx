@@ -48,7 +48,7 @@ export default async function DealsBoardPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+          <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
             Канбан сделок
           </h1>
           <p className="text-content-muted mt-1 text-sm">

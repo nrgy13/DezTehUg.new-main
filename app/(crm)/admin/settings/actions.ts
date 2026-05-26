@@ -12,6 +12,10 @@ import {
   type StageThresholds,
   type ThresholdStatus,
 } from '@/lib/notifications/thresholds';
+import {
+  saveAccountantEmail,
+  clearAccountantEmail,
+} from '@/lib/notifications/accountant';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -82,6 +86,41 @@ export async function resetNotificationThresholds(): Promise<Result> {
 
   await resetThresholds();
   await logActivity(actor.id, 'settings.notification_thresholds.reset');
+  revalidatePath('/admin/settings');
+  return { ok: true };
+}
+
+/**
+ * Sprint 8: сохранить email бухгалтера ДезТехЮг.
+ * На этот email уходят счета/УПД по кнопке «Отправить буху».
+ */
+export async function updateAccountantEmail(email: string): Promise<Result> {
+  const actor = await requireAdmin();
+  if (!actor) return { ok: false, error: 'Только админ может менять настройки' };
+
+  const trimmed = email.trim();
+  if (!trimmed) return { ok: false, error: 'Email не может быть пустым' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return { ok: false, error: 'Невалидный формат email' };
+  }
+
+  try {
+    await saveAccountantEmail(trimmed, actor.id);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Не удалось сохранить' };
+  }
+
+  await logActivity(actor.id, 'settings.accountant_email.update', { email: trimmed });
+  revalidatePath('/admin/settings');
+  return { ok: true };
+}
+
+export async function resetAccountantEmail(): Promise<Result> {
+  const actor = await requireAdmin();
+  if (!actor) return { ok: false, error: 'Только админ может менять настройки' };
+
+  await clearAccountantEmail();
+  await logActivity(actor.id, 'settings.accountant_email.reset');
   revalidatePath('/admin/settings');
   return { ok: true };
 }

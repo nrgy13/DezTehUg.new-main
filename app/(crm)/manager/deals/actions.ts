@@ -14,6 +14,7 @@ import { users } from '@/lib/db/schema/users';
 import { documents } from '@/lib/db/schema/documents';
 import { activityLog } from '@/lib/db/schema/activity';
 import { auth } from '@/lib/auth';
+import { executeDocumentDeletion } from '@/lib/documents/deletion';
 import {
   dealFormSchema,
   priceItemFormSchema,
@@ -483,6 +484,7 @@ export async function addPriceItem(
       serviceId: data.serviceId ?? null,
       customName: emptyToNull(data.customName ?? null),
       areaM2: data.areaM2,
+      unit: data.unit,
       method: emptyToNull(data.method ?? null),
       frequency: emptyToNull(data.frequency ?? null),
       priceNoVat: String(data.priceNoVat),
@@ -531,6 +533,7 @@ export async function updatePriceItem(
       serviceId: data.serviceId ?? null,
       customName: emptyToNull(data.customName ?? null),
       areaM2: data.areaM2,
+      unit: data.unit,
       method: emptyToNull(data.method ?? null),
       frequency: emptyToNull(data.frequency ?? null),
       priceNoVat: String(data.priceNoVat),
@@ -575,7 +578,50 @@ function round2(n: number): number {
 }
 
 // =============================================================
-// DOCUMENTS — request/cancel deletion (Sprint 5 эпик B)
+// DOCUMENTS — прямое удаление (Sprint 8: Регина = admin по части документов)
+// =============================================================
+
+/**
+ * Прямое удаление документа manager или admin. Без approval-flow.
+ * Удаляет файлы из storage + запись в БД через lib/documents/deletion.
+ * Sprint 8: Регина получила прямые права (см. CLAUDE.md).
+ */
+export async function deleteDocument(id: string): Promise<Result> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Нет доступа' };
+
+  const rows = await db
+    .select({
+      id: documents.id,
+      number: documents.number,
+      type: documents.type,
+      dealId: documents.dealId,
+      clientId: documents.clientId,
+    })
+    .from(documents)
+    .where(eq(documents.id, id))
+    .limit(1);
+  if (rows.length === 0) return { ok: false, error: 'Документ не найден' };
+  const doc = rows[0];
+
+  const result = await executeDocumentDeletion(id);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  await logActivity(actor.id, 'document.delete', doc.dealId ?? doc.clientId ?? id, {
+    documentId: id,
+    number: doc.number,
+    type: doc.type,
+  });
+
+  if (doc.dealId) revalidatePath(`/manager/deals/${doc.dealId}`);
+  if (doc.clientId) revalidatePath(`/manager/clients/${doc.clientId}`);
+  revalidatePath('/manager/documents');
+
+  return { ok: true, data: undefined };
+}
+
+// =============================================================
+// DOCUMENTS — request/cancel deletion (Sprint 5 эпик B — legacy)
 // =============================================================
 
 /**

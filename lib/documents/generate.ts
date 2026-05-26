@@ -15,6 +15,8 @@ export type GenerateDocumentInput = {
   format: 'docx' | 'pdf' | 'both';
   overrides?: Record<string, unknown>;
   actorId: string;
+  /** Sprint 8: если задано — генерим только эти позиции прайса. Иначе все. */
+  priceItemIds?: string[];
 };
 
 export type GenerateDocumentResult = {
@@ -54,6 +56,7 @@ export async function generateDocument(
     documentNumber,
     documentDate: dateIso,
     overrides: input.overrides,
+    priceItemIds: input.priceItemIds,
   });
 
   const tpl = await getActiveTemplate(input.type);
@@ -119,6 +122,7 @@ function typeLabel(type: DocumentType): string {
       act_inspection: 'Акт обследования',
       invoice: 'Счёт',
       commercial_offer: 'КП',
+      upd: 'УПД',
       other: 'Документ',
     } as Record<DocumentType, string>
   )[type] ?? 'Документ';

@@ -27,7 +27,7 @@ export default async function ManagerDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
           Дашборд менеджера
         </h1>
         <p className="text-content-muted mt-1 text-sm">
@@ -197,7 +197,7 @@ function StatCard({
           <Icon className="w-4 h-4 text-content-muted group-hover:text-poison-green transition-colors" />
         </div>
         <div className="flex items-end justify-between gap-2">
-          <div className={`text-3xl font-orbitron font-bold ${ACCENT_CLASSES[accent]}`}>
+          <div className={`text-2xl font-orbitron font-bold ${ACCENT_CLASSES[accent]}`}>
             {value}
           </div>
           <ArrowRight className="w-4 h-4 text-content-muted/40 group-hover:text-poison-green group-hover:translate-x-0.5 transition-all" />

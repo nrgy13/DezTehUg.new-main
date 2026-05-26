@@ -31,7 +31,7 @@ export default async function EditClientPage({
           <ChevronLeft className="w-4 h-4" />
           К карточке клиента
         </Link>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
           {client.shortName}
         </h1>
         <p className="text-sm text-content-muted mt-1">Редактирование</p>

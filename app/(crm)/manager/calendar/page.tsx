@@ -16,7 +16,7 @@ export default async function ManagerCalendarPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+      <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
         Календарь выездов
       </h1>
       <CalendarFull events={serialized} dealHrefBase="/manager/deals" canDragDates />

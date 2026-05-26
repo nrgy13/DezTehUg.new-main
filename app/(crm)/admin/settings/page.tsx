@@ -1,4 +1,4 @@
-import { Building2, FileSignature, Banknote, Phone, Lock, Code, Bell } from 'lucide-react';
+import { Building2, FileSignature, Banknote, Phone, Lock, Code, Bell, Calculator } from 'lucide-react';
 import { eq } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth/helpers';
 import { CONTRACT_PROVIDER as P } from '@/lib/contract-provider';
@@ -6,7 +6,9 @@ import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { db } from '@/lib/db';
 import { appSettings } from '@/lib/db/schema/settings';
 import { getThresholds, defaultThresholds, THRESHOLDS_KEY } from '@/lib/notifications/thresholds';
+import { getAccountantEmail } from '@/lib/notifications/accountant';
 import { NotificationThresholdsSection } from './NotificationThresholdsSection';
+import { AccountantEmailSection } from './AccountantEmailSection';
 
 export const metadata = { title: 'Настройки — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -14,7 +16,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminSettingsPage() {
   await requireRole('admin');
 
-  const [thresholds, defaults, dbOverride] = await Promise.all([
+  const [thresholds, defaults, dbOverride, accountantEmail] = await Promise.all([
     getThresholds(),
     Promise.resolve(defaultThresholds()),
     db
@@ -22,6 +24,7 @@ export default async function AdminSettingsPage() {
       .from(appSettings)
       .where(eq(appSettings.key, THRESHOLDS_KEY))
       .limit(1),
+    getAccountantEmail(),
   ]);
   const isOverridden = dbOverride.length > 0;
 
@@ -84,6 +87,12 @@ export default async function AdminSettingsPage() {
             defaults={defaults}
             isOverridden={isOverridden}
           />
+        </div>
+      </Section>
+
+      <Section icon={Calculator} title="Email бухгалтера">
+        <div className="px-4 py-3">
+          <AccountantEmailSection initial={accountantEmail} />
         </div>
       </Section>
 

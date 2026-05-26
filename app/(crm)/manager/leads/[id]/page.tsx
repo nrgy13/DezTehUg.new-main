@@ -73,7 +73,7 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
         </Link>
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+            <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
               {lead.contactName ?? 'Без имени'}
             </h1>
             <div className="flex items-center gap-2 mt-2 flex-wrap">

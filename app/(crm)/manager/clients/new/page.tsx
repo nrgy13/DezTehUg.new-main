@@ -19,7 +19,7 @@ export default async function NewClientPage() {
           <ChevronLeft className="w-4 h-4" />
           К списку клиентов
         </Link>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
           Новый клиент
         </h1>
       </div>

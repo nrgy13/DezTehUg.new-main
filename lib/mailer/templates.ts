@@ -324,6 +324,9 @@ export function bodyForDocumentType(type: DocumentType, ctx: Ctx): MailBody {
       return actInspectionBody(ctx);
     case 'invoice':
       return invoiceBody(ctx);
+    case 'upd':
+      // UPD по сути совмещает счёт и акт — для тела email reuse invoice-шаблона.
+      return invoiceBody(ctx);
     case 'other':
     default:
       return genericDocumentBody(ctx);

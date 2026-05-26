@@ -15,6 +15,7 @@ import { DealStatusBadge } from '@/components/crm/DealStatusBadge';
 import { ClientStatusControl } from '../ClientStatusControl';
 import { DeleteObjectButton } from '../DeleteObjectButton';
 import { CreateDealButton } from './CreateDealButton';
+import { DeleteClientButton } from './DeleteClientButton';
 import { deals } from '@/lib/db/schema/deals';
 
 export const dynamic = 'force-dynamic';
@@ -60,7 +61,7 @@ export default async function ClientCardPage({
         </Link>
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+            <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
               {client.shortName}
             </h1>
             <div className="flex items-center gap-2 mt-2">
@@ -74,6 +75,7 @@ export default async function ClientCardPage({
               <Pencil className="w-4 h-4 mr-2" />
               Редактировать
             </CyberpunkButton>
+            <DeleteClientButton clientId={id} clientName={client.shortName} />
           </div>
         </div>
       </div>

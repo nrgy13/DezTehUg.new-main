@@ -97,6 +97,7 @@ export default async function DealDetailPage({
       serviceId: dealPriceItems.serviceId,
       customName: dealPriceItems.customName,
       areaM2: dealPriceItems.areaM2,
+      unit: dealPriceItems.unit,
       method: dealPriceItems.method,
       frequency: dealPriceItems.frequency,
       priceNoVat: dealPriceItems.priceNoVat,
@@ -332,6 +333,14 @@ export default async function DealDetailPage({
         <DocumentsTab
           dealId={deal.id}
           clientEmail={client.email}
+          priceItems={priceItems.map((pi) => ({
+            id: pi.id,
+            objectName: pi.objectId ? objMap.get(pi.objectId)?.name ?? null : null,
+            serviceName: pi.customName || (pi.serviceId ? svcMap.get(pi.serviceId) ?? '—' : '—'),
+            areaM2: pi.areaM2,
+            unit: pi.unit,
+            priceWithVat: Number(pi.priceWithVat),
+          }))}
           documents={docList.map((d) => ({
             id: d.id,
             type: d.type,

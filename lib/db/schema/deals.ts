@@ -37,6 +37,11 @@ export const workLogStatusEnum = pgEnum('work_log_status', [
   'completed',
 ]);
 
+// Sprint 8 — единица измерения для позиции прайса.
+// 'm2' — площадь (м²), 'pcs' — штуки (шт).
+// area_m2 трактуется как «количество в этой единице».
+export const priceItemUnitEnum = pgEnum('price_item_unit', ['m2', 'pcs']);
+
 // Договор (сделка)
 export const deals = pgTable('deals', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
@@ -112,7 +117,8 @@ export const dealPriceItems = pgTable('deal_price_items', {
   customName: varchar('custom_name', { length: 255 }),
 
   // Параметры
-  areaM2: integer('area_m2').notNull(),
+  areaM2: integer('area_m2').notNull(), // Sprint 8: «количество в unit» (м² или шт).
+  unit: priceItemUnitEnum('unit').notNull().default('m2'),
   method: varchar('method', { length: 128 }), // "Сухая/Точечное орошение/Туман"
   frequency: varchar('frequency', { length: 64 }), // "Ежемесячно", "По заявке" — опционально для разовых работ
 
@@ -201,6 +207,7 @@ export const dealWorkLogs = pgTable(
 );
 
 export type WorkLogStatus = (typeof workLogStatusEnum.enumValues)[number];
+export type PriceItemUnit = (typeof priceItemUnitEnum.enumValues)[number];
 
 export type DealStatus = (typeof dealStatusEnum.enumValues)[number];
 export type Deal = typeof deals.$inferSelect;

@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import { clients, type Client } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { activityLog } from '@/lib/db/schema/activity';
-import { dealPriceItems } from '@/lib/db/schema/deals';
+import { dealPriceItems, deals } from '@/lib/db/schema/deals';
 import { auth } from '@/lib/auth';
 import { clientFormSchema, clientObjectSchema, updateClientStatusSchema } from './schemas';
 
@@ -158,6 +158,46 @@ export async function updateClientStatus(rawInput: unknown): Promise<Result> {
 
   revalidatePath('/manager/clients');
   revalidatePath(`/manager/clients/${id}`);
+
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Прямое удаление клиента manager или admin. Sprint 8 — Регина получила
+ * расширенные права. Защита: если у клиента есть сделки — не удаляем.
+ */
+export async function deleteClient(id: string): Promise<Result> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Не авторизован' };
+
+  const [existing] = await db
+    .select({ id: clients.id, shortName: clients.shortName })
+    .from(clients)
+    .where(eq(clients.id, id))
+    .limit(1);
+  if (!existing) return { ok: false, error: 'Клиент не найден' };
+
+  // Защита: если есть сделки — нельзя удалить
+  const [{ count: dealCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(deals)
+    .where(eq(deals.clientId, id));
+  if (dealCount > 0) {
+    return {
+      ok: false,
+      error: `У клиента ${dealCount} сделок — удаление невозможно. Сначала удали/расторгни все сделки клиента.`,
+    };
+  }
+
+  // client_objects, leads, documents — снимутся ON DELETE SET NULL / cascade
+  await db.delete(clients).where(eq(clients.id, id));
+
+  await logActivity(actor.id, 'client.delete', 'client', id, {
+    shortName: existing.shortName,
+  });
+
+  revalidatePath('/manager/clients');
+  revalidatePath('/admin/clients');
 
   return { ok: true, data: undefined };
 }

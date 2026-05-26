@@ -57,6 +57,13 @@ const SEEDS: SeedTemplate[] = [
     filename: 'commercial-offer.docx',
     description: 'КП с прайс-листом по объектам.',
   },
+  {
+    type: 'upd',
+    name: 'Базовый: УПД',
+    filename: 'upd.docx',
+    description:
+      'Универсальный передаточный документ. Базовая копия счёта — Регина перевыложит свой шаблон через /admin/templates.',
+  },
 ];
 
 async function main() {

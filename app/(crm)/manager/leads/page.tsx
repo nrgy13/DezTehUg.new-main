@@ -106,7 +106,7 @@ export default async function LeadsListPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+          <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
             Заявки
           </h1>
           <p className="text-content-muted mt-1 text-sm">

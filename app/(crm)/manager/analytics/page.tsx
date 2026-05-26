@@ -61,7 +61,7 @@ export default async function AnalyticsPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
+        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
           Аналитика воронки
         </h1>
         <p className="text-content-muted mt-1 text-sm">

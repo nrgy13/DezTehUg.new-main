@@ -23,6 +23,7 @@ type PriceItem = {
   serviceId: string | null;
   customName: string | null;
   areaM2: number;
+  unit: 'm2' | 'pcs';
   method: string | null;
   frequency: string | null;
   priceNoVat: string;
@@ -30,6 +31,10 @@ type PriceItem = {
   vatRate: string;
   sortOrder: number | null;
 };
+
+function unitLabel(unit: 'm2' | 'pcs'): string {
+  return unit === 'pcs' ? 'шт' : 'м²';
+}
 
 export function PriceItemsTable({
   dealId,
@@ -67,7 +72,7 @@ export function PriceItemsTable({
           <tr className="text-[10px] uppercase font-orbitron tracking-wider text-content-muted">
             <th className="text-left px-4 py-2">Объект</th>
             <th className="text-left px-4 py-2">Услуга</th>
-            <th className="text-right px-4 py-2 w-20">м²</th>
+            <th className="text-right px-4 py-2 w-24">Кол-во</th>
             <th className="text-left px-4 py-2 w-32">Способ</th>
             <th className="text-left px-4 py-2 w-32">Периодичность</th>
             <th className="text-right px-4 py-2 w-28">Без НДС</th>
@@ -85,7 +90,9 @@ export function PriceItemsTable({
               <tr key={it.id} className="hover:bg-bg-secondary/30">
                 <td className="px-4 py-2 text-content-secondary text-xs">{obj?.name ?? '—'}</td>
                 <td className="px-4 py-2 text-content-primary">{name}</td>
-                <td className="px-4 py-2 text-right text-content-secondary">{it.areaM2}</td>
+                <td className="px-4 py-2 text-right text-content-secondary">
+                  {it.areaM2} <span className="text-content-muted text-xs">{unitLabel(it.unit)}</span>
+                </td>
                 <td className="px-4 py-2 text-content-secondary text-xs">{it.method ?? '—'}</td>
                 <td className="px-4 py-2 text-content-secondary text-xs">{it.frequency ?? '—'}</td>
                 <td className="px-4 py-2 text-right text-content-secondary">
@@ -149,7 +156,7 @@ export function PriceItemsTable({
               </div>
               {obj && <div className="text-xs text-content-muted mb-1">{obj.name}</div>}
               <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-content-secondary mb-1.5">
-                <span>{it.areaM2} м²</span>
+                <span>{it.areaM2} {unitLabel(it.unit)}</span>
                 {it.method && <span>{it.method}</span>}
                 {it.frequency && <span>{it.frequency}</span>}
               </div>
@@ -216,12 +223,49 @@ function PriceItemDialog({
   const [serviceId, setServiceId] = useState(item?.serviceId ?? '');
   const [customName, setCustomName] = useState(item?.customName ?? '');
   const [areaM2, setAreaM2] = useState(String(item?.areaM2 ?? 0));
+  const [unit, setUnit] = useState<'m2' | 'pcs'>(item?.unit ?? 'm2');
   const [method, setMethod] = useState(item?.method ?? '');
   const [frequency, setFrequency] = useState(item?.frequency ?? '');
   const [priceNoVat, setPriceNoVat] = useState(item?.priceNoVat ?? '');
-  const [vatRate, setVatRate] = useState(item?.vatRate ?? '5');
+  const [priceWithVat, setPriceWithVat] = useState(item?.priceWithVat ?? '');
+  // БД хранит vatRate как numeric "5.00", а option value у select — "5".
+  // Нормализуем через Number, иначе select не находит matching option
+  // и валится на первое значение ("0"), затирая ставку при сохранении.
+  const [vatRate, setVatRate] = useState(
+    item?.vatRate != null ? String(Number(item.vatRate)) : '5',
+  );
+  const [inputMode, setInputMode] = useState<'noVat' | 'withVat'>('noVat');
   const [sortOrder, setSortOrder] = useState(String(item?.sortOrder ?? 0));
   const [isPending, startTransition] = useTransition();
+
+  // Один источник правды — priceNoVat. priceWithVat пересчитывается
+  // на лету в зависимости от vatRate. Если режим «С НДС» — наоборот.
+  function handlePriceNoVatChange(v: string) {
+    setPriceNoVat(v);
+    const rate = Number(vatRate) || 0;
+    const noVat = Number(v) || 0;
+    setPriceWithVat(round2(noVat * (1 + rate / 100)).toString());
+  }
+  function handlePriceWithVatChange(v: string) {
+    setPriceWithVat(v);
+    const rate = Number(vatRate) || 0;
+    const withVat = Number(v) || 0;
+    setPriceNoVat(round2(withVat / (1 + rate / 100)).toString());
+  }
+  function handleVatRateChange(v: string) {
+    setVatRate(v);
+    const rate = Number(v) || 0;
+    if (inputMode === 'noVat') {
+      const noVat = Number(priceNoVat) || 0;
+      setPriceWithVat(round2(noVat * (1 + rate / 100)).toString());
+    } else {
+      const withVat = Number(priceWithVat) || 0;
+      setPriceNoVat(round2(withVat / (1 + rate / 100)).toString());
+    }
+  }
+  function round2(n: number): number {
+    return Math.round(n * 100) / 100;
+  }
 
   // Auto-fill method from service when service changes
   function handleServiceChange(id: string) {
@@ -239,6 +283,7 @@ function PriceItemDialog({
       serviceId: serviceId || null,
       customName,
       areaM2: Number(areaM2) || 0,
+      unit,
       method,
       frequency,
       priceNoVat: Number(priceNoVat) || 0,
@@ -331,16 +376,29 @@ function PriceItemDialog({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <Label htmlFor="areaM2">Площадь, м²</Label>
-              <NeonInput
-                id="areaM2"
-                type="number"
-                min={0}
-                value={areaM2}
-                onChange={(e) => setAreaM2(e.target.value)}
-                disabled={isPending}
-                required
-              />
+              <Label htmlFor="areaM2">Кол-во</Label>
+              <div className="flex gap-2 mt-1">
+                <NeonInput
+                  id="areaM2"
+                  type="number"
+                  min={0}
+                  value={areaM2}
+                  onChange={(e) => setAreaM2(e.target.value)}
+                  disabled={isPending}
+                  required
+                  className="flex-1"
+                />
+                <select
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value as 'm2' | 'pcs')}
+                  disabled={isPending}
+                  className="px-2 text-sm bg-bg-primary border border-gray-300 rounded-md focus:border-neon-orange focus:outline-none h-11"
+                  aria-label="Единица измерения"
+                >
+                  <option value="m2">м²</option>
+                  <option value="pcs">шт</option>
+                </select>
+              </div>
             </div>
             <div>
               <Label htmlFor="method">Способ</Label>
@@ -364,45 +422,93 @@ function PriceItemDialog({
             </div>
           </div>
 
+          <div>
+            <Label>Что ввожу?</Label>
+            <div className="flex gap-3 mt-1 text-sm">
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="inputMode"
+                  value="noVat"
+                  checked={inputMode === 'noVat'}
+                  onChange={() => setInputMode('noVat')}
+                  disabled={isPending}
+                />
+                Цену БЕЗ НДС
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="inputMode"
+                  value="withVat"
+                  checked={inputMode === 'withVat'}
+                  onChange={() => setInputMode('withVat')}
+                  disabled={isPending}
+                />
+                Цену С НДС
+              </label>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <Label htmlFor="priceNoVat">Цена без НДС, ₽</Label>
+              <Label htmlFor="priceNoVat">
+                Без НДС, ₽ {inputMode === 'withVat' && <span className="text-[10px] text-content-muted">(авто)</span>}
+              </Label>
               <NeonInput
                 id="priceNoVat"
                 type="number"
                 step="0.01"
                 min={0}
                 value={priceNoVat}
-                onChange={(e) => setPriceNoVat(e.target.value)}
-                disabled={isPending}
-                required
+                onChange={(e) => handlePriceNoVatChange(e.target.value)}
+                disabled={isPending || inputMode === 'withVat'}
+                required={inputMode === 'noVat'}
               />
             </div>
             <div>
-              <Label htmlFor="vatRate">НДС, %</Label>
+              <Label htmlFor="priceWithVat">
+                С НДС, ₽ {inputMode === 'noVat' && <span className="text-[10px] text-content-muted">(авто)</span>}
+              </Label>
               <NeonInput
-                id="vatRate"
+                id="priceWithVat"
                 type="number"
                 step="0.01"
                 min={0}
-                max={100}
-                value={vatRate}
-                onChange={(e) => setVatRate(e.target.value)}
-                disabled={isPending}
+                value={priceWithVat}
+                onChange={(e) => handlePriceWithVatChange(e.target.value)}
+                disabled={isPending || inputMode === 'noVat'}
+                required={inputMode === 'withVat'}
               />
-              <p className="text-[10px] text-content-muted mt-0.5">УСН — обычно 5%</p>
             </div>
             <div>
-              <Label htmlFor="sortOrder">Сортировка</Label>
-              <NeonInput
-                id="sortOrder"
-                type="number"
-                min={0}
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value)}
+              <Label htmlFor="vatRate">НДС</Label>
+              <select
+                id="vatRate"
+                value={vatRate}
+                onChange={(e) => handleVatRateChange(e.target.value)}
                 disabled={isPending}
-              />
+                className="w-full mt-1 px-3 py-2 text-sm bg-bg-primary border border-gray-300 rounded-md focus:border-neon-orange focus:outline-none h-[42px]"
+              >
+                <option value="0">Без НДС (0%)</option>
+                <option value="5">5% (УСН)</option>
+                <option value="10">10%</option>
+                <option value="20">20%</option>
+              </select>
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="sortOrder">Сортировка</Label>
+            <NeonInput
+              id="sortOrder"
+              type="number"
+              min={0}
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              disabled={isPending}
+              className="max-w-[120px]"
+            />
           </div>
 
           <DialogFooter className="flex-row justify-between items-center">

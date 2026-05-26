@@ -21,6 +21,8 @@ export type BuildContext = {
   documentDate: string; // YYYY-MM-DD
   /** Произвольные оверрайды от UI: contract.endDate, report.objectStatus и т.д. */
   overrides?: Record<string, unknown>;
+  /** Sprint 8: если задано — генерим только эти позиции прайса. Иначе все. */
+  priceItemIds?: string[];
 };
 
 /**
@@ -55,8 +57,9 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         .orderBy(asc(clientObjects.name))
     : [];
 
-  // Прайс-позиции сделки
-  const priceItemsRaw = deal
+  // Прайс-позиции сделки.
+  // Sprint 8: фильтрация по priceItemIds — если задано, грузим только эти позиции.
+  const priceItemsAll = deal
     ? await db
         .select({
           id: dealPriceItems.id,
@@ -64,6 +67,7 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
           serviceId: dealPriceItems.serviceId,
           customName: dealPriceItems.customName,
           areaM2: dealPriceItems.areaM2,
+          unit: dealPriceItems.unit,
           method: dealPriceItems.method,
           frequency: dealPriceItems.frequency,
           priceNoVat: dealPriceItems.priceNoVat,
@@ -75,6 +79,11 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         .where(eq(dealPriceItems.dealId, deal.id))
         .orderBy(asc(dealPriceItems.sortOrder), asc(dealPriceItems.id))
     : [];
+
+  const priceItemsRaw =
+    ctx.priceItemIds && ctx.priceItemIds.length > 0
+      ? priceItemsAll.filter((p) => ctx.priceItemIds!.includes(p.id))
+      : priceItemsAll;
 
   // Имена услуг (для priceItems из каталога)
   const serviceIds = priceItemsRaw.map((p) => p.serviceId).filter((x): x is string => !!x);
@@ -94,6 +103,8 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       objectName: obj?.name ?? '',
       objectAddress: obj?.address ?? '',
       area: p.areaM2,
+      areaUnit: p.unit,
+      areaUnitLabel: p.unit === 'pcs' ? 'шт' : 'м²',
       method: p.method ?? '',
       frequency: p.frequency ?? '',
       priceNet: formatMoney(p.priceNoVat),
@@ -252,6 +263,23 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         totalInWords: '',
         ...(ctx.overrides ?? {}),
       };
+      break;
+    case 'upd':
+      // УПД сочетает счёт-фактуру и акт. Базовый шаблон сейчас идентичен invoice
+      // — Регина перевыложит реальный шаблон через /admin/templates.
+      data.upd = {
+        number: ctx.documentNumber,
+        date: formatHumanDate(ctx.documentDate),
+        basis: deal ? `Договор № ${deal.contractNumber} от ${formatHumanDate(deal.contractDate)}` : '',
+        totalNet: formatMoney(totalNet),
+        vatAmount: formatMoney(totalGross - totalNet),
+        totalGross: formatMoney(totalGross),
+        totalInWords: '',
+        ...(ctx.overrides ?? {}),
+      };
+      // Также пробрасываем под старым ключом invoice — на случай если Регина
+      // загрузит шаблон с переменными {{invoice.*}}.
+      data.invoice = data.upd;
       break;
     case 'commercial_offer':
       data.offer = {

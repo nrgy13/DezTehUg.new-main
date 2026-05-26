@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ChevronDown,
@@ -11,8 +11,6 @@ import {
   RefreshCw,
   Send,
   Trash2,
-  X,
-  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -21,7 +19,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -30,12 +27,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { NeonInput } from '@/components/cyberpunk/NeonInput';
-import { sendDocumentToClient } from './send-document-action';
-import { requestDocumentDeletion, cancelDeletionRequest } from '../actions';
+import { sendDocumentToClient, sendDocumentToAccountant } from './send-document-action';
+import { deleteDocument } from '../actions';
 import type { DocumentType, DocumentStatus, DeletionStatus } from '@/lib/db/schema/documents';
 
 const DOC_TYPE_LABEL: Record<DocumentType, string> = {
@@ -45,8 +41,11 @@ const DOC_TYPE_LABEL: Record<DocumentType, string> = {
   act_inspection: 'Акт обследования',
   invoice: 'Счёт',
   commercial_offer: 'Коммерческое предложение',
+  upd: 'УПД',
   other: 'Другой документ',
 };
+
+const ACCOUNTANT_TYPES: DocumentType[] = ['invoice', 'upd'];
 
 const STATUS_LABEL: Record<DocumentStatus, { label: string; color: string }> = {
   draft: { label: 'Черновик', color: 'text-content-muted' },
@@ -62,6 +61,7 @@ const GENERATABLE: DocumentType[] = [
   'act_inspection',
   'act_work',
   'invoice',
+  'upd',
 ];
 
 export type DocumentRow = {
@@ -83,64 +83,60 @@ export type DocumentRow = {
   resolverName: string | null;
 };
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+export type PriceItemForDoc = {
+  id: string;
+  objectName: string | null;
+  serviceName: string;
+  areaM2: number;
+  unit: 'm2' | 'pcs';
+  priceWithVat: number;
+};
 
 export function DocumentsTab({
   dealId,
   documents,
   clientEmail,
+  priceItems,
 }: {
   dealId: string;
   documents: DocumentRow[];
   clientEmail: string | null;
+  priceItems: PriceItemForDoc[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [generatingType, setGeneratingType] = useState<DocumentType | null>(null);
   const [sendingDoc, setSendingDoc] = useState<DocumentRow | null>(null);
-  const [requestingDoc, setRequestingDoc] = useState<DocumentRow | null>(null);
+  const [generatePending, setGeneratePending] = useState<DocumentType | null>(null);
 
-  function handleCancelRequest(doc: DocumentRow) {
-    if (!confirm('Отменить запрос на удаление?')) return;
+  function handleDelete(doc: DocumentRow) {
+    const label = `${DOC_TYPE_LABEL[doc.type]} ${doc.number ?? ''}`.trim();
+    if (!confirm(`Удалить «${label}» безвозвратно? Файлы DOCX/PDF и скан подписи будут удалены из storage.`)) return;
     startTransition(async () => {
-      const res = await cancelDeletionRequest(doc.id);
+      const res = await deleteDocument(doc.id);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success('Запрос отменён');
+      toast.success('Документ удалён');
       router.refresh();
     });
   }
 
-  function handleGenerate(type: DocumentType) {
-    setGeneratingType(type);
+  function openGenerate(type: DocumentType) {
+    setGeneratePending(type);
+  }
+
+  function handleSendToAccountant(doc: DocumentRow) {
+    const label = `${DOC_TYPE_LABEL[doc.type]} ${doc.number ?? ''}`.trim();
+    if (!confirm(`Отправить «${label}» на email бухгалтера ДезТехЮг?`)) return;
     startTransition(async () => {
-      try {
-        const res = await fetch('/api/documents/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, dealId, format: 'both' }),
-        });
-        const json = await res.json();
-        if (!res.ok || !json.ok) {
-          toast.error(json.error ?? `HTTP ${res.status}`);
-          return;
-        }
-        toast.success(`${DOC_TYPE_LABEL[type]} ${json.data.number} готов`);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Ошибка сети');
-      } finally {
-        setGeneratingType(null);
+      const res = await sendDocumentToAccountant(doc.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
       }
+      toast.success(`Отправлено бухгалтеру (${res.data.email})`);
+      router.refresh();
     });
   }
 
@@ -153,23 +149,14 @@ export function DocumentsTab({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <CyberpunkButton variant="primary" disabled={isPending}>
-              {isPending && generatingType ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                  Генерируем {DOC_TYPE_LABEL[generatingType]}…
-                </>
-              ) : (
-                <>
-                  <FileText className="w-4 h-4 mr-1" />
-                  Сгенерировать
-                  <ChevronDown className="w-3 h-3 ml-1" />
-                </>
-              )}
+              <FileText className="w-4 h-4 mr-1" />
+              Сгенерировать
+              <ChevronDown className="w-3 h-3 ml-1" />
             </CyberpunkButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {GENERATABLE.map((t) => (
-              <DropdownMenuItem key={t} onSelect={() => handleGenerate(t)}>
+              <DropdownMenuItem key={t} onSelect={() => openGenerate(t)}>
                 {DOC_TYPE_LABEL[t]}
               </DropdownMenuItem>
             ))}
@@ -196,138 +183,83 @@ export function DocumentsTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {documents.map((d) => {
-                const isPendingDeletion = d.deletionStatus === 'pending';
-                const isRejected = d.deletionStatus === 'rejected';
-                return (
-                  <Fragment key={d.id}>
-                    <tr className={d.status === 'archived' ? 'opacity-50' : ''}>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-content-primary">
-                          {DOC_TYPE_LABEL[d.type]}
-                        </div>
-                        <div className="text-xs text-content-muted font-mono">{d.number}</div>
-                      </td>
-                      <td className="px-4 py-3 text-content-secondary text-xs">
-                        {d.date ? d.date.split('-').reverse().join('.') : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className={STATUS_LABEL[d.status]?.color ?? ''}>
-                          {STATUS_LABEL[d.status]?.label ?? d.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right space-x-2">
-                        {d.docxS3Key && (
-                          <a
-                            href={`/api/documents/${d.id}/download?format=docx`}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-neon-orange/40 text-neon-orange rounded hover:bg-neon-orange/10"
-                          >
-                            <FileDown className="w-3 h-3" />
-                            DOCX
-                          </a>
-                        )}
-                        {d.pdfS3Key && (
-                          <a
-                            href={`/api/documents/${d.id}/download?format=pdf`}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-poison-green/40 text-poison-green rounded hover:bg-poison-green/10"
-                          >
-                            <FileDown className="w-3 h-3" />
-                            PDF
-                          </a>
-                        )}
-                        {d.status !== 'archived' && (d.docxS3Key || d.pdfS3Key) && (
-                          <button
-                            onClick={() => setSendingDoc(d)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs text-cyber-blue hover:text-cyber-blue/80"
-                            title="Отправить клиенту"
-                          >
-                            <Send className="w-3 h-3" />
-                          </button>
-                        )}
-                        {d.status !== 'archived' && !isPendingDeletion && (
-                          <button
-                            onClick={() => handleGenerate(d.type)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs text-content-muted hover:text-content-primary"
-                            title="Перегенерировать"
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                          </button>
-                        )}
-                        {isPendingDeletion ? (
-                          <button
-                            onClick={() => handleCancelRequest(d)}
-                            disabled={isPending}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs text-content-muted hover:text-content-primary disabled:opacity-50"
-                            title="Отменить запрос на удаление"
-                          >
-                            <X className="w-3 h-3" />
-                            Отменить
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setRequestingDoc(d)}
-                            disabled={isPending}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
-                            title="Запросить удаление документа"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                    {isPendingDeletion && (
-                      <tr className="bg-neon-orange/5 border-t-0">
-                        <td colSpan={4} className="px-4 py-2">
-                          <div className="flex items-start gap-2 text-xs text-content-secondary">
-                            <AlertCircle className="w-3.5 h-3.5 text-neon-orange mt-0.5 flex-shrink-0" />
-                            <div className="flex-1">
-                              <span className="text-neon-orange font-medium">
-                                Запрошено удаление
-                              </span>
-                              {' · '}
-                              <span>{d.requesterName ?? '—'}</span>
-                              {d.deletionRequestedAt && (
-                                <>
-                                  {' · '}
-                                  <span className="text-content-muted">
-                                    {formatDateTime(d.deletionRequestedAt)}
-                                  </span>
-                                </>
-                              )}
-                              {d.deletionReason && (
-                                <div className="text-content-muted mt-0.5 italic">
-                                  «{d.deletionReason}»
-                                </div>
-                              )}
-                              <div className="text-[10px] text-content-muted mt-0.5">
-                                Ждёт решения админа в /admin/deletions
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
+              {documents.map((d) => (
+                <tr key={d.id} className={d.status === 'archived' ? 'opacity-50' : ''}>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-content-primary">
+                      {DOC_TYPE_LABEL[d.type]}
+                    </div>
+                    <div className="text-xs text-content-muted font-mono">{d.number}</div>
+                  </td>
+                  <td className="px-4 py-3 text-content-secondary text-xs">
+                    {d.date ? d.date.split('-').reverse().join('.') : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-xs">
+                    <span className={STATUS_LABEL[d.status]?.color ?? ''}>
+                      {STATUS_LABEL[d.status]?.label ?? d.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right space-x-2">
+                    {d.docxS3Key && (
+                      <a
+                        href={`/api/documents/${d.id}/download?format=docx`}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-neon-orange/40 text-neon-orange rounded hover:bg-neon-orange/10"
+                      >
+                        <FileDown className="w-3 h-3" />
+                        DOCX
+                      </a>
                     )}
-                    {isRejected && d.deletionAdminNote && (
-                      <tr className="bg-bg-secondary/40 border-t-0">
-                        <td colSpan={4} className="px-4 py-2">
-                          <div className="flex items-start gap-2 text-xs text-content-secondary">
-                            <AlertCircle className="w-3.5 h-3.5 text-content-muted mt-0.5 flex-shrink-0" />
-                            <div className="flex-1">
-                              <span className="text-content-muted">
-                                Удаление отклонено
-                                {d.resolverName && ` (${d.resolverName})`}:
-                              </span>{' '}
-                              <span className="text-content-primary italic">
-                                «{d.deletionAdminNote}»
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
+                    {d.pdfS3Key && (
+                      <a
+                        href={`/api/documents/${d.id}/download?format=pdf`}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-poison-green/40 text-poison-green rounded hover:bg-poison-green/10"
+                      >
+                        <FileDown className="w-3 h-3" />
+                        PDF
+                      </a>
                     )}
-                  </Fragment>
-                );
-              })}
+                    {d.status !== 'archived' && (d.docxS3Key || d.pdfS3Key) && (
+                      <button
+                        onClick={() => setSendingDoc(d)}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-cyber-blue hover:text-cyber-blue/80"
+                        title="Отправить клиенту"
+                      >
+                        <Send className="w-3 h-3" />
+                      </button>
+                    )}
+                    {d.status !== 'archived' &&
+                      (d.docxS3Key || d.pdfS3Key) &&
+                      ACCOUNTANT_TYPES.includes(d.type) && (
+                        <button
+                          onClick={() => handleSendToAccountant(d)}
+                          disabled={isPending}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded disabled:opacity-50"
+                          title="Отправить бухгалтеру"
+                        >
+                          <Send className="w-3 h-3" />
+                          БУХ
+                        </button>
+                      )}
+                    {d.status !== 'archived' && (
+                      <button
+                        onClick={() => openGenerate(d.type)}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-content-muted hover:text-content-primary"
+                        title="Перегенерировать"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(d)}
+                      disabled={isPending}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+                      title="Удалить документ безвозвратно"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </CyberpunkCard>
@@ -345,12 +277,14 @@ export function DocumentsTab({
         />
       )}
 
-      {requestingDoc && (
-        <RequestDeletionDialog
-          doc={requestingDoc}
-          onClose={() => setRequestingDoc(null)}
-          onRequested={() => {
-            setRequestingDoc(null);
+      {generatePending && (
+        <GenerateDocumentDialog
+          dealId={dealId}
+          type={generatePending}
+          priceItems={priceItems}
+          onClose={() => setGeneratePending(null)}
+          onDone={() => {
+            setGeneratePending(null);
             router.refresh();
           }}
         />
@@ -359,76 +293,173 @@ export function DocumentsTab({
   );
 }
 
-function RequestDeletionDialog({
-  doc,
+function GenerateDocumentDialog({
+  dealId,
+  type,
+  priceItems,
   onClose,
-  onRequested,
+  onDone,
 }: {
-  doc: DocumentRow;
+  dealId: string;
+  type: DocumentType;
+  priceItems: PriceItemForDoc[];
   onClose: () => void;
-  onRequested: () => void;
+  onDone: () => void;
 }) {
-  const [reason, setReason] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(priceItems.map((p) => p.id)),
+  );
   const [isPending, startTransition] = useTransition();
-  const docLabel = `${DOC_TYPE_LABEL[doc.type]} ${doc.number ?? ''}`.trim();
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const allSelected = priceItems.length > 0 && selectedIds.size === priceItems.length;
+  const noneSelected = selectedIds.size === 0;
+
+  // Группировка по объекту (null → «Без объекта»)
+  const groups = new Map<string, PriceItemForDoc[]>();
+  for (const pi of priceItems) {
+    const key = pi.objectName ?? '— Без объекта —';
+    const arr = groups.get(key) ?? [];
+    arr.push(pi);
+    groups.set(key, arr);
+  }
+
+  const selectedItems = priceItems.filter((p) => selectedIds.has(p.id));
+  const totalSelected = selectedItems.reduce((s, p) => s + p.priceWithVat, 0);
+
+  function toggle(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(priceItems.map((p) => p.id)));
+  }
+
+  function handleSubmit() {
+    // Если позиций нет — генерим без фильтра (могут быть док-ты без прайса, типа акт обследования).
+    const priceItemIds = priceItems.length > 0 ? Array.from(selectedIds) : undefined;
     startTransition(async () => {
-      const res = await requestDocumentDeletion(doc.id, reason);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
+      try {
+        const res = await fetch('/api/documents/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, dealId, format: 'both', priceItemIds }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) {
+          toast.error(json.error ?? `HTTP ${res.status}`);
+          return;
+        }
+        toast.success(`${DOC_TYPE_LABEL[type]} ${json.data.number} готов`);
+        onDone();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Ошибка сети');
       }
-      toast.success('Запрос отправлен — админ получит его в /admin/deletions');
-      onRequested();
     });
   }
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-orbitron uppercase tracking-wide">
-            Запросить удаление
+            Сгенерировать «{DOC_TYPE_LABEL[type]}»
           </DialogTitle>
-          <DialogDescription>
-            «{docLabel}» — удаление выполнит админ после твоего запроса. Файлы DOCX/PDF и
-            подписанный скан удалятся безвозвратно.
-          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <Label htmlFor="deletion-reason">Причина удаления</Label>
-            <Textarea
-              id="deletion-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Например: документ создан по ошибке (другой клиент); договор расторгнут до подписания; и т.п."
-              rows={4}
-              disabled={isPending}
-              required
-            />
-            <div className="text-[10px] text-content-muted mt-1">
-              Минимум 5 символов. Эту причину увидит админ.
+        {priceItems.length === 0 ? (
+          <p className="text-sm text-content-muted">
+            У сделки нет позиций прайса. Документ будет сгенерирован пустым шаблоном.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="text-xs text-cyber-blue hover:underline"
+              >
+                {allSelected ? 'Снять все' : 'Выбрать все'}
+              </button>
+              <span className="text-xs text-content-muted">
+                Выбрано: {selectedIds.size} из {priceItems.length}
+              </span>
+            </div>
+
+            <div className="max-h-[50vh] overflow-y-auto border border-gray-200 rounded-md divide-y divide-gray-100">
+              {Array.from(groups.entries()).map(([objectName, items]) => (
+                <div key={objectName}>
+                  <div className="px-3 py-1.5 bg-bg-secondary text-[11px] font-orbitron uppercase tracking-wide text-content-muted">
+                    {objectName}
+                  </div>
+                  {items.map((p) => {
+                    const unitLbl = p.unit === 'pcs' ? 'шт' : 'м²';
+                    return (
+                      <label
+                        key={p.id}
+                        className="flex items-center gap-3 px-3 py-2 hover:bg-bg-secondary/40 cursor-pointer text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(p.id)}
+                          onChange={() => toggle(p.id)}
+                          disabled={isPending}
+                          className="w-4 h-4 rounded border-gray-300 text-neon-orange focus:ring-neon-orange/40"
+                        />
+                        <span className="flex-1 text-content-primary">{p.serviceName}</span>
+                        <span className="text-content-muted text-xs">
+                          {p.areaM2} {unitLbl}
+                        </span>
+                        <span className="text-content-primary font-medium tabular-nums">
+                          {p.priceWithVat.toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between px-1 text-sm">
+              <span className="text-content-muted">Итого с НДС по выбранным:</span>
+              <span className="font-orbitron font-bold text-content-primary tabular-nums">
+                {totalSelected.toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽
+              </span>
             </div>
           </div>
+        )}
 
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isPending}
-              className="px-4 py-2 text-sm text-content-secondary hover:text-content-primary"
-            >
-              Отмена
-            </button>
-            <CyberpunkButton type="submit" variant="primary" disabled={isPending}>
-              {isPending ? 'Отправляю…' : 'Запросить удаление'}
-            </CyberpunkButton>
-          </DialogFooter>
-        </form>
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isPending}
+            className="px-4 py-2 text-sm text-content-secondary hover:text-content-primary"
+          >
+            Отмена
+          </button>
+          <CyberpunkButton
+            type="button"
+            variant="primary"
+            disabled={isPending || (priceItems.length > 0 && noneSelected)}
+            onClick={handleSubmit}
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                Генерация…
+              </>
+            ) : (
+              <>
+                <FileText className="w-4 h-4 mr-1" />
+                Сгенерировать
+              </>
+            )}
+          </CyberpunkButton>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
