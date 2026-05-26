@@ -1,11 +1,36 @@
 # DezTehYug CRM — память проекта
 
 > Файл читается Claude автоматически в начале каждой сессии в этом проекте.
-> Обновляй при больших изменениях. Последнее обновление: **2026-05-26 (адаптив панели менеджера под мобилу на prod).**
+> Обновляй при больших изменениях. Последнее обновление: **2026-05-26 (Sprint 8 закоммичен, ждёт деплоя).**
 
 ---
 
 ## ⚡ ВНИМАНИЕ: где сейчас стоит работа (читать перед стартом!)
+
+**Sprint 8 (UX + бухгалтерия) ЗАКОММИЧЕН (2026-05-26, коммит `814484b`), НЕ задеплоен на prod.** Ветка `feature/crm`. Working tree после коммита чистый. Локально протестировано через preview + миграции 0013/0014 применены на dev. Подробности: `memory/sprint8_ux_accounting.md`.
+
+- **Эпик A:** шрифты CRM — H1 на 17 manager-страницах `text-3xl → text-2xl`, цифры виджетов дашборда `text-3xl → text-2xl`, 3 бейджа (`ClientStatusBadge`/`DealStatusBadge`/`LeadStatusBadge`) `tracking-wider → tracking-tight` + `font-semibold → font-medium` + `px-2 → px-1.5`.
+- **Эпик B:** НДС dropdown + обратный расчёт — `PriceItemDialog` теперь `<select>` (0/5/10/20%) + radio «Ввожу цену БЕЗ НДС / С НДС» с автопересчётом. Fix: vatRate из БД `"5.00"` нормализуется через `String(Number())`, иначе select валился на 0%.
+- **Эпик C:** Регина — прямые права на документы и клиентов. Без `users.role='admin'`. `deleteDocument` (manager+admin) обходит approval-flow через `executeDocumentDeletion`. `deleteClient` с защитой от наличия сделок. `DeleteClientButton` в карточке. В `DocumentsTab` корзина → прямой confirm + delete (RequestDeletionDialog убран). `/admin/deletions` остаётся для legacy pending.
+- **Эпик D:** единица «шт» к «м²» — миграция **0013** (`CREATE TYPE price_item_unit AS ENUM('m2','pcs')` + `deal_price_items.unit DEFAULT 'm2'`). В диалоге прайса select «м²/шт» рядом с «Кол-во». В таблице рендер «816 м²» / «5 шт». В build-data.ts добавлены `areaUnit` + `areaUnitLabel` для шаблонов (сами .docx не трогали — Регина обновит сама если понадобится).
+- **Эпик E:** генерация документа с выбором позиций — `priceItemIds?: string[]` через `lib/documents/generate.ts` → `lib/templates/build-data.ts` → `/api/documents/generate/route.ts`. Новый `GenerateDocumentDialog` в `DocumentsTab.tsx`: чекбоксы с группировкой по объекту + итого с НДС внизу. По умолчанию все позиции отмечены.
+- **Эпик F:** UPD + email бухгалтера + кнопка «Отправить буху» — миграция **0014** (`ALTER TYPE document_type ADD VALUE 'upd'`). `templates/upd.docx` (заготовка = копия `invoice.docx`, Регина перевыложит свой через `/admin/templates`). `lib/notifications/accountant.ts` с get/save/clear через `app_settings.accountant_email`. Секция «Email бухгалтера» в `/admin/settings` (`AccountantEmailSection.tsx`). `sendDocumentToAccountant` в `send-document-action.ts` шлёт через тот же mailer. Кнопка «БУХ» в `DocumentsTab` для invoice + upd. Без настроенного email — корректная ошибка «Email бухгалтера не настроен».
+
+**Что осталось от Сани (вручную):**
+1. Применить миграции на prod:
+   ```bash
+   docker cp drizzle/migrations/0013_price_item_unit.sql deztech-crm-postgres:/tmp/m13.sql
+   docker exec -i deztech-crm-postgres psql -U deztech deztech_crm -f /tmp/m13.sql
+   docker cp drizzle/migrations/0014_document_type_upd.sql deztech-crm-postgres:/tmp/m14.sql
+   docker exec -i deztech-crm-postgres psql -U deztech deztech_crm -f /tmp/m14.sql
+   ```
+2. `git push origin feature/crm`, на VPS `git pull && docker compose -f docker-compose.prod.yml --env-file .env build app && up -d --force-recreate app`.
+3. Засеять UPD-шаблон: `docker compose -f docker-compose.prod.yml --env-file .env run --rm app npx tsx lib/db/seed-templates.ts` (или эквивалент).
+4. В `/admin/settings` вписать реальный email бухгалтера.
+
+---
+
+## Предыдущий статус (для контекста)
 
 **Адаптив панели менеджера под мобилу РАЗВЁРНУТ НА PROD (2026-05-26, коммит `dd10000`).** Ветка `feature/crm`, working tree чистый. UI-only (миграций нет, БД не трогалась). Все страницы менеджера теперь работают на телефоне. Подробности: `memory/manager_mobile_adaptive_committed.md`.
 - **Канбаны (лиды/сделки):** на `<lg` вертикальные секции по статусам + кнопка «Переместить» (Radix dropdown) вместо drag; drag остаётся на desktop (`hidden lg:block`). Общая `requestStatusChange` для drag и dropdown; спец-переходы (КП/конверт/lost, расторжение/закрытие) переиспользуют существующие модалки. Файлы: `leads/_components/{LeadBoard,LeadCard,MobileLeadBoard}.tsx`, `deals/board/DealBoardClient.tsx`.
