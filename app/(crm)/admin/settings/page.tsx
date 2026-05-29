@@ -14,7 +14,7 @@ export const metadata = { title: 'Настройки — ДезТехЮг CRM' }
 export const dynamic = 'force-dynamic';
 
 export default async function AdminSettingsPage() {
-  await requireRole('admin');
+  await requireRole('admin', 'manager');
 
   const [thresholds, defaults, dbOverride, accountantEmail] = await Promise.all([
     getThresholds(),

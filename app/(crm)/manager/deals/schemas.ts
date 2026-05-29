@@ -43,8 +43,12 @@ export const priceItemFormSchema = z
     serviceId: z.string().uuid().optional().nullable(),
     customName: z.string().max(255).optional().or(z.literal('')),
 
-    areaM2: z.coerce.number().int().min(0).max(1_000_000),
-    unit: z.enum(['m2', 'pcs']).default('m2'),
+    // Sprint 9: дробное кол-во. Запятую из ru-ввода нормализуем в точку.
+    areaM2: z.preprocess(
+      (v) => (typeof v === 'string' ? v.replace(',', '.') : v),
+      z.coerce.number().min(0).max(1_000_000),
+    ),
+    unit: z.enum(['m2', 'pcs', 'm3']).default('m2'),
     method: z.string().max(128).optional().or(z.literal('')),
     frequency: z.string().max(64).optional().or(z.literal('')),
 

@@ -8,6 +8,8 @@ import { clients } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
+import { unitLabel, formatQuantity } from '@/lib/constants/units';
+import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
 export const metadata = { title: 'Мастер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -23,7 +25,8 @@ type VisitRow = {
   clientShortName: string | null;
   service: string;
   objectName: string | null;
-  areaM2: number | null;
+  areaM2: string | null;
+  unit: PriceItemUnit | null;
   dealId: string;
 };
 
@@ -46,6 +49,7 @@ export default async function MasterDashboard() {
       contractNumber: deals.contractNumber,
       clientShortName: clients.shortName,
       areaM2: dealPriceItems.areaM2,
+      unit: dealPriceItems.unit,
       method: dealPriceItems.method,
       serviceId: dealPriceItems.serviceId,
       customName: dealPriceItems.customName,
@@ -93,6 +97,7 @@ export default async function MasterDashboard() {
       r.customName || (r.serviceId ? svcMap.get(r.serviceId) ?? 'Без услуги' : 'Без услуги'),
     objectName: r.objectName,
     areaM2: r.areaM2,
+    unit: r.unit,
     dealId: r.dealId,
   }));
 
@@ -202,7 +207,7 @@ function VisitGroup({
                       </span>
                       {v.areaM2 && (
                         <span className="text-xs text-content-muted">
-                          · {v.areaM2} м²
+                          · {formatQuantity(v.areaM2)} {unitLabel(v.unit)}
                         </span>
                       )}
                     </div>

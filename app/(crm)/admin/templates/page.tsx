@@ -9,7 +9,7 @@ export const metadata = { title: 'DOCX-шаблоны — ДезТехЮг CRM' 
 export const dynamic = 'force-dynamic';
 
 export default async function TemplatesAdminPage() {
-  await requireRole('admin');
+  await requireRole('admin', 'manager');
 
   const list = await db
     .select({

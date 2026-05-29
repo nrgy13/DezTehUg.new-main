@@ -37,10 +37,10 @@ export const workLogStatusEnum = pgEnum('work_log_status', [
   'completed',
 ]);
 
-// Sprint 8 — единица измерения для позиции прайса.
-// 'm2' — площадь (м²), 'pcs' — штуки (шт).
-// area_m2 трактуется как «количество в этой единице».
-export const priceItemUnitEnum = pgEnum('price_item_unit', ['m2', 'pcs']);
+// Sprint 8/9 — единица измерения для позиции прайса.
+// 'm2' — площадь (м²), 'pcs' — единицы (ед.), 'm3' — объём (м³).
+// area_m2 трактуется как «количество в этой единице» (может быть дробным).
+export const priceItemUnitEnum = pgEnum('price_item_unit', ['m2', 'pcs', 'm3']);
 
 // Договор (сделка)
 export const deals = pgTable('deals', {
@@ -117,7 +117,9 @@ export const dealPriceItems = pgTable('deal_price_items', {
   customName: varchar('custom_name', { length: 255 }),
 
   // Параметры
-  areaM2: integer('area_m2').notNull(), // Sprint 8: «количество в unit» (м² или шт).
+  // Sprint 9: «количество в unit» (м²/ед./м³), дробное. decimal → string в JS,
+  // арифметика через Number(), сохранение через String().
+  areaM2: decimal('area_m2', { precision: 10, scale: 2 }).notNull(),
   unit: priceItemUnitEnum('unit').notNull().default('m2'),
   method: varchar('method', { length: 128 }), // "Сухая/Точечное орошение/Туман"
   frequency: varchar('frequency', { length: 64 }), // "Ежемесячно", "По заявке" — опционально для разовых работ

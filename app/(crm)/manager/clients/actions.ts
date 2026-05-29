@@ -6,11 +6,16 @@ import { eq, and, ne, sql } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { clients, type Client } from '@/lib/db/schema/clients';
-import { clientObjects } from '@/lib/db/schema/objects';
+import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { activityLog } from '@/lib/db/schema/activity';
 import { dealPriceItems, deals } from '@/lib/db/schema/deals';
 import { auth } from '@/lib/auth';
-import { clientFormSchema, clientObjectSchema, updateClientStatusSchema } from './schemas';
+import {
+  clientFormSchema,
+  clientObjectSchema,
+  updateClientStatusSchema,
+  type ObjectServiceInput,
+} from './schemas';
 
 type Result<T = void> =
   | { ok: true; data: T }
@@ -219,14 +224,36 @@ export async function addObject(clientId: string, rawInput: unknown): Promise<Re
   const [client] = await db.select({ id: clients.id }).from(clients).where(eq(clients.id, clientId)).limit(1);
   if (!client) return { ok: false, error: 'Клиент не найден' };
 
+  const { services: serviceList, ...obj } = parsed.data;
+
+  // Если объект привязывается к договору — он должен принадлежать этому же клиенту.
+  if (obj.dealId) {
+    const [d] = await db
+      .select({ id: deals.id, clientId: deals.clientId })
+      .from(deals)
+      .where(eq(deals.id, obj.dealId))
+      .limit(1);
+    if (!d) return { ok: false, error: 'Договор не найден', field: 'dealId' };
+    if (d.clientId !== clientId)
+      return { ok: false, error: 'Договор принадлежит другому клиенту', field: 'dealId' };
+  }
+
   const [created] = await db
     .insert(clientObjects)
-    .values({ clientId, ...parsed.data })
+    .values({
+      clientId,
+      ...obj,
+      areaM2: obj.areaM2 == null ? null : String(obj.areaM2),
+      dealId: obj.dealId ?? null,
+      plannedTreatmentDate: obj.plannedTreatmentDate ?? null,
+    })
     .returning({ id: clientObjects.id });
+
+  await syncObjectServices(created.id, serviceList ?? []);
 
   await logActivity(actor.id, 'object.create', 'client_object', created.id, {
     clientId,
-    name: parsed.data.name,
+    name: obj.name,
   });
 
   revalidatePath(`/manager/clients/${clientId}`);
@@ -247,16 +274,125 @@ export async function updateObject(objectId: string, rawInput: unknown): Promise
   const [existing] = await db.select().from(clientObjects).where(eq(clientObjects.id, objectId)).limit(1);
   if (!existing) return { ok: false, error: 'Объект не найден' };
 
+  // dealId сюда НЕ попадает: привязка к договору живёт отдельно
+  // (attachObjectToDeal / createObjectForDeal), чтобы правка реквизитов
+  // объекта не сбрасывала его связь с договором.
+  const { services: serviceList, dealId: _ignoredDealId, ...obj } = parsed.data;
+
   await db
     .update(clientObjects)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({
+      ...obj,
+      areaM2: obj.areaM2 == null ? null : String(obj.areaM2),
+      plannedTreatmentDate: obj.plannedTreatmentDate ?? null,
+      updatedAt: new Date(),
+    })
     .where(eq(clientObjects.id, objectId));
 
-  await logActivity(actor.id, 'object.update', 'client_object', objectId, computeDiff(existing, parsed.data));
+  await syncObjectServices(objectId, serviceList ?? []);
+
+  await logActivity(actor.id, 'object.update', 'client_object', objectId, computeDiff(existing, obj));
 
   revalidatePath(`/manager/clients/${existing.clientId}`);
+  if (existing.dealId) revalidatePath(`/manager/deals/${existing.dealId}`);
 
   return { ok: true, data: undefined };
+}
+
+/**
+ * Sprint 9: привязать/отвязать объект к договору (временная функция для Регины —
+ * чтобы дополнить старые объекты договором-основанием). dealId=null → отвязать.
+ * Договор обязан принадлежать тому же клиенту, что и объект.
+ */
+export async function attachObjectToDeal(
+  objectId: string,
+  dealId: string | null,
+): Promise<Result> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Не авторизован' };
+
+  const [obj] = await db
+    .select({ id: clientObjects.id, clientId: clientObjects.clientId, dealId: clientObjects.dealId })
+    .from(clientObjects)
+    .where(eq(clientObjects.id, objectId))
+    .limit(1);
+  if (!obj) return { ok: false, error: 'Объект не найден' };
+
+  if (dealId) {
+    const [d] = await db
+      .select({ id: deals.id, clientId: deals.clientId })
+      .from(deals)
+      .where(eq(deals.id, dealId))
+      .limit(1);
+    if (!d) return { ok: false, error: 'Договор не найден' };
+    if (d.clientId !== obj.clientId)
+      return { ok: false, error: 'Договор принадлежит другому клиенту' };
+  }
+
+  await db
+    .update(clientObjects)
+    .set({ dealId, updatedAt: new Date() })
+    .where(eq(clientObjects.id, objectId));
+
+  await logActivity(actor.id, 'object.attach_deal', 'client_object', objectId, {
+    from: obj.dealId,
+    to: dealId,
+  });
+
+  revalidatePath(`/manager/clients/${obj.clientId}`);
+  if (dealId) revalidatePath(`/manager/deals/${dealId}`);
+  if (obj.dealId) revalidatePath(`/manager/deals/${obj.dealId}`);
+
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Sprint 9: создать объект сразу привязанным к договору (из карточки договора,
+ * таб «Объекты»). Клиент берётся из договора, dealId инъектируется принудительно.
+ */
+export async function createObjectForDeal(
+  dealId: string,
+  rawInput: unknown,
+): Promise<Result<{ id: string }>> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Не авторизован' };
+
+  const [deal] = await db
+    .select({ id: deals.id, clientId: deals.clientId })
+    .from(deals)
+    .where(eq(deals.id, dealId))
+    .limit(1);
+  if (!deal) return { ok: false, error: 'Сделка не найдена' };
+
+  const input = { ...(rawInput as Record<string, unknown>), dealId };
+  const res = await addObject(deal.clientId, input);
+  if (res.ok) revalidatePath(`/manager/deals/${dealId}`);
+  return res;
+}
+
+/**
+ * Заменяет полный набор услуг объекта (delete-all + reinsert). Пустые строки
+ * (нет ни услуги из каталога, ни произвольного названия) отсеиваются.
+ */
+async function syncObjectServices(
+  objectId: string,
+  serviceList: ObjectServiceInput[],
+): Promise<void> {
+  await db.delete(clientObjectServices).where(eq(clientObjectServices.objectId, objectId));
+
+  const rows = serviceList
+    .filter((s) => s.serviceId || s.customName)
+    .map((s, i) => ({
+      objectId,
+      serviceId: s.serviceId ?? null,
+      customName: s.customName ?? null,
+      method: s.method ?? null,
+      sortOrder: i,
+    }));
+
+  if (rows.length > 0) {
+    await db.insert(clientObjectServices).values(rows);
+  }
 }
 
 export async function removeObject(objectId: string): Promise<Result> {

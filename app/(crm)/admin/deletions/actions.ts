@@ -13,7 +13,12 @@ type Result = { ok: true } | { ok: false; error: string };
 
 async function requireAdmin() {
   const session = await auth();
-  if (!session?.user?.id || session.user.role !== 'admin') return null;
+  // Sprint 9: manager (Регина) одобряет/отклоняет запросы на удаление наравне с admin.
+  if (
+    !session?.user?.id ||
+    (session.user.role !== 'admin' && session.user.role !== 'manager')
+  )
+    return null;
   return session.user;
 }
 

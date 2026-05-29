@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { Plus, ChevronDown, ChevronRight, CheckCircle2, Circle, MinusCircle, Camera } from 'lucide-react';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { createNextVisitForPriceItem } from './visits-actions';
+import { unitLabel, formatQuantity } from '@/lib/constants/units';
+import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
 export type VisitItemView = {
   id: string;
@@ -33,7 +35,8 @@ export type PriceItemGroup = {
   id: string;
   service: string;
   objectName: string | null;
-  areaM2: number;
+  areaM2: string;
+  unit: PriceItemUnit | null;
   visits: VisitView[];
 };
 
@@ -114,7 +117,7 @@ export function VisitsTab({ dealId, groups, hasMaster }: Props) {
             <div className="flex-1 min-w-0">
               <div className="font-medium text-content-primary">
                 {g.service}
-                <span className="text-content-muted font-normal"> · {g.areaM2} м²</span>
+                <span className="text-content-muted font-normal"> · {formatQuantity(g.areaM2)} {unitLabel(g.unit)}</span>
               </div>
               {g.objectName && (
                 <div className="text-xs text-content-muted mt-0.5">{g.objectName}</div>

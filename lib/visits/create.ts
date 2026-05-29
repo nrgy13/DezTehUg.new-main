@@ -10,6 +10,7 @@ import 'server-only';
 import { eq, and, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deals, dealPriceItems, dealWorkLogs } from '@/lib/db/schema/deals';
+import { clientObjects } from '@/lib/db/schema/objects';
 import { serviceChecklists, dealChecklistItems } from '@/lib/db/schema/checklists';
 
 export type CreatedVisit = {
@@ -95,9 +96,9 @@ export async function seedPlannedVisitsForDeal(
   dealId: string,
   masterId: string,
 ): Promise<CreatedVisit[]> {
-  // 1) Все позиции прайса сделки.
+  // 1) Все позиции прайса сделки (+ привязанный объект — для даты выезда).
   const items = await db
-    .select({ id: dealPriceItems.id })
+    .select({ id: dealPriceItems.id, objectId: dealPriceItems.objectId })
     .from(dealPriceItems)
     .where(eq(dealPriceItems.dealId, dealId));
 
@@ -126,17 +127,35 @@ export async function seedPlannedVisitsForDeal(
     .where(eq(deals.id, dealId))
     .limit(1);
 
-  let plannedAt: Date | null = null;
+  let dealPlannedAt: Date | null = null;
   if (deal?.startAt) {
-    plannedAt = deal.startAt;
+    dealPlannedAt = deal.startAt;
   } else if (deal?.startDate) {
-    plannedAt = new Date(deal.startDate + 'T09:00:00');
+    dealPlannedAt = new Date(deal.startDate + 'T09:00:00');
+  }
+
+  // 3b) Плановые даты обработки объектов — приоритетный источник даты выезда.
+  // Саня (Sprint 9): «на её основе формируются заявки мастерам».
+  const objectIds = items.map((i) => i.objectId).filter((x): x is string => !!x);
+  const objPlannedDate = new Map<string, string | null>();
+  if (objectIds.length > 0) {
+    const objs = await db
+      .select({
+        id: clientObjects.id,
+        plannedTreatmentDate: clientObjects.plannedTreatmentDate,
+      })
+      .from(clientObjects)
+      .where(inArray(clientObjects.id, objectIds));
+    for (const o of objs) objPlannedDate.set(o.id, o.plannedTreatmentDate);
   }
 
   // 4) Создаём planned-выезд для каждой позиции без активного выезда.
+  // Дата: плановая дата обработки объекта (если есть) → иначе дата старта сделки.
   const results: CreatedVisit[] = [];
   for (const it of items) {
     if (haveActive.has(it.id)) continue;
+    const objDate = it.objectId ? objPlannedDate.get(it.objectId) : null;
+    const plannedAt = objDate ? new Date(objDate + 'T09:00:00') : dealPlannedAt;
     const r = await createPlannedVisitForPriceItem({
       dealId,
       masterId,

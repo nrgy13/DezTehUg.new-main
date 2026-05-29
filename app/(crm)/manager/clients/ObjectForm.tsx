@@ -2,32 +2,72 @@
 
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import type { z } from 'zod';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, X } from 'lucide-react';
 
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { NeonInput } from '@/components/cyberpunk/NeonInput';
+import { TREATMENT_METHODS } from '@/lib/constants/treatment';
 import { clientObjectSchema } from './schemas';
-import { addObject, updateObject } from './actions';
+import { addObject, updateObject, createObjectForDeal } from './actions';
 import type { ClientObject } from '@/lib/db/schema/objects';
 
 type FormValues = z.infer<typeof clientObjectSchema>;
 
-type Props =
-  | { mode: 'create'; clientId: string; initial?: undefined }
-  | { mode: 'edit'; clientId: string; initial: ClientObject };
+type ServiceOption = { id: string; name: string };
+type InitialService = {
+  serviceId: string | null;
+  customName: string | null;
+  method: string | null;
+};
 
-export function ObjectForm({ mode, clientId, initial }: Props) {
+// dealId — если задан в режиме create, объект создаётся привязанным к договору
+// (createObjectForDeal). redirectTo — куда вернуться после сохранения.
+type Props =
+  | {
+      mode: 'create';
+      clientId: string;
+      services: ServiceOption[];
+      dealId?: string;
+      redirectTo?: string;
+      initial?: undefined;
+      initialServices?: undefined;
+    }
+  | {
+      mode: 'edit';
+      clientId: string;
+      services: ServiceOption[];
+      dealId?: string;
+      redirectTo?: string;
+      initial: ClientObject;
+      initialServices: InitialService[];
+    };
+
+const selectClass =
+  'w-full rounded-md bg-bg-primary px-3 py-2 text-sm border border-gray-200 focus:border-poison-green focus:ring-2 focus:ring-poison-green/20 focus:outline-none transition-all';
+
+export function ObjectForm({
+  mode,
+  clientId,
+  services,
+  dealId,
+  redirectTo,
+  initial,
+  initialServices,
+}: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const backHref = redirectTo ?? `/manager/clients/${clientId}?tab=objects`;
 
   const {
     register,
+    control,
     handleSubmit,
+    watch,
     formState: { errors },
     setError,
   } = useForm<FormValues>({
@@ -36,20 +76,31 @@ export function ObjectForm({ mode, clientId, initial }: Props) {
       ? {
           name: initial.name,
           address: initial.address,
-          areaM2: initial.areaM2 ?? undefined,
+          areaM2: initial.areaM2 != null ? Number(initial.areaM2) : undefined,
           objectType: initial.objectType ?? undefined,
           contactPerson: initial.contactPerson ?? undefined,
           contactPhone: initial.contactPhone ?? undefined,
+          plannedTreatmentDate: initial.plannedTreatmentDate ?? undefined,
           notes: initial.notes ?? undefined,
+          services: (initialServices ?? []).map((s) => ({
+            serviceId: s.serviceId ?? undefined,
+            customName: s.customName ?? undefined,
+            method: s.method ?? undefined,
+          })),
         }
-      : {},
+      : { services: [] },
   });
+
+  const { fields, append, remove } = useFieldArray({ control, name: 'services' });
+  const watchedServices = watch('services');
 
   const onSubmit = (values: FormValues) => {
     startTransition(async () => {
       const result =
         mode === 'create'
-          ? await addObject(clientId, values)
+          ? dealId
+            ? await createObjectForDeal(dealId, values)
+            : await addObject(clientId, values)
           : await updateObject(initial!.id, values);
       if (!result.ok) {
         if (result.field) {
@@ -60,7 +111,7 @@ export function ObjectForm({ mode, clientId, initial }: Props) {
         return;
       }
       toast.success(mode === 'create' ? 'Объект добавлен' : 'Объект обновлён');
-      router.push(`/manager/clients/${clientId}?tab=objects`);
+      router.push(backHref);
       router.refresh();
     });
   };
@@ -81,15 +132,24 @@ export function ObjectForm({ mode, clientId, initial }: Props) {
           <Field label="Адрес *" error={errors.address?.message} className="md:col-span-2">
             <NeonInput {...register('address')} placeholder="г. Анапа, ул. Гребенская, 5" />
           </Field>
-          <Field label="Площадь, м²" error={errors.areaM2?.message} hint="число">
+          <Field label="Площадь, м²" error={errors.areaM2?.message} hint="напр. 7,7">
             <NeonInput
-              {...register('areaM2', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })}
-              type="number"
-              inputMode="numeric"
+              {...register('areaM2', {
+                setValueAs: (v) =>
+                  v === '' || v == null ? undefined : Number(String(v).replace(',', '.')),
+              })}
+              type="text"
+              inputMode="decimal"
               placeholder="120"
             />
           </Field>
-          <div />
+          <Field
+            label="Плановая дата обработки"
+            error={errors.plannedTreatmentDate?.message}
+            hint="на её основе формируются заявки мастерам"
+          >
+            <NeonInput {...register('plannedTreatmentDate')} type="date" />
+          </Field>
           <Field label="Контактное лицо" error={errors.contactPerson?.message}>
             <NeonInput {...register('contactPerson')} placeholder="Сидорова О.А., администратор" />
           </Field>
@@ -107,6 +167,73 @@ export function ObjectForm({ mode, clientId, initial }: Props) {
         </div>
       </CyberpunkCard>
 
+      <CyberpunkCard variant="default" hoverEffect={false} className="p-5">
+        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
+          <h2 className="text-sm font-orbitron font-semibold tracking-wider text-content-primary uppercase">
+            Услуги объекта
+          </h2>
+          <button
+            type="button"
+            onClick={() => append({ serviceId: undefined, customName: undefined, method: undefined })}
+            className="inline-flex items-center gap-1 text-xs font-orbitron uppercase tracking-wider text-poison-green hover:text-neon-orange transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Добавить
+          </button>
+        </div>
+
+        {fields.length === 0 ? (
+          <p className="text-sm text-content-muted">
+            Услуги не заданы. Можно добавить несколько услуг — у каждой свой способ обработки.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {fields.map((f, i) => {
+              const isCustom = !watchedServices?.[i]?.serviceId;
+              return (
+                <div
+                  key={f.id}
+                  className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-start"
+                >
+                  <div className="space-y-2">
+                    <select {...register(`services.${i}.serviceId` as const)} className={selectClass}>
+                      <option value="">— произвольная услуга —</option>
+                      {services.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    {isCustom && (
+                      <NeonInput
+                        {...register(`services.${i}.customName` as const)}
+                        placeholder="Название услуги"
+                      />
+                    )}
+                  </div>
+                  <select {...register(`services.${i}.method` as const)} className={selectClass}>
+                    <option value="">— способ обработки —</option>
+                    {TREATMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => remove(i)}
+                    className="p-2 text-content-muted hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                    title="Убрать услугу"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CyberpunkCard>
+
       <div className="flex items-center gap-3">
         <CyberpunkButton type="submit" disabled={isPending} variant="primary">
           {isPending ? (
@@ -120,10 +247,7 @@ export function ObjectForm({ mode, clientId, initial }: Props) {
             'Сохранить'
           )}
         </CyberpunkButton>
-        <CyberpunkButton
-          href={`/manager/clients/${clientId}?tab=objects`}
-          variant="ghost"
-        >
+        <CyberpunkButton href={backHref} variant="ghost">
           Отмена
         </CyberpunkButton>
       </div>

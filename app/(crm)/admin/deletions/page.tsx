@@ -29,7 +29,7 @@ type RawRow = {
 };
 
 export default async function AdminDeletionsPage() {
-  await requireRole('admin');
+  await requireRole('admin', 'manager');
 
   // pending — главная очередь, rejected — для контекста (последние 30 дней)
   const result = await db.execute<RawRow>(sql`

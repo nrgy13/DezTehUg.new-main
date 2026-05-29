@@ -16,14 +16,17 @@ import { NeonInput } from '@/components/cyberpunk/NeonInput';
 import { addPriceItem, updatePriceItem, deletePriceItem } from '../actions';
 import type { Service } from '@/lib/db/schema/services';
 import type { ClientObject } from '@/lib/db/schema/objects';
+import type { PriceItemUnit } from '@/lib/db/schema/deals';
+import { unitLabel, formatQuantity, UNIT_OPTIONS } from '@/lib/constants/units';
+import { TREATMENT_METHODS, TREATMENT_FREQUENCIES } from '@/lib/constants/treatment';
 
 type PriceItem = {
   id: string;
   objectId: string | null;
   serviceId: string | null;
   customName: string | null;
-  areaM2: number;
-  unit: 'm2' | 'pcs';
+  areaM2: string;
+  unit: PriceItemUnit;
   method: string | null;
   frequency: string | null;
   priceNoVat: string;
@@ -31,10 +34,6 @@ type PriceItem = {
   vatRate: string;
   sortOrder: number | null;
 };
-
-function unitLabel(unit: 'm2' | 'pcs'): string {
-  return unit === 'pcs' ? 'шт' : 'м²';
-}
 
 export function PriceItemsTable({
   dealId,
@@ -91,7 +90,7 @@ export function PriceItemsTable({
                 <td className="px-4 py-2 text-content-secondary text-xs">{obj?.name ?? '—'}</td>
                 <td className="px-4 py-2 text-content-primary">{name}</td>
                 <td className="px-4 py-2 text-right text-content-secondary">
-                  {it.areaM2} <span className="text-content-muted text-xs">{unitLabel(it.unit)}</span>
+                  {formatQuantity(it.areaM2)} <span className="text-content-muted text-xs">{unitLabel(it.unit)}</span>
                 </td>
                 <td className="px-4 py-2 text-content-secondary text-xs">{it.method ?? '—'}</td>
                 <td className="px-4 py-2 text-content-secondary text-xs">{it.frequency ?? '—'}</td>
@@ -156,7 +155,7 @@ export function PriceItemsTable({
               </div>
               {obj && <div className="text-xs text-content-muted mb-1">{obj.name}</div>}
               <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-content-secondary mb-1.5">
-                <span>{it.areaM2} {unitLabel(it.unit)}</span>
+                <span>{formatQuantity(it.areaM2)} {unitLabel(it.unit)}</span>
                 {it.method && <span>{it.method}</span>}
                 {it.frequency && <span>{it.frequency}</span>}
               </div>
@@ -222,10 +221,17 @@ function PriceItemDialog({
   const [objectId, setObjectId] = useState(item?.objectId ?? '');
   const [serviceId, setServiceId] = useState(item?.serviceId ?? '');
   const [customName, setCustomName] = useState(item?.customName ?? '');
-  const [areaM2, setAreaM2] = useState(String(item?.areaM2 ?? 0));
-  const [unit, setUnit] = useState<'m2' | 'pcs'>(item?.unit ?? 'm2');
+  const [areaM2, setAreaM2] = useState(item?.areaM2 ?? '');
+  const [unit, setUnit] = useState<PriceItemUnit>(item?.unit ?? 'm2');
   const [method, setMethod] = useState(item?.method ?? '');
-  const [frequency, setFrequency] = useState(item?.frequency ?? '');
+  // Периодичность: select из справочника + «Своё…» (свободный ввод). Если у
+  // позиции уже стоит значение вне справочника — это «своё», открываем текст-поле.
+  const initialFreqCustom =
+    !!item?.frequency && !(TREATMENT_FREQUENCIES as readonly string[]).includes(item.frequency);
+  const [freqSelect, setFreqSelect] = useState(
+    initialFreqCustom ? '__custom__' : item?.frequency ?? '',
+  );
+  const [freqCustom, setFreqCustom] = useState(initialFreqCustom ? item!.frequency! : '');
   const [priceNoVat, setPriceNoVat] = useState(item?.priceNoVat ?? '');
   const [priceWithVat, setPriceWithVat] = useState(item?.priceWithVat ?? '');
   // БД хранит vatRate как numeric "5.00", а option value у select — "5".
@@ -278,14 +284,15 @@ function PriceItemDialog({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const frequencyValue = freqSelect === '__custom__' ? freqCustom.trim() : freqSelect;
     const payload = {
       objectId: objectId || null,
       serviceId: serviceId || null,
       customName,
-      areaM2: Number(areaM2) || 0,
+      areaM2: Number(areaM2.replace(',', '.')) || 0,
       unit,
       method,
-      frequency,
+      frequency: frequencyValue,
       priceNoVat: Number(priceNoVat) || 0,
       vatRate: Number(vatRate) || 0,
       sortOrder: Number(sortOrder) || 0,
@@ -380,45 +387,76 @@ function PriceItemDialog({
               <div className="flex gap-2 mt-1">
                 <NeonInput
                   id="areaM2"
-                  type="number"
-                  min={0}
+                  type="text"
+                  inputMode="decimal"
                   value={areaM2}
                   onChange={(e) => setAreaM2(e.target.value)}
                   disabled={isPending}
                   required
+                  placeholder="напр. 7,7"
                   className="flex-1"
                 />
                 <select
                   value={unit}
-                  onChange={(e) => setUnit(e.target.value as 'm2' | 'pcs')}
+                  onChange={(e) => setUnit(e.target.value as PriceItemUnit)}
                   disabled={isPending}
                   className="px-2 text-sm bg-bg-primary border border-gray-300 rounded-md focus:border-neon-orange focus:outline-none h-11"
                   aria-label="Единица измерения"
                 >
-                  <option value="m2">м²</option>
-                  <option value="pcs">шт</option>
+                  {UNIT_OPTIONS.map((u) => (
+                    <option key={u.value} value={u.value}>
+                      {u.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
             <div>
               <Label htmlFor="method">Способ</Label>
-              <NeonInput
+              <select
                 id="method"
                 value={method}
                 onChange={(e) => setMethod(e.target.value)}
-                placeholder="Сухая / Туман"
                 disabled={isPending}
-              />
+                className="w-full mt-1 px-3 py-2 text-sm bg-bg-primary border border-gray-300 rounded-md focus:border-neon-orange focus:outline-none h-11"
+              >
+                <option value="">— не указан —</option>
+                {method && !(TREATMENT_METHODS as readonly string[]).includes(method) && (
+                  <option value={method}>{method}</option>
+                )}
+                {TREATMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <Label htmlFor="frequency">Периодичность</Label>
-              <NeonInput
+              <select
                 id="frequency"
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value)}
-                placeholder="Ежемесячно / Разово"
+                value={freqSelect}
+                onChange={(e) => setFreqSelect(e.target.value)}
                 disabled={isPending}
-              />
+                className="w-full mt-1 px-3 py-2 text-sm bg-bg-primary border border-gray-300 rounded-md focus:border-neon-orange focus:outline-none h-11"
+              >
+                <option value="">— не указана —</option>
+                {TREATMENT_FREQUENCIES.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+                <option value="__custom__">Своё…</option>
+              </select>
+              {freqSelect === '__custom__' && (
+                <NeonInput
+                  value={freqCustom}
+                  onChange={(e) => setFreqCustom(e.target.value)}
+                  placeholder="Впиши периодичность"
+                  disabled={isPending}
+                  className="mt-2"
+                />
+              )}
             </div>
           </div>
 

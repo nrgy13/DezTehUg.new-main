@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { eq, asc, desc } from 'drizzle-orm';
+import { eq, asc, desc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { ArrowLeft, Briefcase } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
@@ -9,15 +9,17 @@ import { deals, dealPriceItems, dealAddendums, dealWorkLogs } from '@/lib/db/sch
 import { dealChecklistItems } from '@/lib/db/schema/checklists';
 import { documents } from '@/lib/db/schema/documents';
 import { clients } from '@/lib/db/schema/clients';
-import { clientObjects } from '@/lib/db/schema/objects';
+import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
 import { activityLog } from '@/lib/db/schema/activity';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { DealStatusBadge } from '@/components/crm/DealStatusBadge';
 import { DealStatusControl } from './DealStatusControl';
+import { DeleteDealButton } from './DeleteDealButton';
 import { PriceItemsTable } from './PriceItemsTable';
 import { DealRequisitesTab } from './DealRequisitesTab';
+import { DealObjectsTab } from './DealObjectsTab';
 import { DocumentsTab } from './DocumentsTab';
 import { AddendumsTab } from './AddendumsTab';
 import { VisitsTab, type PriceItemGroup } from './VisitsTab';
@@ -28,6 +30,7 @@ export const dynamic = 'force-dynamic';
 const TABS = [
   { key: 'requisites', label: 'Реквизиты' },
   { key: 'prices', label: 'Прайс' },
+  { key: 'objects', label: 'Объекты' },
   { key: 'visits', label: 'Выезды' },
   { key: 'documents', label: 'Документы' },
   { key: 'addendums', label: 'ДС' },
@@ -115,6 +118,48 @@ export default async function DealDetailPage({
     .from(services)
     .where(eq(services.isActive, true))
     .orderBy(asc(services.sortOrder));
+
+  // Sprint 9: объекты, привязанные к этому договору + не привязанные ни к одному
+  // (для «Привязать существующий»). Берём из уже загруженного списка objects.
+  const dealObjects = objects.filter((o) => o.dealId === id);
+  const attachableObjects = objects
+    .filter((o) => o.dealId === null)
+    .map((o) => ({ id: o.id, name: o.name, address: o.address }));
+
+  // Услуги объектов договора (несколько на объект) с именами из каталога.
+  const dealObjectIds = dealObjects.map((o) => o.id);
+  const objectServiceRows = dealObjectIds.length
+    ? await db
+        .select({
+          id: clientObjectServices.id,
+          objectId: clientObjectServices.objectId,
+          serviceId: clientObjectServices.serviceId,
+          customName: clientObjectServices.customName,
+          method: clientObjectServices.method,
+          sortOrder: clientObjectServices.sortOrder,
+        })
+        .from(clientObjectServices)
+        .where(inArray(clientObjectServices.objectId, dealObjectIds))
+        .orderBy(asc(clientObjectServices.sortOrder))
+    : [];
+  const svcNameMap = new Map(allServices.map((s) => [s.id, s.name]));
+  const servicesByObject = new Map<string, { label: string; method: string | null }[]>();
+  for (const row of objectServiceRows) {
+    const label =
+      row.customName ?? (row.serviceId ? svcNameMap.get(row.serviceId) ?? 'Услуга' : 'Услуга');
+    const arr = servicesByObject.get(row.objectId) ?? [];
+    arr.push({ label, method: row.method });
+    servicesByObject.set(row.objectId, arr);
+  }
+  const dealObjectsView = dealObjects.map((o) => ({
+    id: o.id,
+    name: o.name,
+    objectType: o.objectType,
+    address: o.address,
+    areaM2: o.areaM2,
+    plannedTreatmentDate: o.plannedTreatmentDate,
+    services: servicesByObject.get(o.id) ?? [],
+  }));
 
   // Total
   const totalNoVat = priceItems.reduce((sum, pi) => sum + Number(pi.priceNoVat), 0);
@@ -242,6 +287,7 @@ export default async function DealDetailPage({
       service: pi.customName || (pi.serviceId ? svcMap.get(pi.serviceId) ?? '—' : '—'),
       objectName: obj?.name ?? null,
       areaM2: pi.areaM2,
+      unit: pi.unit,
       visits,
     };
   });
@@ -276,7 +322,10 @@ export default async function DealDetailPage({
           <DealStatusBadge status={deal.status} />
         </div>
 
-        <DealStatusControl dealId={deal.id} status={deal.status} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <DealStatusControl dealId={deal.id} status={deal.status} />
+          <DeleteDealButton dealId={deal.id} contractNumber={deal.contractNumber} />
+        </div>
       </div>
 
       {/* Tabs — на мобиле горизонтальный скролл (6 табов не влезают по ширине) */}
@@ -319,6 +368,14 @@ export default async function DealDetailPage({
             totalWithVat={totalWithVat}
           />
         </CyberpunkCard>
+      )}
+
+      {tab === 'objects' && (
+        <DealObjectsTab
+          dealId={deal.id}
+          objects={dealObjectsView}
+          attachable={attachableObjects}
+        />
       )}
 
       {tab === 'visits' && (

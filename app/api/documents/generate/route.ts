@@ -17,6 +17,7 @@ const inputSchema = z.object({
   format: z.enum(['docx', 'pdf', 'both']).default('docx'),
   overrides: z.record(z.unknown()).optional(),
   priceItemIds: z.array(z.string().uuid()).optional(),
+  objectId: z.string().uuid().optional(),
 });
 
 export async function POST(request: Request) {
@@ -46,7 +47,8 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { type, dealId, addendumId, clientId, format, overrides, priceItemIds } = parsed.data;
+  const { type, dealId, addendumId, clientId, format, overrides, priceItemIds, objectId } =
+    parsed.data;
 
   if (!dealId && !clientId) {
     return NextResponse.json(
@@ -65,6 +67,7 @@ export async function POST(request: Request) {
       overrides,
       actorId: session.user.id,
       priceItemIds,
+      objectId,
     });
 
     await db.insert(activityLog).values({

@@ -4,14 +4,15 @@ import { eq, asc } from 'drizzle-orm';
 import { ChevronLeft } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
+import { deals } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { services } from '@/lib/db/schema/services';
-import { ObjectForm } from '../../../ObjectForm';
+import { ObjectForm } from '../../../../clients/ObjectForm';
 
-export const metadata = { title: 'Новый объект — ДезТехЮг CRM' };
+export const metadata = { title: 'Новый объект договора — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
 
-export default async function NewObjectPage({
+export default async function NewDealObjectPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -19,12 +20,22 @@ export default async function NewObjectPage({
   await requireRole('manager');
   const { id } = await params;
 
+  const [deal] = await db
+    .select({
+      id: deals.id,
+      clientId: deals.clientId,
+      contractNumber: deals.contractNumber,
+    })
+    .from(deals)
+    .where(eq(deals.id, id))
+    .limit(1);
+  if (!deal) notFound();
+
   const [client] = await db
     .select({ id: clients.id, shortName: clients.shortName })
     .from(clients)
-    .where(eq(clients.id, id))
+    .where(eq(clients.id, deal.clientId))
     .limit(1);
-  if (!client) notFound();
 
   const serviceList = await db
     .select({ id: services.id, name: services.name })
@@ -32,22 +43,31 @@ export default async function NewObjectPage({
     .where(eq(services.isActive, true))
     .orderBy(asc(services.sortOrder), asc(services.name));
 
+  const backHref = `/manager/deals/${id}?tab=objects`;
+
   return (
     <div className="space-y-6">
       <div>
         <Link
-          href={`/manager/clients/${id}?tab=objects`}
+          href={backHref}
           className="inline-flex items-center gap-1 text-sm text-content-muted hover:text-neon-orange transition-colors mb-2"
         >
-          <ChevronLeft className="w-4 h-4" />
-          К карточке клиента
+          <ChevronLeft className="w-4 h-4" />К договору {deal.contractNumber}
         </Link>
         <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Новый объект
+          Новый объект договора
         </h1>
-        <p className="text-sm text-content-muted mt-1">Клиент: {client.shortName}</p>
+        <p className="text-sm text-content-muted mt-1">
+          Договор {deal.contractNumber} · {client?.shortName ?? '—'}
+        </p>
       </div>
-      <ObjectForm mode="create" clientId={id} services={serviceList} />
+      <ObjectForm
+        mode="create"
+        clientId={deal.clientId}
+        dealId={deal.id}
+        services={serviceList}
+        redirectTo={backHref}
+      />
     </div>
   );
 }

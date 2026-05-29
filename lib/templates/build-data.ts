@@ -6,6 +6,7 @@ import { deals, dealPriceItems, dealAddendums, dealWorkLogs, type Deal } from '@
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
 import { CONTRACT_PROVIDER } from '@/lib/contract-provider';
+import { unitLabel, formatQuantity } from '@/lib/constants/units';
 import type { DocumentType } from '@/lib/db/schema/documents';
 
 /**
@@ -23,6 +24,9 @@ export type BuildContext = {
   overrides?: Record<string, unknown>;
   /** Sprint 8: если задано — генерим только эти позиции прайса. Иначе все. */
   priceItemIds?: string[];
+  /** Sprint 9: если задано — акт по конкретному объекту (АО/АВР). Сужает прайс и
+   *  список объектов до этого объекта. */
+  objectId?: string;
 };
 
 /**
@@ -80,10 +84,15 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         .orderBy(asc(dealPriceItems.sortOrder), asc(dealPriceItems.id))
     : [];
 
+  // Sprint 9: акт по объекту — сначала сужаем прайс до позиций этого объекта.
+  const priceItemsByObject = ctx.objectId
+    ? priceItemsAll.filter((p) => p.objectId === ctx.objectId)
+    : priceItemsAll;
+
   const priceItemsRaw =
     ctx.priceItemIds && ctx.priceItemIds.length > 0
-      ? priceItemsAll.filter((p) => ctx.priceItemIds!.includes(p.id))
-      : priceItemsAll;
+      ? priceItemsByObject.filter((p) => ctx.priceItemIds!.includes(p.id))
+      : priceItemsByObject;
 
   // Имена услуг (для priceItems из каталога)
   const serviceIds = priceItemsRaw.map((p) => p.serviceId).filter((x): x is string => !!x);
@@ -95,6 +104,9 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
 
   const objMap = new Map(objects.map((o) => [o.id, o]));
 
+  // Sprint 9: для акта по объекту список объектов в шаблоне сужаем до него одного.
+  const templateObjects = ctx.objectId ? objects.filter((o) => o.id === ctx.objectId) : objects;
+
   const priceItems = priceItemsRaw.map((p, idx) => {
     const obj = p.objectId ? objMap.get(p.objectId) : null;
     return {
@@ -102,9 +114,9 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       serviceName: p.customName || (p.serviceId ? svcMap.get(p.serviceId) ?? '' : ''),
       objectName: obj?.name ?? '',
       objectAddress: obj?.address ?? '',
-      area: p.areaM2,
+      area: formatQuantity(p.areaM2),
       areaUnit: p.unit,
-      areaUnitLabel: p.unit === 'pcs' ? 'шт' : 'м²',
+      areaUnitLabel: unitLabel(p.unit),
       method: p.method ?? '',
       frequency: p.frequency ?? '',
       priceNet: formatMoney(p.priceNoVat),
@@ -170,11 +182,11 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
           bankCorrAccount: client.bankCorrAccount ?? '',
         }
       : {},
-    objects: objects.map((o, i) => ({
+    objects: templateObjects.map((o, i) => ({
       index: i + 1,
       name: o.name,
       address: o.address,
-      area: o.areaM2 ?? '',
+      area: formatQuantity(o.areaM2),
       service: o.objectType ?? '',
     })),
     priceItems,
@@ -218,7 +230,7 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         areaCheck: 'совпадает',
         actualArea:
           workLogs.reduce((s, w) => s + (w.areaM2 ?? 0), 0) ||
-          priceItemsRaw.reduce((s, p) => s + p.areaM2, 0),
+          priceItemsRaw.reduce((s, p) => s + Number(p.areaM2), 0),
         discrepancy: '',
         disinfector: '',
         responsibleName: '',

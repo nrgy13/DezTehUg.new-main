@@ -100,19 +100,54 @@ export const updateClientStatusSchema = z.object({
   status: z.enum(['lead', 'active', 'inactive', 'blocked']),
 });
 
+// === Услуга объекта (Sprint 9: несколько услуг на объект) ===
+// Каждая строка — услуга из каталога (serviceId) ИЛИ произвольное название
+// (customName) + способ обработки. Пустые строки отсеиваются в action.
+export const objectServiceSchema = z.object({
+  serviceId: z
+    .string()
+    .uuid()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  customName: optionalTrimmed,
+  method: optionalTrimmed,
+});
+
 // === Объект обслуживания ===
 export const clientObjectSchema = z.object({
   name: z.string().trim().min(1, 'Название объекта обязательно').max(255),
   address: z.string().trim().min(1, 'Адрес обязателен'),
-  areaM2: z
-    .union([z.number().int().positive().max(1000000), z.nan()])
-    .optional()
-    .transform((v) => (typeof v === 'number' && !isNaN(v) ? v : undefined)),
+  // Sprint 9: дробная квадратура. Запятую нормализуем в точку, пусто → undefined.
+  areaM2: z.preprocess(
+    (v) => {
+      if (v === '' || v === null || v === undefined) return undefined;
+      return typeof v === 'string' ? v.replace(',', '.') : v;
+    },
+    z.coerce.number().positive().max(1_000_000).optional(),
+  ),
   objectType: optionalTrimmed,
   contactPerson: optionalTrimmed,
   contactPhone: phoneSchema,
+  // Sprint 9: договор-основание (инъектируется через createObjectForDeal,
+  // в форме клиента не редактируется — привязка идёт через attachObjectToDeal).
+  dealId: z
+    .string()
+    .uuid()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  // Sprint 9: плановая дата обработки (ГГГГ-ММ-ДД), пусто → undefined.
+  plannedTreatmentDate: z.preprocess(
+    (v) => (v === '' || v == null ? undefined : v),
+    z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Дата в формате ГГГГ-ММ-ДД')
+      .optional(),
+  ),
+  // Sprint 9: услуги объекта (несколько). default → пустой массив.
+  services: z.array(objectServiceSchema).optional().default([]),
   notes: optionalTrimmed,
 });
 
 export type ClientFormInput = z.infer<typeof clientFormSchema>;
 export type ClientObjectInput = z.infer<typeof clientObjectSchema>;
+export type ObjectServiceInput = z.infer<typeof objectServiceSchema>;

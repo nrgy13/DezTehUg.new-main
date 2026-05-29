@@ -21,7 +21,12 @@ type Result = { ok: true } | { ok: false; error: string };
 
 async function requireAdmin() {
   const session = await auth();
-  if (!session?.user?.id || session.user.role !== 'admin') return null;
+  // Sprint 9: manager (Регина) приравнен к admin для настроек CRM.
+  if (
+    !session?.user?.id ||
+    (session.user.role !== 'admin' && session.user.role !== 'manager')
+  )
+    return null;
   return session.user;
 }
 

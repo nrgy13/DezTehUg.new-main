@@ -477,7 +477,7 @@ export async function submitProposalForLead(
     await db.insert(dealPriceItems).values({
       dealId: deal.id,
       customName: it.customName,
-      areaM2: it.areaM2,
+      areaM2: String(it.areaM2),
       method: it.method?.trim() || null,
       frequency: it.frequency?.trim() || null,
       priceNoVat: String(it.priceNoVat),

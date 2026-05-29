@@ -9,7 +9,7 @@ export const metadata = { title: 'Каталог услуг — ДезТехЮг
 export const dynamic = 'force-dynamic';
 
 export default async function ServicesAdminPage() {
-  await requireRole('admin');
+  await requireRole('admin', 'manager');
 
   const list = await db
     .select({

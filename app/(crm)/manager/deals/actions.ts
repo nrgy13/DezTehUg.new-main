@@ -450,6 +450,61 @@ export async function assignMaster(
 }
 
 // =============================================================
+// DELETE
+// =============================================================
+
+/**
+ * Полное удаление сделки manager или admin (Sprint 9: Регина = прямые права).
+ *
+ * Порядок важен: документы привязаны к сделке через FK onDelete='set null',
+ * поэтому их надо удалить ЯВНО (файлы из storage + запись) до удаления сделки,
+ * иначе они осиротеют. Остальное чистится каскадами Postgres:
+ *   deal_price_items / deal_addendums / deal_work_logs → cascade,
+ *   deal_checklist_items → cascade транзитивно через work_logs,
+ *   client_objects.deal_id → set null (объекты остаются у клиента).
+ */
+export async function deleteDeal(id: string): Promise<Result> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Нет доступа' };
+
+  const [deal] = await db
+    .select({
+      id: deals.id,
+      contractNumber: deals.contractNumber,
+      clientId: deals.clientId,
+    })
+    .from(deals)
+    .where(eq(deals.id, id))
+    .limit(1);
+  if (!deal) return { ok: false, error: 'Сделка не найдена' };
+
+  // Документы сделки — удаляем файлы + записи (FK set null их бы осиротил).
+  const docs = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(eq(documents.dealId, id));
+  for (const doc of docs) {
+    const res = await executeDocumentDeletion(doc.id);
+    if (!res.ok) {
+      return { ok: false, error: `Не удалось удалить документ сделки: ${res.error}` };
+    }
+  }
+
+  await db.delete(deals).where(eq(deals.id, id));
+
+  await logActivity(actor.id, 'deal.delete', id, {
+    contractNumber: deal.contractNumber,
+    clientId: deal.clientId,
+    deletedDocuments: docs.length,
+  });
+
+  revalidatePath('/manager/deals');
+  revalidatePath(`/manager/clients/${deal.clientId}`);
+
+  return { ok: true, data: undefined };
+}
+
+// =============================================================
 // PRICE ITEMS
 // =============================================================
 
@@ -483,7 +538,7 @@ export async function addPriceItem(
       objectId: data.objectId ?? null,
       serviceId: data.serviceId ?? null,
       customName: emptyToNull(data.customName ?? null),
-      areaM2: data.areaM2,
+      areaM2: String(data.areaM2),
       unit: data.unit,
       method: emptyToNull(data.method ?? null),
       frequency: emptyToNull(data.frequency ?? null),
@@ -532,7 +587,7 @@ export async function updatePriceItem(
       objectId: data.objectId ?? null,
       serviceId: data.serviceId ?? null,
       customName: emptyToNull(data.customName ?? null),
-      areaM2: data.areaM2,
+      areaM2: String(data.areaM2),
       unit: data.unit,
       method: emptyToNull(data.method ?? null),
       frequency: emptyToNull(data.frequency ?? null),

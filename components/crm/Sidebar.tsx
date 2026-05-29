@@ -46,22 +46,23 @@ const NAV: NavItem[] = [
   { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'] },
   { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'] },
   { href: '/manager/inbox', label: 'Уведомления', icon: Bell, roles: ['manager'] },
-  { href: '/manual', label: 'Инструкция', icon: BookOpen, roles: ['manager'] },
 
   // Мастер
   { href: '/master', label: 'Мои выезды', icon: Wrench, roles: ['master'] },
   { href: '/master/calendar', label: 'Календарь', icon: Calendar, roles: ['master'] },
   { href: '/master/completed', label: 'Выполнено', icon: ListChecks, roles: ['master'] },
-  { href: '/manual', label: 'Инструкция', icon: BookOpen, roles: ['master'] },
 
   // Админ
   { href: '/admin', label: 'Дашборд', icon: LayoutDashboard, roles: ['admin'] },
   { href: '/admin/users', label: 'Пользователи', icon: Users, roles: ['admin'] },
-  { href: '/admin/services', label: 'Услуги', icon: Wrench, roles: ['admin'] },
-  { href: '/admin/templates', label: 'Шаблоны', icon: FileText, roles: ['admin'] },
-  { href: '/admin/deletions', label: 'Удаления', icon: Trash2, roles: ['admin'] },
-  { href: '/admin/settings', label: 'Настройки', icon: Settings, roles: ['admin'] },
-  { href: '/manual', label: 'Инструкция', icon: BookOpen, roles: ['admin'] },
+  // Sprint 9: Регина (manager) получила админ-разделы — всё, кроме «Пользователи».
+  { href: '/admin/services', label: 'Услуги', icon: Wrench, roles: ['admin', 'manager'] },
+  { href: '/admin/templates', label: 'Шаблоны', icon: FileText, roles: ['admin', 'manager'] },
+  { href: '/admin/deletions', label: 'Удаления', icon: Trash2, roles: ['admin', 'manager'] },
+  { href: '/admin/settings', label: 'Настройки', icon: Settings, roles: ['admin', 'manager'] },
+
+  // Инструкция — для всех ролей, всегда в самом низу навигации.
+  { href: '/manual', label: 'Инструкция', icon: BookOpen, roles: ['admin', 'manager', 'master'] },
 ];
 
 const ROLE_LABEL: Record<UserRole, string> = {

@@ -17,6 +17,8 @@ export type GenerateDocumentInput = {
   actorId: string;
   /** Sprint 8: если задано — генерим только эти позиции прайса. Иначе все. */
   priceItemIds?: string[];
+  /** Sprint 9: акт по объекту (АО/АВР) — сужает прайс/объекты до этого объекта. */
+  objectId?: string;
 };
 
 export type GenerateDocumentResult = {
@@ -57,6 +59,7 @@ export async function generateDocument(
     documentDate: dateIso,
     overrides: input.overrides,
     priceItemIds: input.priceItemIds,
+    objectId: input.objectId,
   });
 
   const tpl = await getActiveTemplate(input.type);

@@ -16,7 +16,8 @@ type Result<T = void> =
 async function getActor() {
   const session = await auth();
   if (!session?.user?.id) return null;
-  if (session.user.role !== 'admin') return null;
+  // Sprint 9: Регина (manager) получила права администратора на каталог услуг.
+  if (session.user.role !== 'admin' && session.user.role !== 'manager') return null;
   return session.user;
 }
 

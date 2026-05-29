@@ -33,6 +33,8 @@ import { NeonInput } from '@/components/cyberpunk/NeonInput';
 import { sendDocumentToClient, sendDocumentToAccountant } from './send-document-action';
 import { deleteDocument } from '../actions';
 import type { DocumentType, DocumentStatus, DeletionStatus } from '@/lib/db/schema/documents';
+import type { PriceItemUnit } from '@/lib/db/schema/deals';
+import { unitLabel, formatQuantity } from '@/lib/constants/units';
 
 const DOC_TYPE_LABEL: Record<DocumentType, string> = {
   contract: 'Договор',
@@ -87,8 +89,8 @@ export type PriceItemForDoc = {
   id: string;
   objectName: string | null;
   serviceName: string;
-  areaM2: number;
-  unit: 'm2' | 'pcs';
+  areaM2: string;
+  unit: PriceItemUnit;
   priceWithVat: number;
 };
 
@@ -396,7 +398,7 @@ function GenerateDocumentDialog({
                     {objectName}
                   </div>
                   {items.map((p) => {
-                    const unitLbl = p.unit === 'pcs' ? 'шт' : 'м²';
+                    const unitLbl = unitLabel(p.unit);
                     return (
                       <label
                         key={p.id}
@@ -411,7 +413,7 @@ function GenerateDocumentDialog({
                         />
                         <span className="flex-1 text-content-primary">{p.serviceName}</span>
                         <span className="text-content-muted text-xs">
-                          {p.areaM2} {unitLbl}
+                          {formatQuantity(p.areaM2)} {unitLbl}
                         </span>
                         <span className="text-content-primary font-medium tabular-nums">
                           {p.priceWithVat.toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽

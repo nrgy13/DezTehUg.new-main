@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, asc, inArray } from 'drizzle-orm';
 import { Pencil, Plus, ChevronLeft, FileText, History as HistoryIcon, ScrollText, Boxes } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
 import { clients } from '@/lib/db/schema/clients';
-import { clientObjects } from '@/lib/db/schema/objects';
+import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
+import { services } from '@/lib/db/schema/services';
 import { activityLog } from '@/lib/db/schema/activity';
 import { users } from '@/lib/db/schema/users';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
@@ -13,9 +14,9 @@ import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { ClientTypeBadge } from '@/components/crm/ClientStatusBadge';
 import { DealStatusBadge } from '@/components/crm/DealStatusBadge';
 import { ClientStatusControl } from '../ClientStatusControl';
-import { DeleteObjectButton } from '../DeleteObjectButton';
 import { CreateDealButton } from './CreateDealButton';
 import { DeleteClientButton } from './DeleteClientButton';
+import { ClientObjectsList } from './ClientObjectsList';
 import { deals } from '@/lib/db/schema/deals';
 
 export const dynamic = 'force-dynamic';
@@ -209,6 +210,49 @@ async function ObjectsTab({ clientId }: { clientId: string }) {
     .where(eq(clientObjects.clientId, clientId))
     .orderBy(desc(clientObjects.createdAt));
 
+  const clientDeals = await db
+    .select({ id: deals.id, contractNumber: deals.contractNumber })
+    .from(deals)
+    .where(eq(deals.clientId, clientId))
+    .orderBy(desc(deals.contractDate), desc(deals.createdAt));
+
+  const contractByDeal = new Map(clientDeals.map((d) => [d.id, d.contractNumber]));
+
+  const objectIds = objects.map((o) => o.id);
+  const serviceRows = objectIds.length
+    ? await db
+        .select({
+          objectId: clientObjectServices.objectId,
+          serviceId: clientObjectServices.serviceId,
+          customName: clientObjectServices.customName,
+          method: clientObjectServices.method,
+          serviceName: services.name,
+        })
+        .from(clientObjectServices)
+        .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
+        .where(inArray(clientObjectServices.objectId, objectIds))
+        .orderBy(asc(clientObjectServices.sortOrder))
+    : [];
+
+  const servicesByObject = new Map<string, { label: string; method: string | null }[]>();
+  for (const r of serviceRows) {
+    const list = servicesByObject.get(r.objectId) ?? [];
+    list.push({ label: r.customName ?? r.serviceName ?? 'Услуга', method: r.method });
+    servicesByObject.set(r.objectId, list);
+  }
+
+  const objectViews = objects.map((o) => ({
+    id: o.id,
+    name: o.name,
+    objectType: o.objectType,
+    address: o.address,
+    areaM2: o.areaM2,
+    plannedTreatmentDate: o.plannedTreatmentDate,
+    dealId: o.dealId,
+    contractNumber: o.dealId ? contractByDeal.get(o.dealId) ?? null : null,
+    services: servicesByObject.get(o.id) ?? [],
+  }));
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -217,34 +261,12 @@ async function ObjectsTab({ clientId }: { clientId: string }) {
           Добавить объект
         </CyberpunkButton>
       </div>
-      {objects.length === 0 ? (
+      {objectViews.length === 0 ? (
         <CyberpunkCard variant="default" hoverEffect={false} className="p-10 text-center">
           <p className="text-sm text-content-muted">У клиента пока нет объектов обслуживания.</p>
         </CyberpunkCard>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {objects.map((o) => (
-            <CyberpunkCard key={o.id} variant="default" className="p-4">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="font-semibold text-content-primary">{o.name}</div>
-                <DeleteObjectButton objectId={o.id} objectName={o.name} />
-              </div>
-              <div className="text-sm text-content-secondary mb-1">{o.address}</div>
-              {o.objectType && (
-                <div className="text-xs text-content-muted mb-2">Тип: {o.objectType}</div>
-              )}
-              {o.areaM2 && (
-                <div className="text-xs text-content-muted">Площадь: {o.areaM2} м²</div>
-              )}
-              {(o.contactPerson || o.contactPhone) && (
-                <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-content-secondary">
-                  {o.contactPerson && <div>{o.contactPerson}</div>}
-                  {o.contactPhone && <div className="font-mono">{o.contactPhone}</div>}
-                </div>
-              )}
-            </CyberpunkCard>
-          ))}
-        </div>
+        <ClientObjectsList objects={objectViews} deals={clientDeals} />
       )}
     </div>
   );

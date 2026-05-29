@@ -164,6 +164,12 @@ export default async function MasterVisitPage({
                     )}
                   </div>
                 )}
+                {object.plannedTreatmentDate && (
+                  <div className="text-xs text-content-muted">
+                    Плановая дата обработки:{' '}
+                    {object.plannedTreatmentDate.split('-').reverse().join('.')}
+                  </div>
+                )}
               </>
             )}
             {client?.phone && !object?.contactPhone && (
