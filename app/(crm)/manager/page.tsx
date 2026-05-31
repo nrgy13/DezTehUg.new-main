@@ -16,6 +16,7 @@ import {
 import { requireRole } from '@/lib/auth/helpers';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { getManagerDashboardStats, formatRubShort } from '@/lib/dashboard/manager-stats';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Менеджер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -27,9 +28,7 @@ export default async function ManagerDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Дашборд менеджера
-        </h1>
+        <PageTitle>Дашборд менеджера</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           Привет, {user.name}! Сводка по твоей работе и общему состоянию воронки.
         </p>

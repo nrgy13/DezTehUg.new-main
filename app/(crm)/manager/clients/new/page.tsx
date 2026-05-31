@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { ClientForm } from '../ClientForm';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Новый клиент — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -19,9 +20,7 @@ export default async function NewClientPage() {
           <ChevronLeft className="w-4 h-4" />
           К списку клиентов
         </Link>
-        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Новый клиент
-        </h1>
+        <PageTitle>Новый клиент</PageTitle>
       </div>
       <ClientForm mode="create" />
     </div>

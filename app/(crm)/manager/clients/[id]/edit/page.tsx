@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
 import { clients } from '@/lib/db/schema/clients';
 import { ClientForm } from '../../ClientForm';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Редактирование клиента — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -31,9 +32,7 @@ export default async function EditClientPage({
           <ChevronLeft className="w-4 h-4" />
           К карточке клиента
         </Link>
-        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          {client.shortName}
-        </h1>
+        <PageTitle>{client.shortName}</PageTitle>
         <p className="text-sm text-content-muted mt-1">Редактирование</p>
       </div>
       <ClientForm mode="edit" initial={client} />

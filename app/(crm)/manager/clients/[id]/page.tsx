@@ -17,6 +17,7 @@ import { ClientStatusControl } from '../ClientStatusControl';
 import { CreateDealButton } from './CreateDealButton';
 import { DeleteClientButton } from './DeleteClientButton';
 import { ClientObjectsList } from './ClientObjectsList';
+import { PageTitle } from '@/components/crm/PageTitle';
 import { deals } from '@/lib/db/schema/deals';
 
 export const dynamic = 'force-dynamic';
@@ -62,9 +63,7 @@ export default async function ClientCardPage({
         </Link>
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-              {client.shortName}
-            </h1>
+            <PageTitle>{client.shortName}</PageTitle>
             <div className="flex items-center gap-2 mt-2">
               <ClientTypeBadge type={client.type} />
               <ClientStatusControl clientId={client.id} initial={client.status} />

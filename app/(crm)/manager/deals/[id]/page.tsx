@@ -23,6 +23,7 @@ import { DealObjectsTab } from './DealObjectsTab';
 import { DocumentsTab } from './DocumentsTab';
 import { AddendumsTab } from './AddendumsTab';
 import { VisitsTab, type PriceItemGroup } from './VisitsTab';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Сделка — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -306,9 +307,7 @@ export default async function DealDetailPage({
         <div className="flex items-center gap-3 flex-wrap">
           <Briefcase className="w-7 h-7 text-neon-orange" />
           <div>
-            <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary">
-              {deal.contractNumber}
-            </h1>
+            <PageTitle>{deal.contractNumber}</PageTitle>
             <p className="text-content-muted text-sm">
               от {formatDate(deal.contractDate)} ·{' '}
               <Link

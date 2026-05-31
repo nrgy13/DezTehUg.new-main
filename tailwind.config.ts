@@ -10,13 +10,20 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // next/font подключает Orbitron и Inter через CSS-переменные
-        // (генерирует уникальное hash-имя, ссылаться напрямую по 'Orbitron' нельзя).
-        // См. app/fonts.ts и app/layout.tsx
-        'orbitron': ['var(--font-orbitron)', 'Orbitron', 'monospace'],
+        // Дефолт всего UI — Inter (полная кириллица, читаемость). См. app/fonts.ts.
+        'sans': ['var(--font-inter)', 'system-ui', 'sans-serif'],
         'inter': ['var(--font-inter)', 'Inter', 'sans-serif'],
-        // Остальные пока остаются на резерве — будут на fallback если ОС не имеет шрифта.
-        // Если понадобятся реально — подключить через next/font/google по той же схеме.
+        // Акцентный «техно»-шрифт (логотип, заголовки, статзначения) — Exo 2.
+        // С кириллицей, в отличие от прежнего Orbitron (тот был latin-only).
+        // NB: имя самого Exo 2 уже внутри var(--font-display) (с кавычками, от next/font).
+        // Не добавляем сюда литерал 'Exo 2' — Tailwind вывел бы его без кавычек
+        // (`Exo 2`), что делает всю декларацию font-family невалидной.
+        'display': ['var(--font-display)', 'system-ui', 'sans-serif'],
+        // LEGACY-алиас: ~180 мест ещё используют font-orbitron. Теперь он указывает
+        // на Exo 2 → русский текст рендерится настоящим шрифтом, а не monospace.
+        // Постепенно мигрируем font-orbitron → font-display (акценты) / убираем (UI → Inter).
+        'orbitron': ['var(--font-display)', 'system-ui', 'sans-serif'],
+        // Резерв (на fallback если ОС имеет шрифт).
         'space-mono': ['Space Mono', 'monospace'],
         'jetbrains': ['JetBrains Mono', 'monospace'],
         'bebas': ['Bebas Neue', 'sans-serif'],

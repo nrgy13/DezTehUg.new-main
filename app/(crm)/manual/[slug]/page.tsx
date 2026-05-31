@@ -11,6 +11,7 @@ import {
   MANUAL_PAGES,
   type ManualSlug,
 } from '@/lib/manual/loader';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Инструкция — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -40,9 +41,7 @@ export default async function ManualPage({
       <div className="flex items-start gap-3 flex-wrap">
         <BookOpen className="w-7 h-7 text-poison-green flex-shrink-0" />
         <div className="flex-1">
-          <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-            Инструкция · {currentMeta.title}
-          </h1>
+          <PageTitle>Инструкция · {currentMeta.title}</PageTitle>
           <p className="text-content-muted text-sm mt-1">
             Документация по работе с CRM. Markdown-источник: <code className="font-mono text-xs bg-bg-secondary px-1 rounded">docs/manual/{currentMeta.file}</code>
           </p>

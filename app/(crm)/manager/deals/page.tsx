@@ -7,6 +7,7 @@ import { deals, type DealStatus } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { DealStatusBadge, DEAL_STATUS_LABELS, DEAL_STATUSES_ORDER } from '@/components/crm/DealStatusBadge';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Сделки — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -87,9 +88,7 @@ export default async function DealsListPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-            Сделки
-          </h1>
+          <PageTitle>Сделки</PageTitle>
           <p className="text-content-muted mt-1 text-sm">
             Договоры и работы по клиентам.
           </p>

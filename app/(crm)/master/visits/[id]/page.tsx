@@ -11,6 +11,7 @@ import { services } from '@/lib/db/schema/services';
 import { dealChecklistItems, type ChecklistPhoto } from '@/lib/db/schema/checklists';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { VisitChecklist, type VisitItem } from './VisitChecklist';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Выезд — мастер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -106,7 +107,7 @@ export default async function MasterVisitPage({
 
       {/* Заголовок */}
       <div>
-        <h1 className="text-xl sm:text-2xl font-orbitron font-bold tracking-wide text-content-primary">
+        <PageTitle>
           {serviceLabel}
           {priceItem?.areaM2 && (
             <span className="text-content-muted font-normal text-base sm:text-lg">
@@ -114,7 +115,7 @@ export default async function MasterVisitPage({
               {priceItem.areaM2} м²
             </span>
           )}
-        </h1>
+        </PageTitle>
         <p className="text-sm text-content-muted mt-1">
           {client?.shortName ?? '—'} · договор{' '}
           <Link

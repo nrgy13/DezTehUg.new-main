@@ -21,6 +21,7 @@ import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { formatQuantity } from '@/lib/constants/units';
 import { ObjectActions } from './ObjectActions';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,9 +93,7 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
         </Link>
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase break-words">
-              {object.name}
-            </h1>
+            <PageTitle className="break-words">{object.name}</PageTitle>
             <div className="text-sm text-content-muted mt-1 flex flex-wrap items-center gap-x-2">
               {client && (
                 <Link href={`/manager/clients/${client.id}`} className="hover:text-neon-orange">

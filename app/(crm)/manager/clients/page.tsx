@@ -7,6 +7,7 @@ import { clients, type ClientStatus, type ClientType } from '@/lib/db/schema/cli
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { ClientStatusBadge, ClientTypeBadge } from '@/components/crm/ClientStatusBadge';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Клиенты — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -82,9 +83,7 @@ export default async function ClientsListPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-            Клиенты
-          </h1>
+          <PageTitle>Клиенты</PageTitle>
           <p className="text-content-muted mt-1 text-sm">
             Всего: <span className="font-semibold text-content-primary">{total}</span>
           </p>

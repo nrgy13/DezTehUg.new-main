@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { deals } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Выполнено — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -38,9 +39,7 @@ export default async function MasterCompletedPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Выполненные работы
-        </h1>
+        <PageTitle>Выполненные работы</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           Архив сделок со статусом «Выполнен», где ты был назначен исполнителем.
           Всего: {rows.length}.

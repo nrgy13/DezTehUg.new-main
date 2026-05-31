@@ -8,6 +8,7 @@ import { deals } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { services } from '@/lib/db/schema/services';
 import { ObjectForm } from '../../../../clients/ObjectForm';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Новый объект договора — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -54,9 +55,7 @@ export default async function NewDealObjectPage({
         >
           <ChevronLeft className="w-4 h-4" />К договору {deal.contractNumber}
         </Link>
-        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Новый объект договора
-        </h1>
+        <PageTitle>Новый объект договора</PageTitle>
         <p className="text-sm text-content-muted mt-1">
           Договор {deal.contractNumber} · {client?.shortName ?? '—'}
         </p>

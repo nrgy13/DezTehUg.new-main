@@ -1,6 +1,6 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
-import { inter, orbitron } from './fonts';
+import { inter, display } from './fonts';
 import { AppWrapper } from '@/components/layout/AppWrapper';
 import { YandexMetrika } from '@/components/analytics/YandexMetrika';
 
@@ -52,7 +52,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru" className={`${inter.variable} ${orbitron.variable}`}>
+    <html lang="ru" className={`${inter.variable} ${display.variable}`}>
       <body className={`${inter.className} antialiased`}>
         <YandexMetrika />
         <AppWrapper>{children}</AppWrapper>

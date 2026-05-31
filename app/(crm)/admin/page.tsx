@@ -5,6 +5,7 @@ import { clients } from '@/lib/db/schema/clients';
 import { sql } from 'drizzle-orm';
 import { Users, UserCog, Wrench, FileText } from 'lucide-react';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Админ — ДезТехЮг CRM' };
 
@@ -17,9 +18,7 @@ export default async function AdminDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Админ-дашборд
-        </h1>
+        <PageTitle>Админ-дашборд</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           Привет, {user.name}! Это панель администратора.
         </p>

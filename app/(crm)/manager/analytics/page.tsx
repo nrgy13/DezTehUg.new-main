@@ -8,6 +8,7 @@ import {
   type AnalyticsFilters,
 } from '@/lib/analytics/funnel';
 import { AnalyticsClient } from './AnalyticsClient';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Аналитика воронки — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -61,9 +62,7 @@ export default async function AnalyticsPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Аналитика воронки
-        </h1>
+        <PageTitle>Аналитика воронки</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           Конверсии, время на стадиях, причины потери. Источник данных — история стадий лидов.
         </p>

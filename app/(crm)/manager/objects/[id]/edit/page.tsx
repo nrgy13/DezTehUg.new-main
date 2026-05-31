@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { ObjectForm } from '../../../clients/ObjectForm';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Редактирование объекта — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -45,9 +46,7 @@ export default async function EditObjectPage({ params }: { params: Promise<{ id:
         >
           <ChevronLeft className="w-4 h-4" />К карточке объекта
         </Link>
-        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Редактирование объекта
-        </h1>
+        <PageTitle>Редактирование объекта</PageTitle>
         <p className="text-sm text-content-muted mt-1">{object.name}</p>
       </div>
       <ObjectForm

@@ -7,6 +7,7 @@ import { PasswordForm } from './PasswordForm';
 import { TelegramSection } from './TelegramSection';
 import { PushSection } from './PushSection';
 import { getBotUsername } from '@/lib/notifications/telegram';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,9 +51,7 @@ export default async function ProfilePage() {
   return (
     <div className="max-w-xl space-y-6">
       <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary mb-1 uppercase">
-          Профиль
-        </h1>
+        <PageTitle className="mb-1">Профиль</PageTitle>
         <p className="text-sm text-content-muted">
           {sessionUser.name} · {ROLE_LABELS[sessionUser.role]} · {sessionUser.email}
         </p>

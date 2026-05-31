@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { documentTemplates } from '@/lib/db/schema/documents';
 import { users } from '@/lib/db/schema/users';
 import { TemplatesClient } from './TemplatesClient';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'DOCX-шаблоны — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -30,9 +31,7 @@ export default async function TemplatesAdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          DOCX-шаблоны
-        </h1>
+        <PageTitle>DOCX-шаблоны</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           Шаблоны для генерации документов. Базовые версии входят в комплект, кастомные можно
           загружать поверх. При генерации используется активная версия каждого типа.

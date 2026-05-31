@@ -21,6 +21,7 @@ import { LeadStatusControl } from '../LeadStatusControl';
 import { TakeLeadButton, ConvertLeadButton } from '../LeadActions';
 import { getLeadHistory } from '@/lib/lead-stages-server';
 import { LeadHistoryTimeline } from '../_components/LeadHistoryTimeline';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,9 +74,7 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
         </Link>
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-              {lead.contactName ?? 'Без имени'}
-            </h1>
+            <PageTitle>{lead.contactName ?? 'Без имени'}</PageTitle>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <LeadStatusControl leadId={lead.id} initial={lead.status} />
               <span className="text-xs text-content-muted">

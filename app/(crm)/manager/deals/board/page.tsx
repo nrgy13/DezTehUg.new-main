@@ -8,6 +8,7 @@ import { deals } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { users } from '@/lib/db/schema/users';
 import { DealBoardClient, type BoardDeal } from './DealBoardClient';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Канбан сделок — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -48,9 +49,7 @@ export default async function DealsBoardPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-            Канбан сделок
-          </h1>
+          <PageTitle>Канбан сделок</PageTitle>
           <p className="text-content-muted mt-1 text-sm">
             <span className="hidden lg:inline">Перетаскивай сделки между колонками для смены статуса.</span>
             <span className="lg:hidden">Меняй статус сделки кнопкой «Переместить» на карточке.</span>{' '}

@@ -13,6 +13,7 @@ import { NewLeadButton } from './_components/NewLeadButton';
 import { badgeClassesForLead, formatDays, stageHealthLevel } from '@/lib/lead-stages';
 import { getDaysInStageBatch } from '@/lib/lead-stages-server';
 import { Clock } from 'lucide-react';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Заявки — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -106,9 +107,7 @@ export default async function LeadsListPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-            Заявки
-          </h1>
+          <PageTitle>Заявки</PageTitle>
           <p className="text-content-muted mt-1 text-sm">
             Всего: <span className="font-semibold text-content-primary">{total}</span>
             {newCount > 0 && (

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { Trash2, ShieldCheck } from 'lucide-react';
 import { DeletionsClient } from './DeletionsClient';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Запросы на удаление — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -92,9 +93,7 @@ export default async function AdminDeletionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Запросы на удаление
-        </h1>
+        <PageTitle>Запросы на удаление</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           Менеджеры запрашивают удаление документов. Ты решаешь — удалять (файлы и запись
           уйдут безвозвратно) или отклонить с пояснением.

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth/helpers';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
+import { PageTitle } from '@/components/crm/PageTitle';
 import {
   Wallet,
   Users,
@@ -99,9 +100,7 @@ export default async function ReportsPage({
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-            Отчёты
-          </h1>
+          <PageTitle>Отчёты</PageTitle>
           <p className="text-content-muted mt-1 text-sm">
             10 отчётов по доходу, активности, услугам и удержанию клиентов. Экспорт в CSV.
           </p>

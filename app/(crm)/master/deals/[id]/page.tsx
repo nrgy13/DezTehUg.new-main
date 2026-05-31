@@ -13,6 +13,7 @@ import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { DealStatusBadge } from '@/components/crm/DealStatusBadge';
 import { WorkLogForm } from './WorkLogForm';
 import { DateChangeRequestForm } from './DateChangeRequestForm';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Сделка — мастер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -100,9 +101,7 @@ export default async function MasterDealPage({
         <div className="flex items-center gap-3 flex-wrap">
           <Briefcase className="w-7 h-7 text-neon-orange" />
           <div>
-            <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary">
-              {deal.contractNumber}
-            </h1>
+            <PageTitle>{deal.contractNumber}</PageTitle>
             <p className="text-content-muted text-sm">
               {client?.shortName ?? '—'} · от {fmt(deal.contractDate)} ·{' '}
               <span className="text-content-secondary">

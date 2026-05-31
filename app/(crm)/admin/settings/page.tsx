@@ -9,6 +9,7 @@ import { getThresholds, defaultThresholds, THRESHOLDS_KEY } from '@/lib/notifica
 import { getAccountantEmail } from '@/lib/notifications/accountant';
 import { NotificationThresholdsSection } from './NotificationThresholdsSection';
 import { AccountantEmailSection } from './AccountantEmailSection';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Настройки — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -31,9 +32,7 @@ export default async function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Настройки системы
-        </h1>
+        <PageTitle>Настройки системы</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           Реквизиты Исполнителя и параметры, используемые в договорах, КП, актах и письмах.
         </p>

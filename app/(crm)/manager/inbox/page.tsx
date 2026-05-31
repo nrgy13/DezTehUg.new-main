@@ -3,6 +3,7 @@ import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { Inbox } from 'lucide-react';
 import { getInboxItems } from '@/lib/inbox/queries';
 import { InboxClient } from './InboxClient';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Уведомления — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -15,9 +16,7 @@ export default async function ManagerInboxPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Уведомления
-        </h1>
+        <PageTitle>Уведомления</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           События по твоим сделкам требующие реакции: запросы переноса дат от мастеров и др.
           Когда обработал — отметь «Прочитано», и запись исчезнет из списка.

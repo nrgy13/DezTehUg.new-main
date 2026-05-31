@@ -10,6 +10,7 @@ import { services } from '@/lib/db/schema/services';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { unitLabel, formatQuantity } from '@/lib/constants/units';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Мастер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -108,9 +109,7 @@ export default async function MasterDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Мои выезды
-        </h1>
+        <PageTitle>Мои выезды</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           Привет, {user.name}! Здесь — все твои запланированные и завершённые
           выезды по позициям договоров.

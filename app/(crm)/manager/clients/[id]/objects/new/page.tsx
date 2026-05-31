@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { clients } from '@/lib/db/schema/clients';
 import { services } from '@/lib/db/schema/services';
 import { ObjectForm } from '../../../ObjectForm';
+import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Новый объект — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -42,9 +43,7 @@ export default async function NewObjectPage({
           <ChevronLeft className="w-4 h-4" />
           К карточке клиента
         </Link>
-        <h1 className="text-2xl font-orbitron font-bold tracking-wide text-content-primary uppercase">
-          Новый объект
-        </h1>
+        <PageTitle>Новый объект</PageTitle>
         <p className="text-sm text-content-muted mt-1">Клиент: {client.shortName}</p>
       </div>
       <ObjectForm mode="create" clientId={id} services={serviceList} />
