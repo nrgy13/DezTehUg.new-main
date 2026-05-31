@@ -112,6 +112,61 @@ async function generatePreliminaryDealNumber(date: Date): Promise<string> {
   return `${prefix}${sameDayCount + 1}`;
 }
 
+/**
+ * Назначение мастера на сделку: авто-seed плановых выездов + push мастеру.
+ * Срабатывает только при назначении НОВОГО мастера (masterId задан и отличается
+ * от предыдущего). Вызывается из createDeal / updateDeal / assignMaster, чтобы
+ * любой путь назначения мастера через UI давал выезды и уведомление.
+ * Подтягивает данные сделки/клиента сам — вызов остаётся простым.
+ */
+async function notifyMasterAssigned(
+  dealId: string,
+  masterId: string | null,
+  prevMasterId: string | null,
+): Promise<void> {
+  if (!masterId || masterId === prevMasterId) return;
+
+  // Авто-seed planned visits по каждой позиции прайса. Идемпотентно: уже
+  // существующие активные выезды не дублируются.
+  try {
+    const { seedPlannedVisitsForDeal } = await import('@/lib/visits/create');
+    await seedPlannedVisitsForDeal(dealId, masterId);
+  } catch (err) {
+    console.warn('[notifyMasterAssigned] seed visits failed:', err);
+  }
+
+  try {
+    const { sendPushToUser } = await import('@/lib/push/server');
+    const [d] = await db
+      .select({
+        contractNumber: deals.contractNumber,
+        clientId: deals.clientId,
+        startDate: deals.startDate,
+      })
+      .from(deals)
+      .where(eq(deals.id, dealId))
+      .limit(1);
+    if (d) {
+      const [client] = await db
+        .select({ shortName: clients.shortName })
+        .from(clients)
+        .where(eq(clients.id, d.clientId))
+        .limit(1);
+      const datePart = d.startDate
+        ? ` · ${d.startDate.split('-').reverse().join('.')}`
+        : '';
+      await sendPushToUser(masterId, {
+        title: 'Новый выезд',
+        body: `${d.contractNumber}${datePart}${client?.shortName ? ` · ${client.shortName}` : ''}`,
+        url: `/master/deals/${dealId}`,
+        tag: `deal-assigned-${dealId}`,
+      });
+    }
+  } catch (err) {
+    console.warn('[notifyMasterAssigned] push failed:', err);
+  }
+}
+
 // =============================================================
 // CREATE
 // =============================================================
@@ -181,6 +236,9 @@ export async function createDeal(input: unknown): Promise<Result<{ id: string }>
     clientId: data.clientId,
     fromLead: !!data.leadId,
   });
+
+  // Если сделку сразу создали с мастером — засеять выезды + push.
+  await notifyMasterAssigned(created.id, data.assignedMasterId ?? null, null);
 
   revalidatePath('/manager/deals');
   revalidatePath(`/manager/clients/${data.clientId}`);
@@ -253,6 +311,13 @@ export async function updateDeal(
     .where(eq(deals.id, id));
 
   await logActivity(actor.id, 'deal.update', id, data);
+
+  // Если через форму реквизитов сменили мастера — засеять выезды + push новому.
+  await notifyMasterAssigned(
+    id,
+    data.assignedMasterId ?? null,
+    existing[0].assignedMasterId,
+  );
 
   revalidatePath('/manager/deals');
   revalidatePath(`/manager/deals/${id}`);
@@ -412,37 +477,8 @@ export async function assignMaster(
   await logActivity(actor.id, 'deal.assign_master', id, { masterId });
 
   // Push мастеру + автосоздание planned-выездов — только если назначен НОВЫЙ
-  // человек (не отменили и не оставили того же).
-  if (masterId && masterId !== dealBefore?.prevMasterId) {
-    // Авто-seed planned visits по каждой позиции прайса. Идемпотентно: уже
-    // существующие активные выезды не дублируются.
-    try {
-      const { seedPlannedVisitsForDeal } = await import('@/lib/visits/create');
-      await seedPlannedVisitsForDeal(id, masterId);
-    } catch (err) {
-      console.warn('[assignMaster] seed visits failed:', err);
-    }
-
-    try {
-      const { sendPushToUser } = await import('@/lib/push/server');
-      const [client] = await db
-        .select({ shortName: clients.shortName })
-        .from(clients)
-        .where(eq(clients.id, dealBefore!.clientId))
-        .limit(1);
-      const datePart = dealBefore?.startDate
-        ? ` · ${dealBefore.startDate.split('-').reverse().join('.')}`
-        : '';
-      await sendPushToUser(masterId, {
-        title: 'Новый выезд',
-        body: `${dealBefore!.contractNumber}${datePart}${client?.shortName ? ` · ${client.shortName}` : ''}`,
-        url: `/master/deals/${id}`,
-        tag: `deal-assigned-${id}`,
-      });
-    } catch (err) {
-      console.warn('[assignMaster] push failed:', err);
-    }
-  }
+  // человек. Общий хелпер, тот же путь что и updateDeal/createDeal.
+  await notifyMasterAssigned(id, masterId, dealBefore?.prevMasterId ?? null);
 
   revalidatePath(`/manager/deals/${id}`);
   revalidatePath(`/master`);

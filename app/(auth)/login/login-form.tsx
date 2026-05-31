@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import { Loader2, AlertCircle, Mail, Lock } from 'lucide-react';
 import { NeonInput } from '@/components/cyberpunk/NeonInput';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
@@ -44,7 +44,16 @@ export function LoginForm({
         return;
       }
 
-      router.push(callbackUrl ?? '/admin');
+      // Без явного callbackUrl — редирект по роли (manager → /manager,
+      // master → /master, admin → /admin). Раньше всех слало на /admin,
+      // из-за чего manager/master ловили forbidden при входе с корня.
+      let target = callbackUrl;
+      if (!target) {
+        const session = await getSession();
+        const role = session?.user?.role;
+        target = role === 'manager' ? '/manager' : role === 'master' ? '/master' : '/admin';
+      }
+      router.push(target);
       router.refresh();
     });
   };
