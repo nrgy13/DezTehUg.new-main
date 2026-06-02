@@ -12,6 +12,7 @@ import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { NeonInput } from '@/components/cyberpunk/NeonInput';
 import { TREATMENT_METHODS } from '@/lib/constants/treatment';
+import { UNIT_OPTIONS } from '@/lib/constants/units';
 import { clientObjectSchema } from './schemas';
 import { addObject, updateObject, createObjectForDeal } from './actions';
 import type { ClientObject } from '@/lib/db/schema/objects';
@@ -23,6 +24,8 @@ type InitialService = {
   serviceId: string | null;
   customName: string | null;
   method: string | null;
+  unit: string | null;
+  quantity: string | null;
 };
 
 // dealId — если задан в режиме create, объект создаётся привязанным к договору
@@ -86,6 +89,8 @@ export function ObjectForm({
             serviceId: s.serviceId ?? undefined,
             customName: s.customName ?? undefined,
             method: s.method ?? undefined,
+            unit: (s.unit as 'm2' | 'pcs' | 'm3') ?? 'm2',
+            quantity: s.quantity != null ? Number(s.quantity) : undefined,
           })),
         }
       : { services: [] },
@@ -174,7 +179,15 @@ export function ObjectForm({
           </h2>
           <button
             type="button"
-            onClick={() => append({ serviceId: undefined, customName: undefined, method: undefined })}
+            onClick={() =>
+              append({
+                serviceId: undefined,
+                customName: undefined,
+                method: undefined,
+                unit: 'm2',
+                quantity: undefined,
+              })
+            }
             className="inline-flex items-center gap-1 text-xs font-orbitron uppercase tracking-wider text-poison-green hover:text-neon-orange transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -193,7 +206,7 @@ export function ObjectForm({
               return (
                 <div
                   key={f.id}
-                  className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-start"
+                  className="grid grid-cols-1 sm:grid-cols-[1.4fr_1.4fr_0.8fr_0.9fr_auto] gap-2 items-start"
                 >
                   <div className="space-y-2">
                     <select {...register(`services.${i}.serviceId` as const)} className={selectClass}>
@@ -216,6 +229,27 @@ export function ObjectForm({
                     {TREATMENT_METHODS.map((m) => (
                       <option key={m} value={m}>
                         {m}
+                      </option>
+                    ))}
+                  </select>
+                  <NeonInput
+                    {...register(`services.${i}.quantity` as const, {
+                      setValueAs: (v) =>
+                        v === '' || v == null ? undefined : Number(String(v).replace(',', '.')),
+                    })}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Кол-во"
+                    aria-label="Количество"
+                  />
+                  <select
+                    {...register(`services.${i}.unit` as const)}
+                    className={selectClass}
+                    aria-label="Единица измерения"
+                  >
+                    {UNIT_OPTIONS.map((u) => (
+                      <option key={u.value} value={u.value}>
+                        {u.label}
                       </option>
                     ))}
                   </select>

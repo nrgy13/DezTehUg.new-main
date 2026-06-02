@@ -24,6 +24,8 @@ export default async function EditObjectPage({ params }: { params: Promise<{ id:
       serviceId: clientObjectServices.serviceId,
       customName: clientObjectServices.customName,
       method: clientObjectServices.method,
+      unit: clientObjectServices.unit,
+      quantity: clientObjectServices.quantity,
     })
     .from(clientObjectServices)
     .where(eq(clientObjectServices.objectId, id))

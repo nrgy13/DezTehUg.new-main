@@ -19,7 +19,7 @@ import { deals } from '@/lib/db/schema/deals';
 import { services } from '@/lib/db/schema/services';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
-import { formatQuantity } from '@/lib/constants/units';
+import { formatQuantity, unitLabel } from '@/lib/constants/units';
 import { ObjectActions } from './ObjectActions';
 import { PageTitle } from '@/components/crm/PageTitle';
 
@@ -69,6 +69,8 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
       customName: clientObjectServices.customName,
       method: clientObjectServices.method,
       serviceName: services.name,
+      unit: clientObjectServices.unit,
+      quantity: clientObjectServices.quantity,
     })
     .from(clientObjectServices)
     .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
@@ -78,6 +80,8 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
   const objectServices = serviceRows.map((r) => ({
     label: r.customName ?? r.serviceName ?? 'Услуга',
     method: r.method,
+    // Sprint 10: «500 м²» / «7,7 м³» / «5 ед.» — пусто, если кол-во не задано.
+    qty: r.quantity != null ? `${formatQuantity(r.quantity)} ${unitLabel(r.unit)}` : '',
   }));
 
   const backHref = `/manager/clients/${object.clientId}?tab=objects`;
@@ -173,6 +177,7 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
                   >
                     {s.label}
                     {s.method ? ` · ${s.method}` : ''}
+                    {s.qty ? ` · ${s.qty}` : ''}
                   </span>
                 ))}
               </div>

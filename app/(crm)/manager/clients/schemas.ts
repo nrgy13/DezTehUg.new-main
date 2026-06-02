@@ -111,6 +111,20 @@ export const objectServiceSchema = z.object({
     .or(z.literal('').transform(() => undefined)),
   customName: optionalTrimmed,
   method: optionalTrimmed,
+  // Sprint 10: единица измерения (по умолчанию м²) — попадает в таблицу АО/АВР.
+  unit: z
+    .enum(['m2', 'pcs', 'm3'])
+    .optional()
+    .or(z.literal('').transform(() => undefined))
+    .transform((v) => v ?? 'm2'),
+  // Sprint 10: количество услуги (дробное). Запятую → точку, пусто → undefined.
+  quantity: z.preprocess(
+    (v) => {
+      if (v === '' || v === null || v === undefined) return undefined;
+      return typeof v === 'string' ? v.replace(',', '.') : v;
+    },
+    z.coerce.number().positive().max(1_000_000).optional(),
+  ),
 });
 
 // === Объект обслуживания ===

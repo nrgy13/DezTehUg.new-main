@@ -195,6 +195,36 @@ def objects_table_with_loop(doc):
     return t
 
 
+def object_services_table_with_loop(doc):
+    """Sprint 10: таблица услуг объекта для АО/АВР — формат бумажных актов Регины:
+    № / Объект / Адрес / Площадь / Услуга. Цикл по {#objectServices} — несколько
+    услуг = несколько строк, у каждой своя единица (м²/ед./м³) в колонке «Площадь»."""
+    t = doc.add_table(rows=2, cols=5)
+    t.style = 'Table Grid'
+    headers = ['№', 'Объект', 'Адрес', 'Площадь', 'Услуга']
+    for i, h in enumerate(headers):
+        cell = t.rows[0].cells[i]
+        cell.text = ''
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run(h)
+        run.bold = True
+        run.font.size = Pt(10)
+    loop_cells = [
+        '{#objectServices}{index}',
+        '{objectName}',
+        '{objectAddress}',
+        '{areaLabel}',
+        '{serviceName}{/objectServices}',
+    ]
+    for i, val in enumerate(loop_cells):
+        cell = t.rows[1].cells[i]
+        cell.text = ''
+        run = cell.paragraphs[0].add_run(val)
+        run.font.size = Pt(10)
+    return t
+
+
 # ═══ 1. ДОГОВОР ═══════════════════════════════════════════════════
 
 
@@ -486,7 +516,7 @@ def build_inspection_report():
     p.add_run('{contract.date}').bold = True
 
     para(doc)
-    objects_table_with_loop(doc)
+    object_services_table_with_loop(doc)
     para(doc)
 
     # Чек-лист состояния
@@ -576,8 +606,8 @@ def build_work_completion_report():
     ])
     para(doc)
 
-    # Таблица работ
-    objects_table_with_loop(doc)
+    # Таблица работ (Sprint 10: услуги объекта с единицами)
+    object_services_table_with_loop(doc)
     para(doc)
 
     # Чек проверок

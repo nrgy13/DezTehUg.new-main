@@ -14,7 +14,7 @@ import {
 import { sql } from 'drizzle-orm';
 import { clients } from './clients';
 import { services } from './services';
-import { deals } from './deals';
+import { deals, priceItemUnitEnum } from './deals';
 
 // Объекты обслуживания клиента (адреса где обрабатываем)
 // Например, у "ООО Аппетит" три объекта: 2 столовых в Анапе + база в Архипо-Осиповке
@@ -67,6 +67,10 @@ export const clientObjectServices = pgTable(
     serviceId: uuid('service_id').references(() => services.id, { onDelete: 'set null' }),
     customName: varchar('custom_name', { length: 255 }), // если услуга вне каталога
     method: varchar('method', { length: 128 }), // способ обработки (из справочника)
+    // Sprint 10: единица измерения + количество услуги — попадают в таблицу АО/АВР.
+    // unit (м²/ед./м³) переиспользует общий enum price_item_unit.
+    unit: priceItemUnitEnum('unit').notNull().default('m2'),
+    quantity: decimal('quantity', { precision: 10, scale: 2 }), // дробное, NULL — взять площадь объекта
     sortOrder: integer('sort_order').notNull().default(0),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

@@ -387,6 +387,9 @@ async function syncObjectServices(
       serviceId: s.serviceId ?? null,
       customName: s.customName ?? null,
       method: s.method ?? null,
+      // Sprint 10: единица (дефолт m2) + количество (numeric → string в Drizzle).
+      unit: s.unit ?? 'm2',
+      quantity: s.quantity == null ? null : String(s.quantity),
       sortOrder: i,
     }));
 

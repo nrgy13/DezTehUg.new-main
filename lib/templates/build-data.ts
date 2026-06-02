@@ -1,7 +1,7 @@
 import { eq, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { clients, type Client } from '@/lib/db/schema/clients';
-import { clientObjects } from '@/lib/db/schema/objects';
+import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { deals, dealPriceItems, dealAddendums, dealWorkLogs, type Deal } from '@/lib/db/schema/deals';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
@@ -159,6 +159,72 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         .orderBy(asc(dealWorkLogs.performedAt))
     : [];
 
+  // Sprint 10: услуги объекта — источник таблицы для АО/АВР по объекту
+  // (№ | Объект | Адрес | Площадь+Единица | Услуга). Цен нет — акт технический.
+  const isObjectAct =
+    !!ctx.objectId && (ctx.type === 'act_inspection' || ctx.type === 'act_work');
+  const targetObject = ctx.objectId ? objMap.get(ctx.objectId) ?? null : null;
+
+  let objectServices: Array<{
+    index: number;
+    objectName: string;
+    objectAddress: string;
+    serviceName: string;
+    method: string;
+    quantity: string;
+    unit: string;
+    unitLabel: string;
+    areaLabel: string;
+  }> = [];
+  let servicesLine = '';
+  if (isObjectAct) {
+    const svcRows = await db
+      .select({
+        customName: clientObjectServices.customName,
+        method: clientObjectServices.method,
+        unit: clientObjectServices.unit,
+        quantity: clientObjectServices.quantity,
+        serviceShort: services.shortName,
+        serviceFull: services.name,
+      })
+      .from(clientObjectServices)
+      .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
+      .where(eq(clientObjectServices.objectId, ctx.objectId!))
+      .orderBy(asc(clientObjectServices.sortOrder));
+
+    objectServices = svcRows.map((r, i) => {
+      // Кол-во услуги; если не задано — берём площадь объекта (как в бумажных АВР).
+      const qtyRaw = r.quantity ?? targetObject?.areaM2 ?? null;
+      const lbl = unitLabel(r.unit);
+      return {
+        index: i + 1,
+        objectName: targetObject?.name ?? '',
+        objectAddress: targetObject?.address ?? '',
+        serviceName: r.customName ?? r.serviceShort ?? r.serviceFull ?? '',
+        method: r.method ?? '',
+        quantity: formatQuantity(qtyRaw),
+        unit: r.unit,
+        unitLabel: lbl,
+        areaLabel: qtyRaw != null ? `${formatQuantity(qtyRaw)} ${lbl}` : '',
+      };
+    });
+    servicesLine = objectServices
+      .map((s) => (s.areaLabel ? `${s.serviceName} — ${s.areaLabel}` : s.serviceName))
+      .filter(Boolean)
+      .join('; ');
+  }
+
+  // Sprint 10: дезинфектор = назначенный мастер сделки (для АО/АВР).
+  let masterName = '';
+  if (isObjectAct && deal?.assignedMasterId) {
+    const [m] = await db
+      .select({ fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, deal.assignedMasterId))
+      .limit(1);
+    masterName = m?.fullName ?? '';
+  }
+
   // Базовые данные, общие для всех типов
   const data: Record<string, unknown> = {
     provider: CONTRACT_PROVIDER,
@@ -190,6 +256,29 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       service: o.objectType ?? '',
     })),
     priceItems,
+    // Sprint 10: услуги объекта для таблицы АО/АВР + строка-перечень + одиночные
+    // поля под формат шаблона Регины ({object.*}, {contact.*}, {master.fio}, {services}).
+    objectServices,
+    services: servicesLine,
+    object: targetObject
+      ? {
+          name: targetObject.name,
+          address: targetObject.address,
+          area: formatQuantity(targetObject.areaM2),
+        }
+      : {},
+    contact: {
+      fio: targetObject?.contactPerson ?? '',
+      phone: targetObject?.contactPhone ?? '',
+    },
+    master: { fio: masterName },
+    document: { number: ctx.documentNumber, date: formatHumanDate(ctx.documentDate) },
+    deal: deal
+      ? {
+          contractNumber: deal.contractNumber ?? '',
+          contractDateLong: formatHumanDate(deal.contractDate ?? ''),
+        }
+      : {},
     totalNet: formatMoney(totalNet),
     totalGross: formatMoney(totalGross),
     vatAmount: formatMoney(totalGross - totalNet),
@@ -230,12 +319,14 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         areaCheck: 'совпадает',
         actualArea:
           workLogs.reduce((s, w) => s + (w.areaM2 ?? 0), 0) ||
-          priceItemsRaw.reduce((s, p) => s + Number(p.areaM2), 0),
+          priceItemsRaw.reduce((s, p) => s + Number(p.areaM2), 0) ||
+          (targetObject?.areaM2 ? Number(targetObject.areaM2) : 0),
         discrepancy: '',
-        disinfector: '',
-        responsibleName: '',
+        // Sprint 10: автозаполнение — дезинфектор (мастер сделки) + контакт объекта.
+        disinfector: masterName,
+        responsibleName: targetObject?.contactPerson ?? '',
         responsibleRole: '',
-        responsiblePhone: '',
+        responsiblePhone: targetObject?.contactPhone ?? '',
         ...(ctx.overrides ?? {}),
       };
       data.workLogs = workLogs.map((w, i) => ({
