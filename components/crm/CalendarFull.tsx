@@ -10,7 +10,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import ruLocale from '@fullcalendar/core/locales/ru';
 import type { EventClickArg, EventContentArg, EventDropArg, DatesSetArg } from '@fullcalendar/core';
-import { Search, X, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Phone, Wrench, User as UserIcon, MapPin } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, Phone, Wrench, User as UserIcon, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateVisitPlannedAt } from '@/app/(crm)/manager/deals/[id]/visits-actions';
 import './calendar.css';
@@ -88,6 +88,53 @@ function toLocalISO(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// Время HH:MM из ISO-строки (локальный TZ браузера = МСК)
+function timeOnly(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Дата выезда (для группировки/фильтра/подсветки) → Date или null
+function eventDate(e: SerializedDealEvent): Date | null {
+  const iso = e.startAt ?? (e.startDate ? `${e.startDate}T00:00:00` : null);
+  return iso ? new Date(iso) : null;
+}
+
+type VisitDayGroup = { dayKey: string; label: string; events: SerializedDealEvent[] };
+
+// Группирует выезды по дню (ключ = локальный YYYY-MM-DD, совпадает с FC data-date).
+function groupVisitsByDay(events: SerializedDealEvent[]): VisitDayGroup[] {
+  const map = new Map<string, SerializedDealEvent[]>();
+  for (const e of events) {
+    const d = eventDate(e);
+    if (!d) continue;
+    const key = toLocalISO(d);
+    const arr = map.get(key) ?? [];
+    arr.push(e);
+    map.set(key, arr);
+  }
+  return Array.from(map.keys())
+    .sort()
+    .map((key) => {
+      const d = new Date(`${key}T00:00:00`);
+      const label = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' });
+      const evs = map
+        .get(key)!
+        .slice()
+        .sort((a, b) => {
+          const ta = a.startAt ? new Date(a.startAt).getTime() : 0;
+          const tb = b.startAt ? new Date(b.startAt).getTime() : 0;
+          return ta - tb;
+        });
+      return { dayKey: key, label, events: evs };
+    });
+}
+
+function visitHref(dealHrefBase: string, e: SerializedDealEvent): string {
+  return dealHrefBase === '/master/visits'
+    ? `/master/visits/${e.id}`
+    : `${dealHrefBase}/${e.dealId}?tab=visits`;
+}
+
 type TooltipState = {
   visible: boolean;
   x: number;
@@ -108,6 +155,8 @@ export function CalendarFull({
 }) {
   const router = useRouter();
   const calendarRef = useRef<FullCalendar | null>(null);
+  // Обёртка FullCalendar — для императивной подсветки ячейки дня по ховеру списка.
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [isPending, startTransition] = useTransition();
   // Lock на время save → router.refresh, иначе быстрые подряд-drop'ы попадают
   // в очередь startTransition и второй info.event ссылается на stale объект
@@ -119,8 +168,13 @@ export function CalendarFull({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [healthFilter, setHealthFilter] = useState<Set<SerializedDealEvent['health']>>(new Set());
-  const [, setCurrentTitle] = useState('');
-  const [currentDate, setCurrentDate] = useState(new Date());
+
+  // Видимый диапазон календаря (синхронизация списка справа) + заголовок вида.
+  const [viewRange, setViewRange] = useState<{ start: number; end: number } | null>(null);
+  const [viewTitle, setViewTitle] = useState('');
+
+  // Подсветка дня в календаре при наведении на строку списка (YYYY-MM-DD).
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
   // Cursor-following tooltip
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, ev: null });
@@ -209,6 +263,33 @@ export function CalendarFull({
     (e) => !e.startDate && !e.endDate && !e.startAt && !e.endAt,
   );
 
+  // Выезды видимого диапазона календаря (список справа синхронен с открытым месяцем/неделей/днём).
+  const visibleEvents = useMemo(() => {
+    if (!viewRange) return [] as SerializedDealEvent[];
+    return filteredEvents.filter((e) => {
+      const d = eventDate(e);
+      if (!d) return false;
+      const t = d.getTime();
+      return t >= viewRange.start && t < viewRange.end;
+    });
+  }, [filteredEvents, viewRange]);
+
+  const dayGroups = useMemo(() => groupVisitsByDay(visibleEvents), [visibleEvents]);
+
+  // Императивная подсветка ячейки дня в FullCalendar по hoveredDate.
+  // DOM-подход надёжнее, чем dayCellClassNames — не зависит от внутренней
+  // реактивности FC и работает в month/week/day (ячейки имеют data-date).
+  useEffect(() => {
+    const root = wrapperRef.current;
+    if (!root) return;
+    root.querySelectorAll('.fc-day-hovered').forEach((el) => el.classList.remove('fc-day-hovered'));
+    if (hoveredDate) {
+      root
+        .querySelectorAll(`[data-date="${hoveredDate}"]`)
+        .forEach((el) => el.classList.add('fc-day-hovered'));
+    }
+  }, [hoveredDate, viewRange, fcEvents]);
+
   // Stats
   const stats = useMemo(
     () => ({
@@ -220,7 +301,7 @@ export function CalendarFull({
     [events],
   );
 
-  // Status counts (для сайдбара)
+  // Status counts (для фильтра статусов)
   const statusCounts = useMemo(() => {
     const m: Record<string, number> = {};
     for (const e of events) m[e.status] = (m[e.status] ?? 0) + 1;
@@ -249,12 +330,6 @@ export function CalendarFull({
     setSearch('');
     setStatusFilter(new Set());
     setHealthFilter(new Set());
-  }
-
-  // Mini-calendar navigation
-  function gotoDate(date: Date) {
-    calendarRef.current?.getApi().gotoDate(date);
-    setCurrentDate(date);
   }
 
   // Event click → открыть выезд (для master) или сделку (для manager)
@@ -328,10 +403,10 @@ export function CalendarFull({
     });
   }
 
-  // Title sync с FullCalendar
+  // Sync видимого диапазона + заголовка с FullCalendar
   function handleDatesSet(arg: DatesSetArg) {
-    setCurrentTitle(arg.view.title);
-    setCurrentDate(arg.view.currentStart);
+    setViewTitle(arg.view.title);
+    setViewRange({ start: arg.start.getTime(), end: arg.end.getTime() });
   }
 
   function renderEventContent(arg: EventContentArg) {
@@ -356,104 +431,17 @@ export function CalendarFull({
     );
   }
 
+  const hasActiveFilters = search || statusFilter.size > 0 || healthFilter.size > 0;
+
   return (
     <>
-      <div className="flex flex-col lg:flex-row gap-4 lg:items-stretch">
-        {/* ─── Сайдбар ────────────────────────────────── */}
-        <aside className="w-full lg:w-64 lg:flex-shrink-0 flex flex-col gap-4">
-          {/* Stats — компактный inline-формат */}
-          <div className="bg-white rounded-lg border border-gray-200 p-3">
-            <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2">
-              Сводка
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <StatChip label="Всего" value={stats.total} accent="muted" />
-              <StatChip label="Сегодня" value={stats.today} accent="green" />
-              <StatChip label="Скоро" value={stats.soon} accent="orange" />
-              <StatChip label="Без даты" value={stats.noDate} accent="muted" />
-            </div>
-          </div>
-
-          {/* Mini calendar */}
-          <MiniCalendar currentDate={currentDate} onDateClick={gotoDate} events={events} />
-
-          {/* Search */}
-          <div className="bg-white rounded-lg border border-gray-200 p-3">
-            <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2">
-              Поиск
-            </div>
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-muted" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Номер / клиент / телефон"
-                className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:border-poison-green/60 focus:ring-1 focus:ring-poison-green/30"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-primary"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Status filter — 2 колонки для компактности */}
-          <div className="bg-white rounded-lg border border-gray-200 p-3">
-            <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2">
-              Статус сделки
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              {Object.entries(STATUS_LABEL).map(([key, label]) => {
-                const cnt = statusCounts[key] ?? 0;
-                const active = statusFilter.has(key);
-                return (
-                  <button
-                    key={key}
-                    onClick={() => toggleStatus(key)}
-                    disabled={cnt === 0}
-                    className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-[11px] transition-colors min-w-0 ${
-                      active
-                        ? 'bg-neon-orange/10 text-neon-orange'
-                        : cnt === 0
-                        ? 'text-content-muted/40 cursor-not-allowed'
-                        : 'text-content-secondary hover:bg-gray-50'
-                    }`}
-                  >
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: STATUS_BORDER[key] }}
-                    />
-                    <span className="flex-1 text-left truncate">{label}</span>
-                    <span className="text-[9px] tabular-nums opacity-70 flex-shrink-0">{cnt}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Spacer — для выравнивания нижних блоков по низу календаря */}
-          <div className="flex-1" />
-
-          {/* Сбросить фильтры — внизу sidebar */}
-          {(search || statusFilter.size > 0 || healthFilter.size > 0) && (
-            <button
-              onClick={clearFilters}
-              className="w-full px-3 py-2 text-xs text-neon-orange hover:bg-neon-orange/5 rounded border border-neon-orange/20 transition-colors flex items-center justify-center gap-1.5"
-            >
-              <X className="w-3 h-3" />
-              Сбросить фильтры
-            </button>
-          )}
-        </aside>
-
-        {/* ─── Основной грид ──────────────────────── */}
-        <div className="flex-1 min-w-0 flex flex-col gap-4">
-          <div className="fc-deztech-wrapper bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+      <div className="flex flex-col lg:flex-row gap-4 lg:items-start">
+        {/* ─── Календарь (слева, основной) ──────────────── */}
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
+          <div
+            ref={wrapperRef}
+            className="fc-deztech-wrapper bg-white rounded-lg border border-gray-200 shadow-sm p-4"
+          >
             <FullCalendar
               ref={calendarRef}
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
@@ -499,19 +487,77 @@ export function CalendarFull({
             />
           </div>
 
-          {/* Срочность — перенесено из sidebar под календарь */}
+          {canDragDates && (
+            <div className="text-[10px] text-content-muted px-1">
+              💡 Перетаскивай выезды прямо в календаре для быстрого переноса дат
+            </div>
+          )}
+        </div>
+
+        {/* ─── Список выездов (справа) ──────────────────── */}
+        <aside className="w-full lg:w-80 xl:w-96 lg:flex-shrink-0 flex flex-col gap-3">
+          {/* Сводка — компактная полоска */}
           <div className="bg-white rounded-lg border border-gray-200 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted">
-                Срочность
-              </div>
-              {canDragDates && (
-                <div className="text-[10px] text-content-muted">
-                  💡 Перетаскивай выезды для быстрого переноса
-                </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-1.5">
+              <StatChip label="Всего" value={stats.total} accent="muted" />
+              <StatChip label="Сегодня" value={stats.today} accent="green" />
+              <StatChip label="Скоро" value={stats.soon} accent="orange" />
+              <StatChip label="Без даты" value={stats.noDate} accent="muted" />
+            </div>
+          </div>
+
+          {/* Поиск + фильтры */}
+          <div className="bg-white rounded-lg border border-gray-200 p-3 space-y-2.5">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-muted" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Номер / клиент / телефон"
+                className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:border-poison-green/60 focus:ring-1 focus:ring-poison-green/30"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-primary"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               )}
             </div>
-            <div className="flex flex-wrap gap-1.5">
+
+            {/* Статусы выезда */}
+            <div className="grid grid-cols-3 gap-1">
+              {Object.entries(STATUS_LABEL).map(([key, label]) => {
+                const cnt = statusCounts[key] ?? 0;
+                const active = statusFilter.has(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleStatus(key)}
+                    disabled={cnt === 0}
+                    className={`flex items-center gap-1 px-1.5 py-1 rounded text-[10px] transition-colors min-w-0 ${
+                      active
+                        ? 'bg-neon-orange/10 text-neon-orange'
+                        : cnt === 0
+                        ? 'text-content-muted/40 cursor-not-allowed'
+                        : 'text-content-secondary hover:bg-gray-50'
+                    }`}
+                  >
+                    <span
+                      className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: STATUS_BORDER[key] }}
+                    />
+                    <span className="flex-1 text-left truncate">{label}</span>
+                    <span className="text-[9px] tabular-nums opacity-70 flex-shrink-0">{cnt}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Срочность */}
+            <div className="flex flex-wrap gap-1">
               {(['today', 'soon', 'future', 'past', 'no-date'] as const).map((h) => {
                 const cnt = events.filter((e) => e.health === h).length;
                 const active = healthFilter.has(h);
@@ -520,7 +566,7 @@ export function CalendarFull({
                     key={h}
                     onClick={() => toggleHealth(h)}
                     disabled={cnt === 0}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
                       active
                         ? 'bg-poison-green/15 text-emerald-700 ring-1 ring-emerald-400/40'
                         : cnt === 0
@@ -533,42 +579,61 @@ export function CalendarFull({
                 );
               })}
             </div>
+
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="w-full px-3 py-1.5 text-xs text-neon-orange hover:bg-neon-orange/5 rounded border border-neon-orange/20 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <X className="w-3 h-3" />
+                Сбросить фильтры
+              </button>
+            )}
+          </div>
+
+          {/* Список выездов видимого периода */}
+          <div className="bg-white rounded-lg border border-gray-200 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted truncate">
+                Выезды{viewTitle ? ` · ${viewTitle}` : ''}
+              </div>
+              <span className="text-[10px] text-content-muted tabular-nums flex-shrink-0 ml-2">
+                {visibleEvents.length}
+              </span>
+            </div>
+            <div className="relative overflow-y-auto max-h-[60vh] lg:max-h-[640px] pr-1">
+              <VisitsList groups={dayGroups} dealHrefBase={dealHrefBase} onHoverDay={setHoveredDate} />
+            </div>
           </div>
 
           {/* Выезды без дат */}
           {noDateEvents.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-3 flex items-center gap-2">
+            <div className="bg-white rounded-lg border border-gray-200 p-3">
+              <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                 Без планируемых дат · {noDateEvents.length}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {noDateEvents.map((e) => {
-                  const href =
-                    dealHrefBase === '/master/visits'
-                      ? `/master/visits/${e.id}`
-                      : `${dealHrefBase}/${e.dealId}?tab=visits`;
-                  return (
-                    <a
-                      key={e.id}
-                      href={href}
-                      className="block px-3 py-2 rounded border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors text-sm"
-                      style={{ borderLeftWidth: 3, borderLeftColor: STATUS_BORDER[e.status] ?? '#94a3b8' }}
-                    >
-                      <div className="text-xs text-content-primary truncate flex items-center gap-1.5">
-                        <span style={{ color: STATUS_BORDER[e.status] }}>{STATUS_ICON[e.status] ?? '·'}</span>
-                        {e.serviceTitle}
-                      </div>
-                      <div className="text-xs text-content-muted truncate">
-                        {e.objectName ?? e.clientShortName ?? '—'}
-                      </div>
-                    </a>
-                  );
-                })}
+              <div className="space-y-1">
+                {noDateEvents.map((e) => (
+                  <a
+                    key={e.id}
+                    href={visitHref(dealHrefBase, e)}
+                    className="block px-2.5 py-1.5 rounded border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors"
+                    style={{ borderLeftWidth: 3, borderLeftColor: STATUS_BORDER[e.status] ?? '#94a3b8' }}
+                  >
+                    <div className="text-xs text-content-primary truncate flex items-center gap-1.5">
+                      <span style={{ color: STATUS_BORDER[e.status] }}>{STATUS_ICON[e.status] ?? '·'}</span>
+                      {e.serviceTitle}
+                    </div>
+                    <div className="text-[11px] text-content-muted truncate pl-[18px]">
+                      {e.objectName ?? e.clientShortName ?? '—'}
+                    </div>
+                  </a>
+                ))}
               </div>
             </div>
           )}
-        </div>
+        </aside>
       </div>
 
       {/* Cursor-following tooltip portal */}
@@ -576,6 +641,66 @@ export function CalendarFull({
         <CursorTooltip ev={tooltip.ev} x={tooltip.x} y={tooltip.y} />
       )}
     </>
+  );
+}
+
+// ─── Список выездов справа ─────────────────────────────────────
+function VisitsList({
+  groups,
+  dealHrefBase,
+  onHoverDay,
+}: {
+  groups: VisitDayGroup[];
+  dealHrefBase: string;
+  /** Подсветить день в календаре (key=YYYY-MM-DD) или снять подсветку (null). */
+  onHoverDay: (key: string | null) => void;
+}) {
+  if (groups.length === 0) {
+    return (
+      <div className="text-xs text-content-muted px-1 py-8 text-center">
+        В этом периоде выездов нет
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {groups.map((g) => (
+        <div key={g.dayKey}>
+          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm text-[10px] font-orbitron uppercase tracking-wider text-content-muted py-1">
+            {g.label}
+          </div>
+          <div
+            className="space-y-1 mt-1"
+            onMouseEnter={() => onHoverDay(g.dayKey)}
+            onMouseLeave={() => onHoverDay(null)}
+          >
+            {g.events.map((e) => (
+              <a
+                key={e.id}
+                href={visitHref(dealHrefBase, e)}
+                className="block px-2.5 py-1.5 rounded border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors"
+                style={{ borderLeftWidth: 3, borderLeftColor: STATUS_BORDER[e.status] ?? '#94a3b8' }}
+              >
+                <div className="flex items-center gap-1.5 text-xs text-content-primary">
+                  <span className="flex-shrink-0" style={{ color: STATUS_BORDER[e.status] }}>
+                    {STATUS_ICON[e.status] ?? '·'}
+                  </span>
+                  {e.startAt && (
+                    <span className="text-[10px] text-content-muted tabular-nums flex-shrink-0">
+                      {timeOnly(e.startAt)}
+                    </span>
+                  )}
+                  <span className="truncate font-medium">{e.serviceTitle}</span>
+                </div>
+                <div className="text-[11px] text-content-muted truncate pl-[18px]">
+                  {e.objectName ?? e.clientShortName ?? '—'}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -722,116 +847,6 @@ function StatChip({
         {label}
       </span>
       <span className={`text-sm font-bold tabular-nums ${accentClasses[accent]}`}>{value}</span>
-    </div>
-  );
-}
-
-// ─── Mini Calendar ────────────────────────────────────────────
-function MiniCalendar({
-  currentDate,
-  onDateClick,
-  events,
-}: {
-  currentDate: Date;
-  onDateClick: (d: Date) => void;
-  events: SerializedDealEvent[];
-}) {
-  const [viewDate, setViewDate] = useState(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
-
-  useEffect(() => {
-    setViewDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
-  }, [currentDate]);
-
-  const eventDays = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of events) {
-      if (e.startDate) set.add(e.startDate);
-      if (e.endDate && e.endDate !== e.startDate) set.add(e.endDate);
-    }
-    return set;
-  }, [events]);
-
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const startOffset = (firstDay.getDay() + 6) % 7;
-  const totalDays = lastDay.getDate();
-
-  const cells: Array<{ day: number; date: Date } | null> = [];
-  for (let i = 0; i < startOffset; i++) cells.push(null);
-  for (let d = 1; d <= totalDays; d++) cells.push({ day: d, date: new Date(year, month, d) });
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  const monthLabel = viewDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
-  const today = new Date();
-  const todayKey = toLocalISO(today);
-
-  function prev() {
-    setViewDate(new Date(year, month - 1, 1));
-  }
-  function next() {
-    setViewDate(new Date(year, month + 1, 1));
-  }
-
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3">
-      <div className="flex items-center justify-between mb-2">
-        <button
-          onClick={prev}
-          className="p-1 hover:bg-gray-100 rounded text-content-muted hover:text-content-primary"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </button>
-        <div className="text-[11px] font-orbitron tracking-wider uppercase text-content-primary text-center capitalize flex-1">
-          {monthLabel}
-        </div>
-        <button
-          onClick={next}
-          className="p-1 hover:bg-gray-100 rounded text-content-muted hover:text-content-primary"
-        >
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-7 gap-0.5 text-[9px] text-content-muted text-center mb-1">
-        {['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map((d) => (
-          <div key={d} className="py-0.5">
-            {d}
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-0.5">
-        {cells.map((c, i) => {
-          if (!c) return <div key={i} className="h-6" />;
-          const dateKey = toLocalISO(c.date);
-          const isToday = dateKey === todayKey;
-          const hasEvents = eventDays.has(dateKey);
-          const isCurrent =
-            c.date.getDate() === currentDate.getDate() &&
-            c.date.getMonth() === currentDate.getMonth() &&
-            c.date.getFullYear() === currentDate.getFullYear();
-          return (
-            <button
-              key={i}
-              onClick={() => onDateClick(c.date)}
-              className={`h-6 text-[10px] rounded transition-colors relative tabular-nums ${
-                isCurrent
-                  ? 'bg-neon-orange text-white font-bold'
-                  : isToday
-                  ? 'bg-neon-orange/10 text-neon-orange font-semibold'
-                  : 'text-content-secondary hover:bg-gray-100'
-              }`}
-            >
-              {c.day}
-              {hasEvents && !isCurrent && (
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-poison-green" />
-              )}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
