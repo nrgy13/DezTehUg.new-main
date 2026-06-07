@@ -12,6 +12,7 @@ import {
   BarChart3,
   KanbanSquare,
   CalendarClock,
+  Flag,
 } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
@@ -23,7 +24,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ManagerDashboard() {
   const user = await requireRole('manager');
-  const stats = await getManagerDashboardStats(user.id);
+  const stats = await getManagerDashboardStats(user.id, user.role === 'admin');
 
   return (
     <div className="space-y-6">
@@ -79,6 +80,14 @@ export default async function ManagerDashboard() {
           href="/manager/calendar"
           hint="договоры в работе на этой неделе"
           accent={stats.upcomingVisits7d > 0 ? 'orange' : 'muted'}
+        />
+        <StatCard
+          label="По графику ждут наряда"
+          value={stats.workOrdersDue}
+          icon={Flag}
+          href="/manager/calendar"
+          hint="объекты с обработкой по графику без заказ-наряда"
+          accent={stats.workOrdersDue > 0 ? 'orange' : 'muted'}
         />
         <StatCard
           label="Выручка за 30 дней"

@@ -226,6 +226,7 @@ async function ObjectsTab({ clientId }: { clientId: string }) {
           customName: clientObjectServices.customName,
           method: clientObjectServices.method,
           serviceName: services.name,
+          frequency: clientObjectServices.frequency,
         })
         .from(clientObjectServices)
         .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
@@ -233,10 +234,17 @@ async function ObjectsTab({ clientId }: { clientId: string }) {
         .orderBy(asc(clientObjectServices.sortOrder))
     : [];
 
-  const servicesByObject = new Map<string, { label: string; method: string | null }[]>();
+  const servicesByObject = new Map<
+    string,
+    { label: string; method: string | null; frequency: string | null }[]
+  >();
   for (const r of serviceRows) {
     const list = servicesByObject.get(r.objectId) ?? [];
-    list.push({ label: r.customName ?? r.serviceName ?? 'Услуга', method: r.method });
+    list.push({
+      label: r.customName ?? r.serviceName ?? 'Услуга',
+      method: r.method,
+      frequency: r.frequency,
+    });
     servicesByObject.set(r.objectId, list);
   }
 

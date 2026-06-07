@@ -1,0 +1,428 @@
+'use client';
+
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
+import { UNIT_OPTIONS } from '@/lib/constants/units';
+import { TREATMENT_METHODS } from '@/lib/constants/treatment';
+import {
+  createWorkOrderAction,
+  getObjectWorkOrderDefaults,
+  type WorkOrderFormData,
+} from '@/app/(crm)/manager/calendar/work-order-actions';
+import type { PriceItemUnit } from '@/lib/db/schema/deals';
+
+const fieldClass =
+  'w-full mt-1 px-3 py-2 text-sm bg-bg-primary border border-gray-300 rounded-md focus:border-neon-orange focus:outline-none';
+
+type SvcRow = {
+  serviceId: string;
+  customName: string;
+  method: string;
+  unit: PriceItemUnit;
+  quantity: string;
+};
+
+/** Предзаполнение формы: открыть с уже выбранным клиентом/договором/объектом/датой. */
+export type WorkOrderPreset = {
+  clientId?: string;
+  dealId?: string;
+  objectId?: string;
+  /** datetime-local формат "YYYY-MM-DDTHH:mm". */
+  plannedAtLocal?: string;
+};
+
+// Способ-select: показываем справочник + текущее значение, если оно вне списка
+// (например, составной default из каталога услуг «Сухая/Туман»).
+function methodOptions(cur: string): string[] {
+  const base = [...TREATMENT_METHODS] as string[];
+  return cur && !base.includes(cur) ? [cur, ...base] : base;
+}
+
+// Decimal из БД приходит строкой ("120.00") — убираем лишние нули для поля ввода.
+function trimNum(s: string | null): string {
+  if (s == null || s === '') return '';
+  const n = Number(s);
+  return Number.isFinite(n) ? String(n) : s;
+}
+
+/**
+ * Форма заказ-наряда. Рендерить только когда открыт (вызывающий: `{open && <... />}`),
+ * чтобы preset применялся при каждом открытии. Используется из календаря (кнопка),
+ * панели напоминаний и карточки объекта.
+ */
+export function WorkOrderDialog({
+  data,
+  preset,
+  onClose,
+  onCreated,
+}: {
+  data: WorkOrderFormData;
+  preset?: WorkOrderPreset;
+  onClose: () => void;
+  onCreated?: () => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const hasClients = data.clients.length > 0;
+
+  const [clientId, setClientId] = useState(preset?.clientId ?? '');
+  const [dealId, setDealId] = useState(preset?.dealId ?? '');
+  const [objectId, setObjectId] = useState('');
+  const [masterId, setMasterId] = useState('');
+  const [plannedAt, setPlannedAt] = useState(preset?.plannedAtLocal ?? ''); // datetime-local
+  const [preparations, setPreparations] = useState('');
+  const [rows, setRows] = useState<SvcRow[]>([]);
+  const [loadingDefaults, setLoadingDefaults] = useState(false);
+
+  const client = useMemo(
+    () => data.clients.find((c) => c.id === clientId) ?? null,
+    [data.clients, clientId],
+  );
+
+  // Подгрузка дефолтов услуг/препаратов/мастера по объекту (последний наряд → услуги объекта).
+  async function loadObject(v: string) {
+    setObjectId(v);
+    if (!v) {
+      setRows([]);
+      return;
+    }
+    setLoadingDefaults(true);
+    try {
+      const d = await getObjectWorkOrderDefaults(v);
+      setRows(
+        d.services.map((s) => ({
+          serviceId: s.serviceId ?? '',
+          customName: s.customName ?? '',
+          method: s.method ?? '',
+          unit: s.unit,
+          quantity: trimNum(s.quantity),
+        })),
+      );
+      if (d.source === 'last_order') {
+        setPreparations(d.preparations ?? '');
+        if (d.masterId) setMasterId(d.masterId);
+      }
+    } finally {
+      setLoadingDefaults(false);
+    }
+  }
+
+  // Применяем preset при открытии (объект → подгружаем дефолты).
+  useEffect(() => {
+    if (preset?.objectId) loadObject(preset.objectId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onClient(v: string) {
+    setClientId(v);
+    setDealId('');
+    setObjectId('');
+    setRows([]);
+  }
+
+  function addRow() {
+    setRows((r) => [...r, { serviceId: '', customName: '', method: '', unit: 'm2', quantity: '' }]);
+  }
+  function removeRow(i: number) {
+    setRows((r) => r.filter((_, idx) => idx !== i));
+  }
+  function patchRow(i: number, patch: Partial<SvcRow>) {
+    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+  }
+  function onPickService(i: number, value: string) {
+    if (value === '__custom__') {
+      patchRow(i, { serviceId: '', customName: '' });
+      return;
+    }
+    const svc = data.catalog.find((c) => c.id === value);
+    patchRow(i, { serviceId: value, customName: '', method: svc?.defaultMethod ?? '' });
+  }
+
+  function submit() {
+    if (!dealId || !objectId) {
+      toast.error('Выбери договор и объект');
+      return;
+    }
+    if (!masterId) {
+      toast.error('Выбери мастера');
+      return;
+    }
+    const services = rows
+      .filter((r) => r.serviceId || r.customName.trim())
+      .map((r) => ({
+        serviceId: r.serviceId || null,
+        customName: r.customName.trim() || null,
+        method: r.method.trim() || null,
+        unit: r.unit,
+        quantity: r.quantity.trim() ? r.quantity.replace(',', '.') : null,
+      }));
+    if (services.length === 0) {
+      toast.error('Добавь хотя бы одну услугу');
+      return;
+    }
+    const plannedAtIso = plannedAt ? new Date(plannedAt).toISOString() : null;
+
+    startTransition(async () => {
+      const res = await createWorkOrderAction({
+        dealId,
+        objectId,
+        masterId,
+        plannedAtIso,
+        preparations: preparations.trim() || null,
+        services,
+      });
+      if (res.ok) {
+        toast.success('Заказ-наряд создан — выезд появился в календаре');
+        onCreated?.();
+        router.refresh();
+        onClose();
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-orbitron uppercase tracking-wide">
+            Новый заказ-наряд
+          </DialogTitle>
+        </DialogHeader>
+
+        {!hasClients ? (
+          <p className="text-sm text-content-muted py-6 text-center">
+            Нет объектов, привязанных к договору. Сначала заведи объект в карточке клиента
+            (с договором-основанием) — тогда по нему можно оформить заказ-наряд.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {/* Клиент + договор */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="wo-client">Клиент</Label>
+                <select
+                  id="wo-client"
+                  className={fieldClass}
+                  value={clientId}
+                  onChange={(e) => onClient(e.target.value)}
+                >
+                  <option value="">— выбери клиента —</option>
+                  {data.clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.shortName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="wo-deal">Договор</Label>
+                <select
+                  id="wo-deal"
+                  className={fieldClass}
+                  value={dealId}
+                  onChange={(e) => setDealId(e.target.value)}
+                  disabled={!client}
+                >
+                  <option value="">— договор —</option>
+                  {client?.deals.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.contractNumber}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Объект + мастер */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="wo-object">Объект</Label>
+                <select
+                  id="wo-object"
+                  className={fieldClass}
+                  value={objectId}
+                  onChange={(e) => loadObject(e.target.value)}
+                  disabled={!client}
+                >
+                  <option value="">— объект —</option>
+                  {client?.objects.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="wo-master">Мастер</Label>
+                <select
+                  id="wo-master"
+                  className={fieldClass}
+                  value={masterId}
+                  onChange={(e) => setMasterId(e.target.value)}
+                >
+                  <option value="">— мастер —</option>
+                  {data.masters.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Дата + время */}
+            <div>
+              <Label htmlFor="wo-date">Дата и время выезда</Label>
+              <input
+                id="wo-date"
+                type="datetime-local"
+                className={fieldClass}
+                value={plannedAt}
+                onChange={(e) => setPlannedAt(e.target.value)}
+              />
+            </div>
+
+            {/* Услуги */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label>
+                  Услуги {objectId ? '(из прошлого наряда — можно править)' : ''}
+                  {loadingDefaults && (
+                    <Loader2 className="inline w-3 h-3 ml-1.5 animate-spin text-content-muted" />
+                  )}
+                </Label>
+                <button
+                  type="button"
+                  onClick={addRow}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-neon-orange border border-neon-orange/40 rounded hover:bg-neon-orange/10"
+                >
+                  <Plus className="w-3 h-3" /> услуга
+                </button>
+              </div>
+              {rows.length === 0 && !loadingDefaults && (
+                <p className="text-xs text-content-muted">
+                  Выбери объект — услуги подтянутся, либо добавь вручную.
+                </p>
+              )}
+              <div className="space-y-2">
+                {rows.map((row, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-2 items-start">
+                    <div className="col-span-12 sm:col-span-4">
+                      <select
+                        className={fieldClass}
+                        value={row.serviceId || '__custom__'}
+                        onChange={(e) => onPickService(i, e.target.value)}
+                      >
+                        <option value="__custom__">— своя услуга —</option>
+                        {data.catalog.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.shortName ?? c.name}
+                          </option>
+                        ))}
+                      </select>
+                      {!row.serviceId && (
+                        <input
+                          className={fieldClass}
+                          placeholder="Название услуги"
+                          value={row.customName}
+                          onChange={(e) => patchRow(i, { customName: e.target.value })}
+                        />
+                      )}
+                    </div>
+                    <div className="col-span-6 sm:col-span-3">
+                      <select
+                        className={fieldClass}
+                        value={row.method}
+                        onChange={(e) => patchRow(i, { method: e.target.value })}
+                      >
+                        <option value="">способ…</option>
+                        {methodOptions(row.method).map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-3 sm:col-span-2">
+                      <input
+                        className={fieldClass}
+                        inputMode="decimal"
+                        placeholder="кол-во"
+                        value={row.quantity}
+                        onChange={(e) => patchRow(i, { quantity: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <select
+                        className={fieldClass}
+                        value={row.unit}
+                        onChange={(e) => patchRow(i, { unit: e.target.value as PriceItemUnit })}
+                      >
+                        {UNIT_OPTIONS.map((u) => (
+                          <option key={u.value} value={u.value}>
+                            {u.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-3 sm:col-span-1 flex items-center justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => removeRow(i)}
+                        className="p-2 text-content-muted hover:text-red-500"
+                        aria-label="Удалить услугу"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Препараты */}
+            <div>
+              <Label htmlFor="wo-prep">Препараты обработки</Label>
+              <textarea
+                id="wo-prep"
+                className={fieldClass}
+                rows={2}
+                value={preparations}
+                onChange={(e) => setPreparations(e.target.value)}
+                placeholder="Напр.: Циперметрин 0.5%, гель Globol"
+              />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-content-secondary hover:text-content-primary"
+          >
+            Отмена
+          </button>
+          {hasClients && (
+            <CyberpunkButton variant="primary" onClick={submit} disabled={isPending}>
+              {isPending ? 'Создаю…' : 'Создать наряд'}
+            </CyberpunkButton>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -106,10 +106,10 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
 
   const conditions = [] as Array<ReturnType<typeof eq>>;
 
+  // Мастер видит только свои выезды. Менеджер/админ — ВСЕ выезды (Релиз B:
+  // операционный календарь общий, менеджер по факту один, мастера общие).
   if (mode.kind === 'master') {
     conditions.push(eq(dealWorkLogs.masterId, mode.userId));
-  } else if (mode.kind === 'manager' && !mode.isAdmin) {
-    conditions.push(eq(deals.assignedManagerId, mode.userId));
   }
 
   // Берём только выезды с датой в окне (или вообще без даты — покажем в «no-date»)

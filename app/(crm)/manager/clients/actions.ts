@@ -390,6 +390,8 @@ async function syncObjectServices(
       // Sprint 10: единица (дефолт m2) + количество (numeric → string в Drizzle).
       unit: s.unit ?? 'm2',
       quantity: s.quantity == null ? null : String(s.quantity),
+      // Релиз B: периодичность обработки (для серии напоминаний).
+      frequency: s.frequency ?? null,
       sortOrder: i,
     }));
 

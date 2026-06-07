@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, desc, inArray } from 'drizzle-orm';
 import {
   ChevronLeft,
   Pencil,
@@ -15,12 +15,16 @@ import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { clients } from '@/lib/db/schema/clients';
-import { deals } from '@/lib/db/schema/deals';
+import { deals, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
+import { dealChecklistItems } from '@/lib/db/schema/checklists';
 import { services } from '@/lib/db/schema/services';
+import { users } from '@/lib/db/schema/users';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { formatQuantity, unitLabel } from '@/lib/constants/units';
+import { getWorkOrderFormData } from '@/app/(crm)/manager/calendar/work-order-actions';
 import { ObjectActions } from './ObjectActions';
+import { ObjectVisitsSection, type ObjectVisitView } from './ObjectVisitsSection';
 import { PageTitle } from '@/components/crm/PageTitle';
 
 export const dynamic = 'force-dynamic';
@@ -71,6 +75,7 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
       serviceName: services.name,
       unit: clientObjectServices.unit,
       quantity: clientObjectServices.quantity,
+      frequency: clientObjectServices.frequency,
     })
     .from(clientObjectServices)
     .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
@@ -82,7 +87,90 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
     method: r.method,
     // Sprint 10: «500 м²» / «7,7 м³» / «5 ед.» — пусто, если кол-во не задано.
     qty: r.quantity != null ? `${formatQuantity(r.quantity)} ${unitLabel(r.unit)}` : '',
+    // Релиз B: периодичность обработки.
+    freq: r.frequency,
   }));
+
+  // Релиз B: выезды (заказ-наряды) по объекту + snapshot услуг + чеклист + мастер.
+  const visitRows = await db
+    .select({
+      id: dealWorkLogs.id,
+      status: dealWorkLogs.status,
+      plannedAt: dealWorkLogs.plannedAt,
+      startedAt: dealWorkLogs.startedAt,
+      finalizedAt: dealWorkLogs.finalizedAt,
+      performedAt: dealWorkLogs.performedAt,
+      preparations: dealWorkLogs.preparations,
+      dealId: dealWorkLogs.dealId,
+      masterName: users.fullName,
+    })
+    .from(dealWorkLogs)
+    .leftJoin(users, eq(users.id, dealWorkLogs.masterId))
+    .where(eq(dealWorkLogs.objectId, id))
+    .orderBy(desc(dealWorkLogs.createdAt));
+
+  const visitIds = visitRows.map((v) => v.id);
+  const [svcRows, chkRows] = await Promise.all([
+    visitIds.length
+      ? db
+          .select({
+            workLogId: dealWorkLogServices.workLogId,
+            customName: dealWorkLogServices.customName,
+            serviceName: services.name,
+          })
+          .from(dealWorkLogServices)
+          .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
+          .where(inArray(dealWorkLogServices.workLogId, visitIds))
+          .orderBy(asc(dealWorkLogServices.sortOrder))
+      : Promise.resolve([]),
+    visitIds.length
+      ? db
+          .select({ workLogId: dealChecklistItems.workLogId, status: dealChecklistItems.status })
+          .from(dealChecklistItems)
+          .where(inArray(dealChecklistItems.workLogId, visitIds))
+      : Promise.resolve([]),
+  ]);
+
+  const svcByWl = new Map<string, string[]>();
+  for (const s of svcRows) {
+    const arr = svcByWl.get(s.workLogId) ?? [];
+    arr.push(s.customName ?? s.serviceName ?? 'Услуга');
+    svcByWl.set(s.workLogId, arr);
+  }
+  const chkByWl = new Map<string, { done: number; total: number }>();
+  for (const c of chkRows) {
+    const cur = chkByWl.get(c.workLogId) ?? { done: 0, total: 0 };
+    cur.total += 1;
+    if (c.status === 'done') cur.done += 1;
+    chkByWl.set(c.workLogId, cur);
+  }
+
+  const objectVisits: ObjectVisitView[] = visitRows.map((v) => {
+    const iso = v.performedAt ?? v.finalizedAt ?? v.startedAt ?? v.plannedAt;
+    const dateLabel = iso
+      ? iso.toLocaleString('ru-RU', {
+          day: '2-digit',
+          month: '2-digit',
+          year: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : 'без даты';
+    const chk = chkByWl.get(v.id) ?? { done: 0, total: 0 };
+    return {
+      id: v.id,
+      status: v.status as ObjectVisitView['status'],
+      dateLabel,
+      masterName: v.masterName,
+      services: svcByWl.get(v.id) ?? [],
+      preparations: v.preparations,
+      checklistDone: chk.done,
+      checklistTotal: chk.total,
+      dealId: v.dealId,
+    };
+  });
+
+  const workOrderData = await getWorkOrderFormData(object.clientId);
 
   const backHref = `/manager/clients/${object.clientId}?tab=objects`;
 
@@ -178,6 +266,7 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
                     {s.label}
                     {s.method ? ` · ${s.method}` : ''}
                     {s.qty ? ` · ${s.qty}` : ''}
+                    {s.freq ? ` · ${s.freq}` : ''}
                   </span>
                 ))}
               </div>
@@ -185,6 +274,15 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
           </CyberpunkCard>
         </div>
       </div>
+
+      {/* Выезды (заказ-наряды) по объекту */}
+      <ObjectVisitsSection
+        objectId={object.id}
+        clientId={object.clientId}
+        dealId={object.dealId}
+        formData={workOrderData}
+        visits={objectVisits}
+      />
 
       {/* Действия: формирование актов + удаление */}
       <CyberpunkCard variant="default" hoverEffect={false} className="p-5">

@@ -10,7 +10,7 @@ import { formatQuantity } from '@/lib/constants/units';
 import { attachObjectToDeal } from '../actions';
 import { DeleteObjectButton } from '../DeleteObjectButton';
 
-type ObjectService = { label: string; method: string | null };
+type ObjectService = { label: string; method: string | null; frequency: string | null };
 
 type ClientObjectView = {
   id: string;
@@ -114,6 +114,7 @@ function ObjectRow({ object: o, deals }: { object: ClientObjectView; deals: Deal
                 >
                   {s.label}
                   {s.method ? ` · ${s.method}` : ''}
+                  {s.frequency ? ` · ${s.frequency}` : ''}
                 </span>
               ))}
             </div>

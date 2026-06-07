@@ -125,6 +125,8 @@ export const objectServiceSchema = z.object({
     },
     z.coerce.number().positive().max(1_000_000).optional(),
   ),
+  // Релиз B: периодичность обработки (из TREATMENT_FREQUENCIES). Пусто → undefined.
+  frequency: optionalTrimmed,
 });
 
 // === Объект обслуживания ===

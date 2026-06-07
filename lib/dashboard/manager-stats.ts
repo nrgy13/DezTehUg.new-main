@@ -7,6 +7,7 @@ import { clients } from '@/lib/db/schema/clients';
 import { deals } from '@/lib/db/schema/deals';
 import { documents } from '@/lib/db/schema/documents';
 import { getStaleLeadsCount } from '@/lib/lead-stages-server';
+import { countDueReminders } from '@/lib/calendar/object-reminders';
 
 export type ManagerDashboardStats = {
   newLeads: number;
@@ -19,13 +20,18 @@ export type ManagerDashboardStats = {
   upcomingVisits7d: number;
   revenue30d: number;
   conversion30d: number | null;
+  /** Релиз B: «горящие» напоминания «оформи заказ-наряд» (просрочено/сегодня/скоро). */
+  workOrdersDue: number;
 };
 
 function getRows<T>(result: unknown): T[] {
   return ((result as { rows?: unknown[] }).rows ?? result) as T[];
 }
 
-export async function getManagerDashboardStats(userId: string): Promise<ManagerDashboardStats> {
+export async function getManagerDashboardStats(
+  userId: string,
+  isAdmin = false,
+): Promise<ManagerDashboardStats> {
   const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [
@@ -39,6 +45,7 @@ export async function getManagerDashboardStats(userId: string): Promise<ManagerD
     upcomingVisitsResult,
     revenueResult,
     conversionResult,
+    workOrdersDue,
   ] = await Promise.all([
     db.select({ newLeads: count() }).from(leads).where(eq(leads.status, 'new')),
     db
@@ -91,6 +98,7 @@ export async function getManagerDashboardStats(userId: string): Promise<ManagerD
       FROM leads
       WHERE created_at >= NOW() - INTERVAL '30 days'
     `),
+    countDueReminders({ userId, isAdmin }),
   ]);
 
   const upcomingRows = getRows<{ cnt: number }>(upcomingVisitsResult);
@@ -114,6 +122,7 @@ export async function getManagerDashboardStats(userId: string): Promise<ManagerD
     upcomingVisits7d,
     revenue30d,
     conversion30d,
+    workOrdersDue,
   };
 }
 

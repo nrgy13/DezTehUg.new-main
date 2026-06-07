@@ -10,7 +10,7 @@ import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { formatQuantity } from '@/lib/constants/units';
 import { attachObjectToDeal } from '../../clients/actions';
 
-type ObjectService = { label: string; method: string | null };
+type ObjectService = { label: string; method: string | null; frequency: string | null };
 
 type DealObject = {
   id: string;
@@ -156,6 +156,7 @@ export function DealObjectsTab({
                         >
                           {s.label}
                           {s.method ? ` · ${s.method}` : ''}
+                          {s.frequency ? ` · ${s.frequency}` : ''}
                         </span>
                       ))}
                     </div>

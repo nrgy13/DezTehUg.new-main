@@ -1,10 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { eq, asc, and } from 'drizzle-orm';
+import { eq, asc, and, desc } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { deals } from '@/lib/db/schema/deals';
+import { deals, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
@@ -48,17 +48,40 @@ export type WorkOrderFormData = {
   catalog: { id: string; name: string; shortName: string | null; defaultMethod: string | null }[];
 };
 
+// Дефолты формы наряда по объекту: услуги/препараты/мастер из ПОСЛЕДНЕГО наряда
+// этого объекта; если нарядов ещё не было — из услуг объекта (client_object_services).
+export type WorkOrderDefaultService = {
+  serviceId: string | null;
+  customName: string | null;
+  method: string | null;
+  unit: PriceItemUnit;
+  quantity: string | null;
+};
+export type WorkOrderDefaults = {
+  source: 'last_order' | 'object';
+  services: WorkOrderDefaultService[];
+  preparations: string | null;
+  masterId: string | null;
+};
+
 /**
  * Дерево клиент → { договоры, объекты } для формы заказ-наряда.
  * Объект и договор выбираются НЕЗАВИСИМО (объект = адрес клиента, договор =
  * основание). Показываем клиентов, у кого есть хотя бы один договор И один объект.
  * При создании наряда объект автоматически привязывается к договору (см.
  * createWorkOrder) — поэтому здесь не требуем заранее проставленный deal_id.
+ *
+ * clientId (опц.) — сузить дерево до одного клиента (карточка объекта / таб сделки).
  */
-export async function getWorkOrderFormData(): Promise<WorkOrderFormData> {
+export async function getWorkOrderFormData(clientId?: string): Promise<WorkOrderFormData> {
   const [clientRows, dealRows, objectRows, objServiceRows, masterRows, catalogRows] =
     await Promise.all([
-      db.select({ id: clients.id, shortName: clients.shortName }).from(clients),
+      clientId
+        ? db
+            .select({ id: clients.id, shortName: clients.shortName })
+            .from(clients)
+            .where(eq(clients.id, clientId))
+        : db.select({ id: clients.id, shortName: clients.shortName }).from(clients),
       db
         .select({ id: deals.id, contractNumber: deals.contractNumber, clientId: deals.clientId })
         .from(deals)
@@ -200,4 +223,132 @@ export async function createWorkOrderAction(input: {
   revalidatePath('/master/calendar');
   revalidatePath('/master');
   return { ok: true };
+}
+
+// ─── Удаление заказ-наряда (только запланированного) ──────────
+/**
+ * Удаляет заказ-наряд (work_log). Разрешено только для status='planned' —
+ * in_progress/completed мастер уже трогал (есть фото/чеклист/история).
+ * Snapshot услуг и пункты чеклиста снимутся каскадом (ON DELETE CASCADE).
+ * После удаления напоминание серии на эту дату снова появится (всё обратимо).
+ */
+export async function deleteWorkOrder(workLogId: string): Promise<Result> {
+  const actor = await getManager();
+  if (!actor) return { ok: false, error: 'Нет доступа' };
+
+  const [wl] = await db
+    .select({
+      id: dealWorkLogs.id,
+      status: dealWorkLogs.status,
+      dealId: dealWorkLogs.dealId,
+      objectId: dealWorkLogs.objectId,
+    })
+    .from(dealWorkLogs)
+    .where(eq(dealWorkLogs.id, workLogId))
+    .limit(1);
+  if (!wl) return { ok: false, error: 'Выезд не найден' };
+  if (wl.status !== 'planned') {
+    return {
+      ok: false,
+      error:
+        wl.status === 'in_progress'
+          ? 'Выезд уже в работе — мастер начал, удаление недоступно'
+          : 'Выезд уже завершён, удаление недоступно',
+    };
+  }
+
+  await db.delete(dealWorkLogs).where(eq(dealWorkLogs.id, workLogId));
+
+  revalidatePath('/manager/calendar');
+  revalidatePath('/master/calendar');
+  revalidatePath('/master');
+  if (wl.dealId) revalidatePath(`/manager/deals/${wl.dealId}`);
+  if (wl.objectId) revalidatePath(`/manager/objects/${wl.objectId}`);
+  return { ok: true };
+}
+
+// ─── Дефолты наряда по объекту (предзаполнение формы) ─────────
+/**
+ * Возвращает предзаполнение формы наряда для объекта:
+ * - если по объекту уже был наряд — услуги (snapshot), препараты и мастера из
+ *   ПОСЛЕДНЕГО наряда (Саня: «форма предзаполнена данными с прошлого наряда»);
+ * - иначе — услуги объекта из client_object_services (как при ручном вводе).
+ */
+export async function getObjectWorkOrderDefaults(objectId: string): Promise<WorkOrderDefaults> {
+  const actor = await getManager();
+  if (!actor) return { source: 'object', services: [], preparations: null, masterId: null };
+
+  // 1) Последний наряд объекта.
+  const [last] = await db
+    .select({
+      id: dealWorkLogs.id,
+      preparations: dealWorkLogs.preparations,
+      masterId: dealWorkLogs.masterId,
+    })
+    .from(dealWorkLogs)
+    .where(eq(dealWorkLogs.objectId, objectId))
+    .orderBy(desc(dealWorkLogs.createdAt))
+    .limit(1);
+
+  if (last) {
+    const svc = await db
+      .select({
+        serviceId: dealWorkLogServices.serviceId,
+        customName: dealWorkLogServices.customName,
+        method: dealWorkLogServices.method,
+        unit: dealWorkLogServices.unit,
+        quantity: dealWorkLogServices.quantity,
+      })
+      .from(dealWorkLogServices)
+      .where(eq(dealWorkLogServices.workLogId, last.id))
+      .orderBy(asc(dealWorkLogServices.sortOrder));
+    return {
+      source: 'last_order',
+      services: svc.map((s) => ({
+        serviceId: s.serviceId,
+        customName: s.customName,
+        method: s.method,
+        unit: s.unit,
+        quantity: s.quantity,
+      })),
+      preparations: last.preparations,
+      masterId: last.masterId,
+    };
+  }
+
+  // 2) Fallback: услуги объекта + площадь для кол-ва по умолчанию.
+  const [objRow, objSvc] = await Promise.all([
+    db
+      .select({ areaM2: clientObjects.areaM2 })
+      .from(clientObjects)
+      .where(eq(clientObjects.id, objectId))
+      .limit(1),
+    db
+      .select({
+        serviceId: clientObjectServices.serviceId,
+        customName: clientObjectServices.customName,
+        serviceName: services.name,
+        method: clientObjectServices.method,
+        unit: clientObjectServices.unit,
+        quantity: clientObjectServices.quantity,
+      })
+      .from(clientObjectServices)
+      .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
+      .where(eq(clientObjectServices.objectId, objectId))
+      .orderBy(asc(clientObjectServices.sortOrder)),
+  ]);
+  const areaM2 = objRow[0]?.areaM2 ?? null;
+  return {
+    source: 'object',
+    services: objSvc.map((s) => ({
+      serviceId: s.serviceId,
+      // произвольная услуга → имя в customName; из каталога → null (рендерится по serviceId)
+      customName: s.serviceId ? null : s.customName ?? s.serviceName ?? null,
+      method: s.method,
+      unit: s.unit,
+      quantity: s.quantity ?? areaM2,
+    })),
+    preparations: null,
+    masterId: null,
+  };
 }

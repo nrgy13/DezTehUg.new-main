@@ -11,7 +11,7 @@ import { Loader2, Plus, X } from 'lucide-react';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { NeonInput } from '@/components/cyberpunk/NeonInput';
-import { TREATMENT_METHODS } from '@/lib/constants/treatment';
+import { TREATMENT_METHODS, TREATMENT_FREQUENCIES } from '@/lib/constants/treatment';
 import { UNIT_OPTIONS } from '@/lib/constants/units';
 import { clientObjectSchema } from './schemas';
 import { addObject, updateObject, createObjectForDeal } from './actions';
@@ -26,6 +26,7 @@ type InitialService = {
   method: string | null;
   unit: string | null;
   quantity: string | null;
+  frequency: string | null;
 };
 
 // dealId — если задан в режиме create, объект создаётся привязанным к договору
@@ -91,6 +92,7 @@ export function ObjectForm({
             method: s.method ?? undefined,
             unit: (s.unit as 'm2' | 'pcs' | 'm3') ?? 'm2',
             quantity: s.quantity != null ? Number(s.quantity) : undefined,
+            frequency: s.frequency ?? undefined,
           })),
         }
       : { services: [] },
@@ -186,6 +188,7 @@ export function ObjectForm({
                 method: undefined,
                 unit: 'm2',
                 quantity: undefined,
+                frequency: undefined,
               })
             }
             className="inline-flex items-center gap-1 text-xs font-orbitron uppercase tracking-wider text-poison-green hover:text-neon-orange transition-colors"
@@ -206,7 +209,7 @@ export function ObjectForm({
               return (
                 <div
                   key={f.id}
-                  className="grid grid-cols-1 sm:grid-cols-[1.4fr_1.4fr_0.8fr_0.9fr_auto] gap-2 items-start"
+                  className="grid grid-cols-1 sm:grid-cols-[1.3fr_1.1fr_1.1fr_0.7fr_0.7fr_auto] gap-2 items-start"
                 >
                   <div className="space-y-2">
                     <select {...register(`services.${i}.serviceId` as const)} className={selectClass}>
@@ -229,6 +232,18 @@ export function ObjectForm({
                     {TREATMENT_METHODS.map((m) => (
                       <option key={m} value={m}>
                         {m}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    {...register(`services.${i}.frequency` as const)}
+                    className={selectClass}
+                    aria-label="Периодичность"
+                  >
+                    <option value="">— периодичность —</option>
+                    {TREATMENT_FREQUENCIES.map((fq) => (
+                      <option key={fq} value={fq}>
+                        {fq}
                       </option>
                     ))}
                   </select>

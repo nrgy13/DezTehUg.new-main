@@ -290,17 +290,6 @@ export function CalendarFull({
     }
   }, [hoveredDate, viewRange, fcEvents]);
 
-  // Stats
-  const stats = useMemo(
-    () => ({
-      total: events.length,
-      today: events.filter((e) => e.health === 'today').length,
-      soon: events.filter((e) => e.health === 'soon').length,
-      noDate: events.filter((e) => e.health === 'no-date').length,
-    }),
-    [events],
-  );
-
   // Status counts (для фильтра статусов)
   const statusCounts = useMemo(() => {
     const m: Record<string, number> = {};
@@ -435,8 +424,144 @@ export function CalendarFull({
 
   return (
     <>
-      <div className="flex flex-col lg:flex-row gap-4 lg:items-start">
-        {/* ─── Календарь (слева, основной) ──────────────── */}
+      {/* ─── Компактная панель: поиск + фильтры ──────────── */}
+      <div className="bg-white rounded-lg border border-gray-200 p-2.5 mb-4 flex flex-col lg:flex-row lg:items-center gap-2.5">
+        {/* Поиск */}
+        <div className="relative lg:w-72 flex-shrink-0">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Номер / клиент / телефон"
+            className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:border-poison-green/60 focus:ring-1 focus:ring-poison-green/30"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-primary"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Статусы выезда */}
+        <div className="flex flex-wrap gap-1">
+          {Object.entries(STATUS_LABEL).map(([key, label]) => {
+            const cnt = statusCounts[key] ?? 0;
+            const active = statusFilter.has(key);
+            return (
+              <button
+                key={key}
+                onClick={() => toggleStatus(key)}
+                disabled={cnt === 0}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors ${
+                  active
+                    ? 'bg-neon-orange/10 text-neon-orange'
+                    : cnt === 0
+                    ? 'text-content-muted/40 cursor-not-allowed'
+                    : 'text-content-secondary hover:bg-gray-50'
+                }`}
+              >
+                <span
+                  className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: STATUS_BORDER[key] }}
+                />
+                {label}
+                <span className="text-[9px] tabular-nums opacity-70">{cnt}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Срочность */}
+        <div className="flex flex-wrap gap-1 lg:ml-auto">
+          {(['today', 'soon', 'future', 'past', 'no-date'] as const).map((h) => {
+            const cnt = events.filter((e) => e.health === h).length;
+            const active = healthFilter.has(h);
+            return (
+              <button
+                key={h}
+                onClick={() => toggleHealth(h)}
+                disabled={cnt === 0}
+                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                  active
+                    ? 'bg-poison-green/15 text-emerald-700 ring-1 ring-emerald-400/40'
+                    : cnt === 0
+                    ? 'bg-gray-50 text-content-muted/40 cursor-not-allowed'
+                    : 'bg-gray-100 text-content-secondary hover:bg-gray-200'
+                }`}
+              >
+                {HEALTH_LABEL[h]} · {cnt}
+              </button>
+            );
+          })}
+        </div>
+
+        {hasActiveFilters && (
+          <button
+            onClick={clearFilters}
+            className="flex-shrink-0 px-2.5 py-1 text-[10px] text-neon-orange hover:bg-neon-orange/5 rounded border border-neon-orange/20 transition-colors flex items-center gap-1"
+          >
+            <X className="w-3 h-3" />
+            Сбросить
+          </button>
+        )}
+      </div>
+
+      {/* ─── Список (слева) + Календарь (справа), равной высоты ─── */}
+      <div className="flex flex-col lg:flex-row gap-4 lg:items-stretch">
+        {/* Список выездов — слева, основная рабочая зона.
+            lg:relative + внутренний lg:absolute inset-0 → высоту колонки задаёт
+            календарь (справа), а список ровно под неё со скроллом. */}
+        <aside className="w-full lg:w-[30rem] xl:w-[34rem] lg:flex-shrink-0 lg:relative">
+          <div className="flex flex-col gap-3 lg:absolute lg:inset-0">
+          <div className="bg-white rounded-lg border border-gray-200 p-3 flex flex-col flex-1 min-h-0">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted truncate">
+                Выезды{viewTitle ? ` · ${viewTitle}` : ''}
+              </div>
+              <span className="text-[10px] text-content-muted tabular-nums flex-shrink-0 ml-2">
+                {visibleEvents.length}
+              </span>
+            </div>
+            <div className="relative overflow-y-auto flex-1 min-h-0 pr-1">
+              <VisitsList groups={dayGroups} dealHrefBase={dealHrefBase} onHoverDay={setHoveredDate} />
+            </div>
+          </div>
+
+          {/* Выезды без дат */}
+          {noDateEvents.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 p-3 flex-shrink-0">
+              <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                Без планируемых дат · {noDateEvents.length}
+              </div>
+              <div className="space-y-1">
+                {noDateEvents.map((e) => (
+                  <a
+                    key={e.id}
+                    href={visitHref(dealHrefBase, e)}
+                    className="block px-2.5 py-1.5 rounded border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors"
+                    style={{ borderLeftWidth: 3, borderLeftColor: STATUS_BORDER[e.status] ?? '#94a3b8' }}
+                  >
+                    <div className="text-xs text-content-primary truncate flex items-center gap-1.5">
+                      <span style={{ color: STATUS_BORDER[e.status] }}>{STATUS_ICON[e.status] ?? '·'}</span>
+                      {e.serviceTitle}
+                    </div>
+                    <div className="text-[11px] text-content-muted truncate pl-[18px]">
+                      {e.objectName ?? e.clientShortName ?? '—'}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          </div>
+        </aside>
+
+        {/* Календарь — справа */}
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div
             ref={wrapperRef}
@@ -493,147 +618,6 @@ export function CalendarFull({
             </div>
           )}
         </div>
-
-        {/* ─── Список выездов (справа) ──────────────────── */}
-        <aside className="w-full lg:w-80 xl:w-96 lg:flex-shrink-0 flex flex-col gap-3">
-          {/* Сводка — компактная полоска */}
-          <div className="bg-white rounded-lg border border-gray-200 p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-1.5">
-              <StatChip label="Всего" value={stats.total} accent="muted" />
-              <StatChip label="Сегодня" value={stats.today} accent="green" />
-              <StatChip label="Скоро" value={stats.soon} accent="orange" />
-              <StatChip label="Без даты" value={stats.noDate} accent="muted" />
-            </div>
-          </div>
-
-          {/* Поиск + фильтры */}
-          <div className="bg-white rounded-lg border border-gray-200 p-3 space-y-2.5">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-muted" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Номер / клиент / телефон"
-                className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:border-poison-green/60 focus:ring-1 focus:ring-poison-green/30"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-primary"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Статусы выезда */}
-            <div className="grid grid-cols-3 gap-1">
-              {Object.entries(STATUS_LABEL).map(([key, label]) => {
-                const cnt = statusCounts[key] ?? 0;
-                const active = statusFilter.has(key);
-                return (
-                  <button
-                    key={key}
-                    onClick={() => toggleStatus(key)}
-                    disabled={cnt === 0}
-                    className={`flex items-center gap-1 px-1.5 py-1 rounded text-[10px] transition-colors min-w-0 ${
-                      active
-                        ? 'bg-neon-orange/10 text-neon-orange'
-                        : cnt === 0
-                        ? 'text-content-muted/40 cursor-not-allowed'
-                        : 'text-content-secondary hover:bg-gray-50'
-                    }`}
-                  >
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: STATUS_BORDER[key] }}
-                    />
-                    <span className="flex-1 text-left truncate">{label}</span>
-                    <span className="text-[9px] tabular-nums opacity-70 flex-shrink-0">{cnt}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Срочность */}
-            <div className="flex flex-wrap gap-1">
-              {(['today', 'soon', 'future', 'past', 'no-date'] as const).map((h) => {
-                const cnt = events.filter((e) => e.health === h).length;
-                const active = healthFilter.has(h);
-                return (
-                  <button
-                    key={h}
-                    onClick={() => toggleHealth(h)}
-                    disabled={cnt === 0}
-                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                      active
-                        ? 'bg-poison-green/15 text-emerald-700 ring-1 ring-emerald-400/40'
-                        : cnt === 0
-                        ? 'bg-gray-50 text-content-muted/40 cursor-not-allowed'
-                        : 'bg-gray-100 text-content-secondary hover:bg-gray-200'
-                    }`}
-                  >
-                    {HEALTH_LABEL[h]} · {cnt}
-                  </button>
-                );
-              })}
-            </div>
-
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="w-full px-3 py-1.5 text-xs text-neon-orange hover:bg-neon-orange/5 rounded border border-neon-orange/20 transition-colors flex items-center justify-center gap-1.5"
-              >
-                <X className="w-3 h-3" />
-                Сбросить фильтры
-              </button>
-            )}
-          </div>
-
-          {/* Список выездов видимого периода */}
-          <div className="bg-white rounded-lg border border-gray-200 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted truncate">
-                Выезды{viewTitle ? ` · ${viewTitle}` : ''}
-              </div>
-              <span className="text-[10px] text-content-muted tabular-nums flex-shrink-0 ml-2">
-                {visibleEvents.length}
-              </span>
-            </div>
-            <div className="relative overflow-y-auto max-h-[60vh] lg:max-h-[640px] pr-1">
-              <VisitsList groups={dayGroups} dealHrefBase={dealHrefBase} onHoverDay={setHoveredDate} />
-            </div>
-          </div>
-
-          {/* Выезды без дат */}
-          {noDateEvents.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-3">
-              <div className="text-[10px] font-orbitron tracking-wider uppercase text-content-muted mb-2 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                Без планируемых дат · {noDateEvents.length}
-              </div>
-              <div className="space-y-1">
-                {noDateEvents.map((e) => (
-                  <a
-                    key={e.id}
-                    href={visitHref(dealHrefBase, e)}
-                    className="block px-2.5 py-1.5 rounded border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors"
-                    style={{ borderLeftWidth: 3, borderLeftColor: STATUS_BORDER[e.status] ?? '#94a3b8' }}
-                  >
-                    <div className="text-xs text-content-primary truncate flex items-center gap-1.5">
-                      <span style={{ color: STATUS_BORDER[e.status] }}>{STATUS_ICON[e.status] ?? '·'}</span>
-                      {e.serviceTitle}
-                    </div>
-                    <div className="text-[11px] text-content-muted truncate pl-[18px]">
-                      {e.objectName ?? e.clientShortName ?? '—'}
-                    </div>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-        </aside>
       </div>
 
       {/* Cursor-following tooltip portal */}
@@ -678,23 +662,74 @@ function VisitsList({
               <a
                 key={e.id}
                 href={visitHref(dealHrefBase, e)}
-                className="block px-2.5 py-1.5 rounded border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors"
+                className="block px-3 py-2.5 rounded-lg border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors"
                 style={{ borderLeftWidth: 3, borderLeftColor: STATUS_BORDER[e.status] ?? '#94a3b8' }}
               >
-                <div className="flex items-center gap-1.5 text-xs text-content-primary">
-                  <span className="flex-shrink-0" style={{ color: STATUS_BORDER[e.status] }}>
-                    {STATUS_ICON[e.status] ?? '·'}
-                  </span>
-                  {e.startAt && (
-                    <span className="text-[10px] text-content-muted tabular-nums flex-shrink-0">
-                      {timeOnly(e.startAt)}
+                {/* Шапка: время + статус + срочность */}
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="flex-shrink-0" style={{ color: STATUS_BORDER[e.status] }}>
+                      {STATUS_ICON[e.status] ?? '·'}
                     </span>
-                  )}
-                  <span className="truncate font-medium">{e.serviceTitle}</span>
+                    {e.startAt && (
+                      <span className="text-xs font-semibold text-content-primary tabular-nums flex-shrink-0">
+                        {timeOnly(e.startAt)}
+                      </span>
+                    )}
+                    <span
+                      className="text-[9px] uppercase tracking-wider px-1.5 py-px rounded-full border font-orbitron whitespace-nowrap"
+                      style={{
+                        color: STATUS_BORDER[e.status],
+                        borderColor: `${STATUS_BORDER[e.status] ?? '#94a3b8'}55`,
+                      }}
+                    >
+                      {STATUS_LABEL[e.status] ?? e.status}
+                    </span>
+                  </div>
+                  <span className="text-[9px] uppercase tracking-wider text-content-muted flex-shrink-0">
+                    {HEALTH_LABEL[e.health]}
+                  </span>
                 </div>
-                <div className="text-[11px] text-content-muted truncate pl-[18px]">
-                  {e.objectName ?? e.clientShortName ?? '—'}
+
+                {/* Услуги */}
+                <div className="text-sm font-medium text-content-primary leading-snug">
+                  {e.serviceTitle}
                 </div>
+
+                {/* Объект */}
+                {e.objectName && (
+                  <div className="mt-1 text-xs text-content-secondary flex items-start gap-1">
+                    <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0 text-content-muted" />
+                    <span className="break-words">{e.objectName}</span>
+                  </div>
+                )}
+
+                {/* Клиент + договор */}
+                <div className="mt-0.5 text-xs text-content-muted flex items-center gap-1 truncate">
+                  <UserIcon className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate">
+                    {e.clientShortName ?? '—'}
+                    {e.contractNumber && e.contractNumber !== '—' ? ` · ${e.contractNumber}` : ''}
+                  </span>
+                </div>
+
+                {/* Телефон + мастер */}
+                {(e.clientPhone || e.masterName) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-content-muted">
+                    {e.clientPhone && (
+                      <span className="inline-flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        {e.clientPhone}
+                      </span>
+                    )}
+                    {e.masterName && (
+                      <span className="inline-flex items-center gap-1">
+                        <Wrench className="w-3 h-3" />
+                        {e.masterName}
+                      </span>
+                    )}
+                  </div>
+                )}
               </a>
             ))}
           </div>
@@ -825,28 +860,4 @@ function formatVisitWhen(startAt: string | null, endAt: string | null): string {
     return `${fmt(startAt)} — ${new Date(endAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
   }
   return fmt(startAt ?? endAt!);
-}
-
-function StatChip({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent: 'muted' | 'green' | 'orange';
-}) {
-  const accentClasses = {
-    muted: 'text-content-primary',
-    green: 'text-emerald-600',
-    orange: 'text-neon-orange',
-  };
-  return (
-    <div className="bg-gray-50 rounded px-2 py-1 flex items-center justify-between">
-      <span className="text-[9px] uppercase tracking-wider text-content-muted font-orbitron">
-        {label}
-      </span>
-      <span className={`text-sm font-bold tabular-nums ${accentClasses[accent]}`}>{value}</span>
-    </div>
-  );
 }

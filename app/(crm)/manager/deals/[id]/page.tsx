@@ -5,7 +5,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { ArrowLeft, Briefcase } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
-import { deals, dealPriceItems, dealAddendums, dealWorkLogs } from '@/lib/db/schema/deals';
+import { deals, dealPriceItems, dealAddendums, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
 import { dealChecklistItems } from '@/lib/db/schema/checklists';
 import { documents } from '@/lib/db/schema/documents';
 import { clients } from '@/lib/db/schema/clients';
@@ -22,7 +22,8 @@ import { DealRequisitesTab } from './DealRequisitesTab';
 import { DealObjectsTab } from './DealObjectsTab';
 import { DocumentsTab } from './DocumentsTab';
 import { AddendumsTab } from './AddendumsTab';
-import { VisitsTab, type PriceItemGroup } from './VisitsTab';
+import { VisitsTab, type ObjectVisitGroup, type VisitView } from './VisitsTab';
+import { getWorkOrderFormData } from '@/app/(crm)/manager/calendar/work-order-actions';
 import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Сделка — ДезТехЮг CRM' };
@@ -137,6 +138,7 @@ export default async function DealDetailPage({
           serviceId: clientObjectServices.serviceId,
           customName: clientObjectServices.customName,
           method: clientObjectServices.method,
+          frequency: clientObjectServices.frequency,
           sortOrder: clientObjectServices.sortOrder,
         })
         .from(clientObjectServices)
@@ -144,12 +146,15 @@ export default async function DealDetailPage({
         .orderBy(asc(clientObjectServices.sortOrder))
     : [];
   const svcNameMap = new Map(allServices.map((s) => [s.id, s.name]));
-  const servicesByObject = new Map<string, { label: string; method: string | null }[]>();
+  const servicesByObject = new Map<
+    string,
+    { label: string; method: string | null; frequency: string | null }[]
+  >();
   for (const row of objectServiceRows) {
     const label =
       row.customName ?? (row.serviceId ? svcNameMap.get(row.serviceId) ?? 'Услуга' : 'Услуга');
     const arr = servicesByObject.get(row.objectId) ?? [];
-    arr.push({ label, method: row.method });
+    arr.push({ label, method: row.method, frequency: row.frequency });
     servicesByObject.set(row.objectId, arr);
   }
   const dealObjectsView = dealObjects.map((o) => ({
@@ -225,7 +230,8 @@ export default async function DealDetailPage({
   const workLogRows = await db
     .select({
       id: dealWorkLogs.id,
-      priceItemId: dealWorkLogs.priceItemId,
+      objectId: dealWorkLogs.objectId,
+      preparations: dealWorkLogs.preparations,
       status: dealWorkLogs.status,
       plannedAt: dealWorkLogs.plannedAt,
       startedAt: dealWorkLogs.startedAt,
@@ -256,42 +262,75 @@ export default async function DealDetailPage({
     itemsByWorkLog.set(it.workLogId, arr);
   }
 
-  // Группировка work_logs по price_item для VisitsTab
+  // svcMap/objMap — также используются в табе «Документы» ниже.
   const svcMap = new Map(allServices.map((s) => [s.id, s.shortName ?? s.name]));
   const objMap = new Map(objects.map((o) => [o.id, o]));
-  const visitGroups: PriceItemGroup[] = priceItems.map((pi) => {
-    const obj = pi.objectId ? objMap.get(pi.objectId) : null;
-    const visits = workLogRows
-      .filter((w) => w.priceItemId === pi.id)
-      .map((w) => ({
-        id: w.id,
-        status: w.status as 'planned' | 'in_progress' | 'completed',
-        plannedAt: w.plannedAt?.toISOString() ?? null,
-        startedAt: w.startedAt?.toISOString() ?? null,
-        finalizedAt: w.finalizedAt?.toISOString() ?? null,
-        performedAt: w.performedAt?.toISOString() ?? null,
-        masterName: w.masterName,
-        items: (itemsByWorkLog.get(w.id) ?? []).map((it) => ({
-          id: it.id,
-          source: it.source as 'template' | 'manager' | 'master',
-          position: it.position,
-          title: it.title,
-          description: it.description,
-          required: it.required,
-          status: it.status as 'pending' | 'done' | 'na',
-          note: it.note,
-          photosCount: Array.isArray(it.photos) ? it.photos.length : 0,
-        })),
-      }));
-    return {
-      id: pi.id,
-      service: pi.customName || (pi.serviceId ? svcMap.get(pi.serviceId) ?? '—' : '—'),
-      objectName: obj?.name ?? null,
-      areaM2: pi.areaM2,
-      unit: pi.unit,
-      visits,
+
+  // Snapshot услуг заказ-нарядов (несколько услуг на выезд).
+  const woSvcRows =
+    wlIds.length > 0
+      ? await db
+          .select({
+            workLogId: dealWorkLogServices.workLogId,
+            customName: dealWorkLogServices.customName,
+            serviceName: services.name,
+          })
+          .from(dealWorkLogServices)
+          .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
+          .where(inArray(dealWorkLogServices.workLogId, wlIds))
+          .orderBy(asc(dealWorkLogServices.sortOrder))
+      : [];
+  const svcByWl = new Map<string, string[]>();
+  for (const s of woSvcRows) {
+    const arr = svcByWl.get(s.workLogId) ?? [];
+    arr.push(s.customName ?? s.serviceName ?? 'Услуга');
+    svcByWl.set(s.workLogId, arr);
+  }
+
+  // Релиз B: группировка выездов (заказ-нарядов) по объекту.
+  const visitsByObject = new Map<string, VisitView[]>();
+  for (const w of workLogRows) {
+    const view: VisitView = {
+      id: w.id,
+      status: w.status as VisitView['status'],
+      plannedAt: w.plannedAt?.toISOString() ?? null,
+      startedAt: w.startedAt?.toISOString() ?? null,
+      finalizedAt: w.finalizedAt?.toISOString() ?? null,
+      performedAt: w.performedAt?.toISOString() ?? null,
+      masterName: w.masterName,
+      services: svcByWl.get(w.id) ?? [],
+      preparations: w.preparations,
+      items: (itemsByWorkLog.get(w.id) ?? []).map((it) => ({
+        id: it.id,
+        source: it.source as 'template' | 'manager' | 'master',
+        position: it.position,
+        title: it.title,
+        description: it.description,
+        required: it.required,
+        status: it.status as 'pending' | 'done' | 'na',
+        note: it.note,
+        photosCount: Array.isArray(it.photos) ? it.photos.length : 0,
+      })),
     };
-  });
+    const key = w.objectId ?? 'none';
+    const arr = visitsByObject.get(key) ?? [];
+    arr.push(view);
+    visitsByObject.set(key, arr);
+  }
+  const objectVisitGroups: ObjectVisitGroup[] = Array.from(visitsByObject.entries()).map(
+    ([key, visits]) => {
+      const obj = key === 'none' ? null : objMap.get(key);
+      return {
+        objectId: key === 'none' ? null : key,
+        objectName: obj?.name ?? null,
+        address: obj?.address ?? null,
+        visits,
+      };
+    },
+  );
+
+  // Данные формы заказ-наряда (для кнопки «+ Заказ-наряд» в табе выездов).
+  const visitsFormData = await getWorkOrderFormData(deal.clientId);
 
   return (
     <div className="space-y-6">
@@ -380,8 +419,9 @@ export default async function DealDetailPage({
       {tab === 'visits' && (
         <VisitsTab
           dealId={deal.id}
-          groups={visitGroups}
-          hasMaster={!!deal.assignedMasterId}
+          clientId={deal.clientId}
+          formData={visitsFormData}
+          groups={objectVisitGroups}
         />
       )}
 

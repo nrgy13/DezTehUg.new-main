@@ -1,34 +1,36 @@
 # DezTehYug CRM — память проекта
 
 > Файл читается Claude автоматически в начале каждой сессии в этом проекте.
-> Обновляй при больших изменениях. Последнее обновление: **2026-05-26 22:16 МСК (Sprint 8 развёрнут на prod, ожидаются багфиксы).**
+> Обновляй при больших изменениях. Последнее обновление: **2026-06-07 (Заказ-наряды Релиз B закоммичен на feature/crm, НЕ задеплоен на prod).**
 
 ---
 
 ## ⚡ ВНИМАНИЕ: где сейчас стоит работа (читать перед стартом!)
 
-**Sprint 8 (UX + бухгалтерия) РАЗВЁРНУТ НА PROD (2026-05-26 22:16 МСК, коммиты `814484b` + `f688805`).** Ветка `feature/crm`, working tree чистый. Миграции 0013 (`price_item_unit` enum + колонка `unit`) и 0014 (`document_type ADD VALUE 'upd'`) применены на проде. UPD-шаблон засеян (`Базовый: УПД` v1). Бекап БД: `/opt/deztech-crm/prod-db-20260526-2216-before-sprint8.sql.gz` (49K). Smoke: login 200, manager 307 → /login, manifest 200, app `Ready in 252ms`. Подробности: `memory/sprint8_ux_accounting.md`.
+**Заказ-наряды Релиз B ЗАКОММИЧЕН на `feature/crm`, НЕ ЗАДЕПЛОЕН на prod (2026-06-07).** Working tree после коммита чистый. Миграция **0019** (`client_object_services ADD COLUMN frequency varchar(64)`) применена ТОЛЬКО на DEV. ⚠️ **При деплое:** бэкап БД → миграция 0019 на prod → rebuild app → smoke. Подробности: `memory/work_orders_release_b.md`. Продолжение Релиза A (`77f90be`/`d676d35`).
 
-> 🛠 **В новой сессии — багфиксы.** Саня после деплоя сообщил, что некоторые функции из Sprint 8 работают не так как надо + есть допфичи. Конкретики до старта сессии нет — спросить у него на старте.
+**Релиз B — цикл заказ-нарядов + история + переделка таба + видимость + раскладка:**
+- **Цикличность:** периодичность на КАЖДОЙ услуге объекта (`client_object_services.frequency`, миграция 0019, значения из `TREATMENT_FREQUENCIES`). Опорная дата цикла = `client_objects.planned_treatment_date` (не сдвигается).
+- **Серия напоминаний:** `lib/calendar/object-reminders.ts::getObjectReminders` — виртуальные флажки «оформи наряд» из частоты услуг, серия вперёд 3 мес (окно [сегодня−14д … +3мес]), гашение по наличию work_log на дату (БД циклом НЕ мутируется, всё обратимо). Панель `app/(crm)/manager/calendar/ObjectRemindersPanel.tsx`.
+- **Предзаполнение из прошлого наряда:** `getObjectWorkOrderDefaults(objectId)` (work-order-actions) — услуги(snapshot)+препараты+мастер из ПОСЛЕДНЕГО work_log объекта (fallback на `client_object_services`). Общий диалог `components/crm/WorkOrderDialog.tsx` (preset clientId/dealId/objectId/plannedAtLocal) переиспользуется: кнопка календаря, панель напоминаний, карточка объекта, таб сделки.
+- **Дашборд-виджет** «По графику ждут наряда: N» (горящие overdue/today/soon) — `manager-stats.workOrdersDue` + `countDueReminders`.
+- **Карточка объекта** `/manager/objects/[id]`: блок «Выезды по объекту» (`ObjectVisitsSection` — история work_logs+snapshot услуг+препараты+чеклист N/M+статус+ссылка) + кнопка «Создать выезд» + удаление planned. Периодичность услуг видна в плашках (карточка/таб договора/список клиента).
+- **Таб «Выезды» сделки ПЕРЕПИСАН** под наряды: группировка по ОБЪЕКТАМ (был по прайсу → заказ-наряды с `price_item_id=null` НЕ показывались = баг Релиза A, починен). +кнопка «+Заказ-наряд», +удаление planned. Убрана кнопка «Новый выезд» по прайсу + осиротевший `createNextVisitForPriceItem`.
+- **Удаление наряда:** `deleteWorkOrder(workLogId)` — только `status=planned`, каскад снимает `deal_work_log_services`+`deal_checklist_items` (FK cascade). Удалил наряд → флажок серии на эту дату возвращается.
+- **⚠️ ПОВЕДЕНЧЕСКОЕ: менеджер видит ВСЁ.** Убран фильтр `assignedManagerId` в `getDealEvents` (календарь) и `getObjectReminders` (напоминания). Менеджер/admin видят ВСЕ выезды; мастер — только свои (фильтр masterId остался). Причина: менеджер по факту один (Регина), мастера общие → операционный календарь общий. Баг был: наряд по договору другого менеджера виден на карточке объекта, но не в календаре.
+- **Раскладка `CalendarFull`:** список выездов СЛЕВА (широкий lg:w-[30rem] xl:w-[34rem], основная зона), календарь СПРАВА, РАВНОЙ высоты (aside `lg:relative` + внутренний `lg:absolute inset-0` → высоту колонки задаёт календарь, список скроллится). Поиск+фильтры компактной строкой сверху; блок «ВСЕГО/СЕГОДНЯ/...» (StatChip) убран. Карточки списка богатые: статус-бейдж/время/услуга/объект/клиент/договор/телефон/мастер.
 
-- **Эпик A:** шрифты CRM — H1 на 17 manager-страницах `text-3xl → text-2xl`, цифры виджетов дашборда `text-3xl → text-2xl`, 3 бейджа (`ClientStatusBadge`/`DealStatusBadge`/`LeadStatusBadge`) `tracking-wider → tracking-tight` + `font-semibold → font-medium` + `px-2 → px-1.5`.
-- **Эпик B:** НДС dropdown + обратный расчёт — `PriceItemDialog` теперь `<select>` (0/5/10/20%) + radio «Ввожу цену БЕЗ НДС / С НДС» с автопересчётом. Fix: vatRate из БД `"5.00"` нормализуется через `String(Number())`, иначе select валился на 0%.
-- **Эпик C:** Регина — прямые права на документы и клиентов. Без `users.role='admin'`. `deleteDocument` (manager+admin) обходит approval-flow через `executeDocumentDeletion`. `deleteClient` с защитой от наличия сделок. `DeleteClientButton` в карточке. В `DocumentsTab` корзина → прямой confirm + delete (RequestDeletionDialog убран). `/admin/deletions` остаётся для legacy pending.
-- **Эпик D:** единица «шт» к «м²» — миграция **0013** (`CREATE TYPE price_item_unit AS ENUM('m2','pcs')` + `deal_price_items.unit DEFAULT 'm2'`). В диалоге прайса select «м²/шт» рядом с «Кол-во». В таблице рендер «816 м²» / «5 шт». В build-data.ts добавлены `areaUnit` + `areaUnitLabel` для шаблонов (сами .docx не трогали — Регина обновит сама если понадобится).
-- **Эпик E:** генерация документа с выбором позиций — `priceItemIds?: string[]` через `lib/documents/generate.ts` → `lib/templates/build-data.ts` → `/api/documents/generate/route.ts`. Новый `GenerateDocumentDialog` в `DocumentsTab.tsx`: чекбоксы с группировкой по объекту + итого с НДС внизу. По умолчанию все позиции отмечены.
-- **Эпик F:** UPD + email бухгалтера + кнопка «Отправить буху» — миграция **0014** (`ALTER TYPE document_type ADD VALUE 'upd'`). `templates/upd.docx` (заготовка = копия `invoice.docx`, Регина перевыложит свой через `/admin/templates`). `lib/notifications/accountant.ts` с get/save/clear через `app_settings.accountant_email`. Секция «Email бухгалтера» в `/admin/settings` (`AccountantEmailSection.tsx`). `sendDocumentToAccountant` в `send-document-action.ts` шлёт через тот же mailer. Кнопка «БУХ» в `DocumentsTab` для invoice + upd. Без настроенного email — корректная ошибка «Email бухгалтера не настроен».
+**Dev-окружение:** порт зафиксирован **3007** (`.claude/launch.json` `autoPort:false` + `--port 3007`, т.к. 3000 занят сторонним проектом ProTEX). Логин Регина `deztexug@yandex.ru / welcome123`. NB: после логина редиректит на «/» (AUTH_URL на нестандартном порту) — на `/manager/*` переходить вручную. Тест-объект на dev: «Административное здание» НМТП (`b42e5433…`) с серией флажков 25.05–25.08. NB рендера: dev на машине Сани сильно тормозит (C: впритык) — preview_screenshot/eval часто таймаутят, проверка велась DOM-замерами + SQL.
 
-**Что осталось от Сани (вручную):**
-1. Применить миграции на prod:
-   ```bash
-   docker cp drizzle/migrations/0013_price_item_unit.sql deztech-crm-postgres:/tmp/m13.sql
-   docker exec -i deztech-crm-postgres psql -U deztech deztech_crm -f /tmp/m13.sql
-   docker cp drizzle/migrations/0014_document_type_upd.sql deztech-crm-postgres:/tmp/m14.sql
-   docker exec -i deztech-crm-postgres psql -U deztech deztech_crm -f /tmp/m14.sql
-   ```
-2. `git push origin feature/crm`, на VPS `git pull && docker compose -f docker-compose.prod.yml --env-file .env build app && up -d --force-recreate app`.
-3. Засеять UPD-шаблон: `docker compose -f docker-compose.prod.yml --env-file .env run --rm app npx tsx lib/db/seed-templates.ts` (или эквивалент).
-4. В `/admin/settings` вписать реальный email бухгалтера.
+**Осталось:** ДЕПЛОЙ на prod по команде Сани (бэкап БД → миграция 0019 → rebuild → smoke).
+
+> **NB для тестов:** React-формы/`<select>` в Claude Preview капризны — проверка велась через SQL к dev БД + DOM-замеры (`a[href*="tab=visits"]` для карточек). См. `memory/preview_form_testing_crm.md`, `memory/radix_dropdown_preview_testing.md`.
+
+### Предыдущие вехи (свежие, до Релиза B)
+- **Заказ-наряды Релиз A** (`77f90be`+`d676d35`, на prod 2026-06-07): миграция 0018 (`deal_work_logs` +object_id +preparations, таблица `deal_work_log_services`), кнопка «Заказ-наряд» в календаре, `seedPlannedVisitsForDeal` ОТКЛЮЧЁН. `memory/work_orders_release_a.md`.
+- **Календарь редизайн** (`ec25e01`): список справа + подсветка дня по ховеру (Релиз B перенёс список влево). `memory/calendar_redesign_hover_list.md`.
+- **Sprint 10** (`69194d0`, на prod): единицы+количество у услуг объекта → в АО/АВР (миграция 0017). `memory/sprint10_object_service_units.md`.
+- **Sprint 9** (`23a9d9a`, на prod): объекты по договору, единицы м²/ед./м³, права Регины (миграции 0015/0016). `memory/sprint9_objects_units.md`.
 
 ---
 

@@ -71,6 +71,9 @@ export const clientObjectServices = pgTable(
     // unit (м²/ед./м³) переиспользует общий enum price_item_unit.
     unit: priceItemUnitEnum('unit').notNull().default('m2'),
     quantity: decimal('quantity', { precision: 10, scale: 2 }), // дробное, NULL — взять площадь объекта
+    // Релиз B: периодичность обработки (из TREATMENT_FREQUENCIES) — на её основе
+    // строится серия напоминаний «оформи заказ-наряд» в календаре. NULL — без цикла.
+    frequency: varchar('frequency', { length: 64 }),
     sortOrder: integer('sort_order').notNull().default(0),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
