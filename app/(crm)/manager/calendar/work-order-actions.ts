@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { eq, asc, isNotNull, and } from 'drizzle-orm';
+import { eq, asc, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { deals } from '@/lib/db/schema/deals';
@@ -35,8 +35,13 @@ export type WorkOrderObject = {
   areaM2: string | null;
   services: WorkOrderObjectService[];
 };
-export type WorkOrderDeal = { id: string; contractNumber: string; objects: WorkOrderObject[] };
-export type WorkOrderClient = { id: string; shortName: string; deals: WorkOrderDeal[] };
+export type WorkOrderDeal = { id: string; contractNumber: string };
+export type WorkOrderClient = {
+  id: string;
+  shortName: string;
+  deals: WorkOrderDeal[];
+  objects: WorkOrderObject[];
+};
 export type WorkOrderFormData = {
   clients: WorkOrderClient[];
   masters: { id: string; fullName: string }[];
@@ -44,24 +49,29 @@ export type WorkOrderFormData = {
 };
 
 /**
- * Дерево клиент → договоры → объекты → услуги объекта для каскадных выпадашек.
- * Только объекты, привязанные к договору (наряд = в рамках договора). Клиенты без
- * подходящих объектов отфильтрованы.
+ * Дерево клиент → { договоры, объекты } для формы заказ-наряда.
+ * Объект и договор выбираются НЕЗАВИСИМО (объект = адрес клиента, договор =
+ * основание). Показываем клиентов, у кого есть хотя бы один договор И один объект.
+ * При создании наряда объект автоматически привязывается к договору (см.
+ * createWorkOrder) — поэтому здесь не требуем заранее проставленный deal_id.
  */
 export async function getWorkOrderFormData(): Promise<WorkOrderFormData> {
   const [clientRows, dealRows, objectRows, objServiceRows, masterRows, catalogRows] =
     await Promise.all([
       db.select({ id: clients.id, shortName: clients.shortName }).from(clients),
-      db.select({ id: deals.id, contractNumber: deals.contractNumber, clientId: deals.clientId }).from(deals),
+      db
+        .select({ id: deals.id, contractNumber: deals.contractNumber, clientId: deals.clientId })
+        .from(deals)
+        .orderBy(asc(deals.contractNumber)),
       db
         .select({
           id: clientObjects.id,
           name: clientObjects.name,
           areaM2: clientObjects.areaM2,
-          dealId: clientObjects.dealId,
+          clientId: clientObjects.clientId,
         })
         .from(clientObjects)
-        .where(isNotNull(clientObjects.dealId)),
+        .orderBy(asc(clientObjects.name)),
       db
         .select({
           objectId: clientObjectServices.objectId,
@@ -107,28 +117,31 @@ export async function getWorkOrderFormData(): Promise<WorkOrderFormData> {
     svcByObject.set(s.objectId, arr);
   }
 
-  // objects by dealId
-  const objByDeal = new Map<string, WorkOrderObject[]>();
+  // objects by clientId (все объекты клиента)
+  const objByClient = new Map<string, WorkOrderObject[]>();
   for (const o of objectRows) {
-    if (!o.dealId) continue;
-    const arr = objByDeal.get(o.dealId) ?? [];
+    const arr = objByClient.get(o.clientId) ?? [];
     arr.push({ id: o.id, name: o.name, areaM2: o.areaM2, services: svcByObject.get(o.id) ?? [] });
-    objByDeal.set(o.dealId, arr);
+    objByClient.set(o.clientId, arr);
   }
 
-  // deals by clientId (только с объектами)
+  // deals by clientId (все договоры клиента)
   const dealsByClient = new Map<string, WorkOrderDeal[]>();
   for (const d of dealRows) {
-    const objs = objByDeal.get(d.id) ?? [];
-    if (objs.length === 0) continue;
     const arr = dealsByClient.get(d.clientId) ?? [];
-    arr.push({ id: d.id, contractNumber: d.contractNumber, objects: objs });
+    arr.push({ id: d.id, contractNumber: d.contractNumber });
     dealsByClient.set(d.clientId, arr);
   }
 
+  // Клиент попадает в форму, если есть И договор, И объект.
   const clientsTree: WorkOrderClient[] = clientRows
-    .map((c) => ({ id: c.id, shortName: c.shortName, deals: dealsByClient.get(c.id) ?? [] }))
-    .filter((c) => c.deals.length > 0)
+    .map((c) => ({
+      id: c.id,
+      shortName: c.shortName,
+      deals: dealsByClient.get(c.id) ?? [],
+      objects: objByClient.get(c.id) ?? [],
+    }))
+    .filter((c) => c.deals.length > 0 && c.objects.length > 0)
     .sort((a, b) => a.shortName.localeCompare(b.shortName, 'ru'));
 
   return { clients: clientsTree, masters: masterRows, catalog: catalogRows };
@@ -154,13 +167,21 @@ export async function createWorkOrderAction(input: {
   const svc = (input.services ?? []).filter((s) => s.serviceId || s.customName?.trim());
   if (svc.length === 0) return { ok: false, error: 'Добавь хотя бы одну услугу' };
 
-  // Проверим, что объект действительно принадлежит этому договору.
+  // Объект и договор должны принадлежать одному клиенту.
   const [obj] = await db
-    .select({ id: clientObjects.id })
+    .select({ clientId: clientObjects.clientId })
     .from(clientObjects)
-    .where(and(eq(clientObjects.id, objectId), eq(clientObjects.dealId, dealId)))
+    .where(eq(clientObjects.id, objectId))
     .limit(1);
-  if (!obj) return { ok: false, error: 'Объект не относится к выбранному договору' };
+  const [deal] = await db
+    .select({ clientId: deals.clientId })
+    .from(deals)
+    .where(eq(deals.id, dealId))
+    .limit(1);
+  if (!obj || !deal) return { ok: false, error: 'Объект или договор не найден' };
+  if (obj.clientId !== deal.clientId) {
+    return { ok: false, error: 'Объект и договор принадлежат разным клиентам' };
+  }
 
   try {
     await createWorkOrder({

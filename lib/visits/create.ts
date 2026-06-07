@@ -7,7 +7,7 @@
  */
 
 import 'server-only';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deals, dealPriceItems, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
 import { clientObjects } from '@/lib/db/schema/objects';
@@ -209,6 +209,13 @@ export async function createWorkOrder(params: {
       preparations: preparations?.trim() ? preparations.trim() : null,
     })
     .returning({ id: dealWorkLogs.id });
+
+  // 1b) Автопривязка объекта к договору, если ещё не привязан. Нужно для актов
+  // АО/АВР (они формируются по позициям договора, относящимся к объекту).
+  await db
+    .update(clientObjects)
+    .set({ dealId })
+    .where(and(eq(clientObjects.id, objectId), isNull(clientObjects.dealId)));
 
   // 2) Snapshot услуг наряда.
   const cleaned = svcList.filter((s) => s.serviceId || s.customName?.trim());

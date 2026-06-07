@@ -76,7 +76,6 @@ function WorkOrderDialog({
     () => data.clients.find((c) => c.id === clientId) ?? null,
     [data.clients, clientId],
   );
-  const deal = useMemo(() => client?.deals.find((d) => d.id === dealId) ?? null, [client, dealId]);
 
   function onClient(v: string) {
     setClientId(v);
@@ -86,12 +85,10 @@ function WorkOrderDialog({
   }
   function onDeal(v: string) {
     setDealId(v);
-    setObjectId('');
-    setRows([]);
   }
   function onObject(v: string) {
     setObjectId(v);
-    const o = deal?.objects.find((x) => x.id === v);
+    const o = client?.objects.find((x) => x.id === v);
     // Предзаполняем услуги из объекта (snapshot для правки).
     setRows(
       (o?.services ?? []).map((s) => ({
@@ -227,10 +224,10 @@ function WorkOrderDialog({
                   className={fieldClass}
                   value={objectId}
                   onChange={(e) => onObject(e.target.value)}
-                  disabled={!deal}
+                  disabled={!client}
                 >
                   <option value="">— объект —</option>
-                  {deal?.objects.map((o) => (
+                  {client?.objects.map((o) => (
                     <option key={o.id} value={o.id}>
                       {o.name}
                     </option>
