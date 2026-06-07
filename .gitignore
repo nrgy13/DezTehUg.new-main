@@ -43,6 +43,9 @@ next-env.d.ts
 /.trae/
 /drizzle/migrations/meta/
 
+# Graphify — локальный граф кода (артефакт скилла /graph-code, не в репо)
+/graphify-out/
+
 # Docker volumes (local dev)
 /docker-data/
 
