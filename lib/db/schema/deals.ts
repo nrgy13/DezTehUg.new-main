@@ -180,6 +180,11 @@ export const dealWorkLogs = pgTable(
       onDelete: 'set null',
     }),
 
+    // Релиз A (заказ-наряды): объект, на который этот выезд. NULL — legacy/прайс-выезды.
+    objectId: uuid('object_id').references(() => clientObjects.id, {
+      onDelete: 'set null',
+    }),
+
     // Статус выезда. planned → in_progress → completed.
     status: workLogStatusEnum('status').notNull().default('completed'),
 
@@ -198,6 +203,9 @@ export const dealWorkLogs = pgTable(
     areaM2: integer('area_m2'),
     notes: text('notes'),
 
+    // Релиз A: препараты обработки (free-text, заполняется в заказ-наряде).
+    preparations: text('preparations'),
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -205,6 +213,30 @@ export const dealWorkLogs = pgTable(
     masterIdx: index('deal_work_logs_master_id_idx').on(t.masterId),
     statusIdx: index('deal_work_logs_status_idx').on(t.status),
     priceItemIdx: index('deal_work_logs_price_item_idx').on(t.priceItemId),
+    objectIdx: index('deal_work_logs_object_id_idx').on(t.objectId),
+  }),
+);
+
+// Релиз A (заказ-наряды): услуги конкретного выезда — snapshot услуг объекта на
+// момент создания наряда. Несколько услуг на один выезд, каждая со своим способом
+// и количеством. Копия (а не ссылка), чтобы история «что делали» не плыла.
+export const dealWorkLogServices = pgTable(
+  'deal_work_log_services',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    workLogId: uuid('work_log_id')
+      .notNull()
+      .references(() => dealWorkLogs.id, { onDelete: 'cascade' }),
+    serviceId: uuid('service_id').references(() => services.id, { onDelete: 'set null' }),
+    customName: varchar('custom_name', { length: 255 }),
+    method: varchar('method', { length: 128 }),
+    unit: priceItemUnitEnum('unit').notNull().default('m2'),
+    quantity: decimal('quantity', { precision: 10, scale: 2 }),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    workLogIdx: index('deal_work_log_services_work_log_idx').on(t.workLogId),
   }),
 );
 
@@ -220,3 +252,5 @@ export type DealAddendum = typeof dealAddendums.$inferSelect;
 export type NewDealAddendum = typeof dealAddendums.$inferInsert;
 export type DealWorkLog = typeof dealWorkLogs.$inferSelect;
 export type NewDealWorkLog = typeof dealWorkLogs.$inferInsert;
+export type DealWorkLogService = typeof dealWorkLogServices.$inferSelect;
+export type NewDealWorkLogService = typeof dealWorkLogServices.$inferInsert;

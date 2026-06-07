@@ -9,9 +9,10 @@
 import 'server-only';
 import { eq, and, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { deals, dealPriceItems, dealWorkLogs } from '@/lib/db/schema/deals';
+import { deals, dealPriceItems, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { serviceChecklists, dealChecklistItems } from '@/lib/db/schema/checklists';
+import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
 export type CreatedVisit = {
   workLogId: string;
@@ -165,4 +166,95 @@ export async function seedPlannedVisitsForDeal(
     results.push(r);
   }
   return results;
+}
+
+// ─── Релиз A: Заказ-наряды ────────────────────────────────────
+
+export type WorkOrderServiceInput = {
+  serviceId?: string | null;
+  customName?: string | null;
+  method?: string | null;
+  unit?: PriceItemUnit;
+  /** Дробное количество в unit. Строка/число/null. */
+  quantity?: string | number | null;
+};
+
+/**
+ * Создаёт заказ-наряд = один выезд (work_log) на ОБЪЕКТ в рамках договора, с
+ * несколькими услугами (snapshot), препаратами и назначенным мастером.
+ * Чеклист копируется из шаблонов по service_id выбранных услуг.
+ *
+ * Возвращает id выезда и кол-во скопированных пунктов чеклиста.
+ */
+export async function createWorkOrder(params: {
+  dealId: string;
+  objectId: string;
+  masterId: string;
+  plannedAt: Date | null;
+  preparations?: string | null;
+  services: WorkOrderServiceInput[];
+}): Promise<{ workLogId: string; itemsCount: number }> {
+  const { dealId, objectId, masterId, plannedAt, preparations, services: svcList } = params;
+
+  // 1) Сам выезд (planned).
+  const [created] = await db
+    .insert(dealWorkLogs)
+    .values({
+      dealId,
+      masterId,
+      objectId,
+      priceItemId: null,
+      status: 'planned',
+      plannedAt: plannedAt ?? null,
+      preparations: preparations?.trim() ? preparations.trim() : null,
+    })
+    .returning({ id: dealWorkLogs.id });
+
+  // 2) Snapshot услуг наряда.
+  const cleaned = svcList.filter((s) => s.serviceId || s.customName?.trim());
+  if (cleaned.length > 0) {
+    await db.insert(dealWorkLogServices).values(
+      cleaned.map((s, i) => ({
+        workLogId: created.id,
+        serviceId: s.serviceId ?? null,
+        customName: s.customName?.trim() ? s.customName.trim() : null,
+        method: s.method?.trim() ? s.method.trim() : null,
+        unit: (s.unit ?? 'm2') as PriceItemUnit,
+        quantity:
+          s.quantity !== null && s.quantity !== undefined && String(s.quantity).trim() !== ''
+            ? String(s.quantity)
+            : null,
+        sortOrder: i,
+      })),
+    );
+  }
+
+  // 3) Чеклист по service_id выбранных услуг (объединяем шаблоны всех услуг).
+  const serviceIds = Array.from(
+    new Set(cleaned.map((s) => s.serviceId).filter((x): x is string => !!x)),
+  );
+  let itemsCount = 0;
+  if (serviceIds.length > 0) {
+    const templates = await db
+      .select()
+      .from(serviceChecklists)
+      .where(inArray(serviceChecklists.serviceId, serviceIds))
+      .orderBy(serviceChecklists.position);
+    if (templates.length > 0) {
+      await db.insert(dealChecklistItems).values(
+        templates.map((t, idx) => ({
+          workLogId: created.id,
+          source: 'template' as const,
+          sourceTemplateId: t.id,
+          position: idx,
+          title: t.title,
+          description: t.description,
+          required: t.required,
+        })),
+      );
+      itemsCount = templates.length;
+    }
+  }
+
+  return { workLogId: created.id, itemsCount };
 }

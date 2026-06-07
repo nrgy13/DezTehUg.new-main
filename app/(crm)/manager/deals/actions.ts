@@ -126,14 +126,10 @@ async function notifyMasterAssigned(
 ): Promise<void> {
   if (!masterId || masterId === prevMasterId) return;
 
-  // Авто-seed planned visits по каждой позиции прайса. Идемпотентно: уже
-  // существующие активные выезды не дублируются.
-  try {
-    const { seedPlannedVisitsForDeal } = await import('@/lib/visits/create');
-    await seedPlannedVisitsForDeal(dealId, masterId);
-  } catch (err) {
-    console.warn('[notifyMasterAssigned] seed visits failed:', err);
-  }
+  // Релиз A (заказ-наряды): авто-seed выездов по позициям прайса ОТКЛЮЧЁН.
+  // Выезды теперь создаются вручную через заказ-наряд (объект + услуги + мастер) —
+  // см. createWorkOrder в lib/visits/create.ts. Это убирает дубли и даёт Регине
+  // ручной контроль над тем, какие выезды реально планируются.
 
   try {
     const { sendPushToUser } = await import('@/lib/push/server');

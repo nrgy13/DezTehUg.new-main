@@ -1,9 +1,9 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
-import { eq, and, gte, or, asc } from 'drizzle-orm';
+import { eq, and, gte, or, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { deals, dealPriceItems, dealWorkLogs } from '@/lib/db/schema/deals';
+import { deals, dealPriceItems, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
@@ -101,6 +101,8 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
 
   const masterAlias = alias(users, 'master_user');
   const managerAlias = alias(users, 'manager_user');
+  // Объект заказ-наряда — напрямую по dealWorkLogs.objectId (а не через позицию прайса).
+  const woObjects = alias(clientObjects, 'wo_object');
 
   const conditions = [] as Array<ReturnType<typeof eq>>;
 
@@ -139,6 +141,8 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
       serviceName: services.name,
       customName: dealPriceItems.customName,
       objectName: clientObjects.name,
+      workLogObjectId: dealWorkLogs.objectId,
+      woObjectName: woObjects.name,
       masterFullName: masterAlias.fullName,
       managerFullName: managerAlias.fullName,
     })
@@ -148,10 +152,35 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
     .leftJoin(dealPriceItems, eq(dealPriceItems.id, dealWorkLogs.priceItemId))
     .leftJoin(services, eq(services.id, dealPriceItems.serviceId))
     .leftJoin(clientObjects, eq(clientObjects.id, dealPriceItems.objectId))
+    .leftJoin(woObjects, eq(woObjects.id, dealWorkLogs.objectId))
     .leftJoin(masterAlias, eq(masterAlias.id, deals.assignedMasterId))
     .leftJoin(managerAlias, eq(managerAlias.id, deals.assignedManagerId))
     .where(and(...conditions))
     .orderBy(asc(dealWorkLogs.plannedAt));
+
+  // Объект-выезды (заказ-наряды): услуги берём из snapshot deal_work_log_services
+  // (несколько услуг на выезд), а не из позиции прайса.
+  const woIds = rows.filter((r) => r.workLogObjectId).map((r) => r.workLogId);
+  const svcByWl = new Map<string, string[]>();
+  if (woIds.length > 0) {
+    const woSvc = await db
+      .select({
+        workLogId: dealWorkLogServices.workLogId,
+        customName: dealWorkLogServices.customName,
+        serviceName: services.name,
+        serviceShortName: services.shortName,
+      })
+      .from(dealWorkLogServices)
+      .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
+      .where(inArray(dealWorkLogServices.workLogId, woIds))
+      .orderBy(asc(dealWorkLogServices.sortOrder));
+    for (const s of woSvc) {
+      const label = s.customName || s.serviceShortName || s.serviceName || 'Услуга';
+      const arr = svcByWl.get(s.workLogId) ?? [];
+      arr.push(label);
+      svcByWl.set(s.workLogId, arr);
+    }
+  }
 
   return rows.map((r) => {
     // Выбираем start для отображения исходя из статуса:
@@ -173,8 +202,9 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
       end = start ? addHours(start, DEFAULT_VISIT_HOURS) : null;
     }
 
+    const woServiceTitle = svcByWl.get(r.workLogId)?.join(', ');
     const serviceTitle =
-      r.customName || r.serviceShortName || r.serviceName || 'Без услуги';
+      woServiceTitle || r.customName || r.serviceShortName || r.serviceName || 'Без услуги';
 
     return {
       id: r.workLogId,
@@ -193,7 +223,7 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
       masterName: r.masterFullName,
       managerName: r.managerFullName,
       serviceTitle,
-      objectName: r.objectName,
+      objectName: r.woObjectName ?? r.objectName,
       periodLabel: formatPeriod(start, end),
       health: computeHealth(start, end),
     };
