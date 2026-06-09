@@ -60,9 +60,14 @@ export function ObjectActions({
   function handleDelete() {
     if (!confirm(`Удалить объект «${objectName}»? Это действие нельзя отменить.`)) return;
     startDelete(async () => {
-      const res = await removeObject(objectId);
+      let res = await removeObject(objectId);
+      // Объект в прайсе/нарядах → второе подтверждение, затем форс-удаление.
+      if (!res.ok && 'needsConfirm' in res && res.needsConfirm) {
+        if (!confirm(res.message)) return;
+        res = await removeObject(objectId, { force: true });
+      }
       if (!res.ok) {
-        toast.error(res.error);
+        toast.error('error' in res ? res.error : 'Не удалось удалить объект');
         return;
       }
       toast.success('Объект удалён');

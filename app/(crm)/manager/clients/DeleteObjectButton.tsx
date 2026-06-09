@@ -13,9 +13,14 @@ export function DeleteObjectButton({ objectId, objectName }: { objectId: string;
   const onClick = () => {
     if (!confirm(`Удалить объект «${objectName}»? Это действие нельзя отменить.`)) return;
     startTransition(async () => {
-      const result = await removeObject(objectId);
+      let result = await removeObject(objectId);
+      // Объект в прайсе/нарядах → второе подтверждение, затем форс-удаление.
+      if (!result.ok && 'needsConfirm' in result && result.needsConfirm) {
+        if (!confirm(result.message)) return;
+        result = await removeObject(objectId, { force: true });
+      }
       if (!result.ok) {
-        toast.error(result.error);
+        toast.error('error' in result ? result.error : 'Не удалось удалить объект');
         return;
       }
       toast.success('Объект удалён');

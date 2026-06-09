@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import { clients, type Client } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { activityLog } from '@/lib/db/schema/activity';
-import { dealPriceItems, deals } from '@/lib/db/schema/deals';
+import { dealPriceItems, deals, dealWorkLogs } from '@/lib/db/schema/deals';
 import { auth } from '@/lib/auth';
 import {
   clientFormSchema,
@@ -21,9 +21,15 @@ type Result<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string; field?: string; existingClientId?: string };
 
+// db или транзакция — чтобы CRUD-хелперы работали и внутри db.transaction().
+type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 async function getActor() {
   const session = await auth();
   if (!session?.user?.id) return null;
+  // Клиенты/объекты — мутации только для manager/admin. Server actions вызываются
+  // в обход middleware (POST), поэтому роль проверяем ЯВНО (master не имеет прав CRUD).
+  if (session.user.role !== 'manager' && session.user.role !== 'admin') return null;
   return session.user;
 }
 
@@ -238,18 +244,21 @@ export async function addObject(clientId: string, rawInput: unknown): Promise<Re
       return { ok: false, error: 'Договор принадлежит другому клиенту', field: 'dealId' };
   }
 
-  const [created] = await db
-    .insert(clientObjects)
-    .values({
-      clientId,
-      ...obj,
-      areaM2: obj.areaM2 == null ? null : String(obj.areaM2),
-      dealId: obj.dealId ?? null,
-      plannedTreatmentDate: obj.plannedTreatmentDate ?? null,
-    })
-    .returning({ id: clientObjects.id });
-
-  await syncObjectServices(created.id, serviceList ?? []);
+  // Объект + его услуги — одной транзакцией (иначе при сбое на услугах остаётся «голый» объект).
+  const created = await db.transaction(async (tx) => {
+    const [c] = await tx
+      .insert(clientObjects)
+      .values({
+        clientId,
+        ...obj,
+        areaM2: obj.areaM2 == null ? null : String(obj.areaM2),
+        dealId: obj.dealId ?? null,
+        plannedTreatmentDate: obj.plannedTreatmentDate ?? null,
+      })
+      .returning({ id: clientObjects.id });
+    await syncObjectServices(c.id, serviceList ?? [], tx);
+    return c;
+  });
 
   await logActivity(actor.id, 'object.create', 'client_object', created.id, {
     clientId,
@@ -279,17 +288,19 @@ export async function updateObject(objectId: string, rawInput: unknown): Promise
   // объекта не сбрасывала его связь с договором.
   const { services: serviceList, dealId: _ignoredDealId, ...obj } = parsed.data;
 
-  await db
-    .update(clientObjects)
-    .set({
-      ...obj,
-      areaM2: obj.areaM2 == null ? null : String(obj.areaM2),
-      plannedTreatmentDate: obj.plannedTreatmentDate ?? null,
-      updatedAt: new Date(),
-    })
-    .where(eq(clientObjects.id, objectId));
-
-  await syncObjectServices(objectId, serviceList ?? []);
+  // Правка реквизитов + услуги — одной транзакцией (иначе sync мог снести услуги и упасть на вставке).
+  await db.transaction(async (tx) => {
+    await tx
+      .update(clientObjects)
+      .set({
+        ...obj,
+        areaM2: obj.areaM2 == null ? null : String(obj.areaM2),
+        plannedTreatmentDate: obj.plannedTreatmentDate ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(clientObjects.id, objectId));
+    await syncObjectServices(objectId, serviceList ?? [], tx);
+  });
 
   await logActivity(actor.id, 'object.update', 'client_object', objectId, computeDiff(existing, obj));
 
@@ -377,8 +388,9 @@ export async function createObjectForDeal(
 async function syncObjectServices(
   objectId: string,
   serviceList: ObjectServiceInput[],
+  executor: DbExecutor = db,
 ): Promise<void> {
-  await db.delete(clientObjectServices).where(eq(clientObjectServices.objectId, objectId));
+  await executor.delete(clientObjectServices).where(eq(clientObjectServices.objectId, objectId));
 
   const rows = serviceList
     .filter((s) => s.serviceId || s.customName)
@@ -396,36 +408,73 @@ async function syncObjectServices(
     }));
 
   if (rows.length > 0) {
-    await db.insert(clientObjectServices).values(rows);
+    await executor.insert(clientObjectServices).values(rows);
   }
 }
 
-export async function removeObject(objectId: string): Promise<Result> {
+export type RemoveObjectResult =
+  | { ok: true }
+  | { ok: false; error: string }
+  | { ok: false; needsConfirm: true; message: string; priceCount: number; visitCount: number };
+
+export async function removeObject(
+  objectId: string,
+  opts?: { force?: boolean },
+): Promise<RemoveObjectResult> {
   const actor = await getActor();
   if (!actor) return { ok: false, error: 'Не авторизован' };
 
   const [existing] = await db.select().from(clientObjects).where(eq(clientObjects.id, objectId)).limit(1);
   if (!existing) return { ok: false, error: 'Объект не найден' };
 
-  // Защита: если есть deal_price_items с этим объектом — не удалять
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(dealPriceItems)
-    .where(eq(dealPriceItems.objectId, objectId));
-
-  if (count > 0) {
-    return {
-      ok: false,
-      error: `Объект используется в ${count} позиции(ях) договоров — удаление невозможно. Перенесите/закройте договоры или измените статус объекта.`,
-    };
+  // Связи объекта: позиции прайса и выезды/наряды. На уровне БД оба FK = SET NULL,
+  // поэтому удаление безопасно (ссылки обнулятся). Но предупреждаем менеджера —
+  // акты АО/АВР по объекту после удаления уже не сформировать. force=true пропускает.
+  if (!opts?.force) {
+    const [[price], [visits]] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dealPriceItems)
+        .where(eq(dealPriceItems.objectId, objectId)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dealWorkLogs)
+        .where(eq(dealWorkLogs.objectId, objectId)),
+    ]);
+    const priceCount = price?.count ?? 0;
+    const visitCount = visits?.count ?? 0;
+    if (priceCount > 0 || visitCount > 0) {
+      const parts: string[] = [];
+      if (priceCount > 0) parts.push(`${priceCount} позиц. прайса`);
+      if (visitCount > 0) parts.push(`${visitCount} выезд(ов)/наряд(ов)`);
+      return {
+        ok: false,
+        needsConfirm: true,
+        priceCount,
+        visitCount,
+        message: `Объект «${existing.name}» используется в ${parts.join(
+          ' и ',
+        )}. При удалении запланированные наряды будут удалены, остальные связи (прайс, завершённые выезды) обнулятся — акты АО/АВР по объекту больше не сформировать. Всё равно удалить?`,
+      };
+    }
   }
 
-  await db.delete(clientObjects).where(eq(clientObjects.id, objectId));
-  await logActivity(actor.id, 'object.delete', 'client_object', objectId, { clientId: existing.clientId });
+  // Planned-наряды этого объекта без него бессмысленны → удаляем в транзакции (каскад снимет
+  // их услуги+чеклист). In_progress/completed оставляем как историю (object_id занулится FK SET NULL).
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(dealWorkLogs)
+      .where(and(eq(dealWorkLogs.objectId, objectId), eq(dealWorkLogs.status, 'planned')));
+    await tx.delete(clientObjects).where(eq(clientObjects.id, objectId));
+  });
+  await logActivity(actor.id, 'object.delete', 'client_object', objectId, {
+    clientId: existing.clientId,
+    forced: opts?.force ?? false,
+  });
 
   revalidatePath(`/manager/clients/${existing.clientId}`);
 
-  return { ok: true, data: undefined };
+  return { ok: true };
 }
 
 // =============================================================
