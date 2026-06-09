@@ -52,13 +52,20 @@ export async function addWorkLog(
 
   // Проверяем что мастер назначен на эту сделку (admin может всегда)
   const dealRows = await db
-    .select({ id: deals.id, masterId: deals.assignedMasterId })
+    .select({ id: deals.id, masterId: deals.assignedMasterId, status: deals.status })
     .from(deals)
     .where(eq(deals.id, dealId))
     .limit(1);
   if (dealRows.length === 0) return { ok: false, error: 'Сделка не найдена' };
   if (actor.role !== 'admin' && dealRows[0].masterId !== actor.id) {
     return { ok: false, error: 'Эта сделка назначена не на тебя' };
+  }
+  // Нельзя дописывать журнал в закрытую/расторгнутую сделку (иначе грязнит АО/АВР после закрытия).
+  if (
+    actor.role !== 'admin' &&
+    (dealRows[0].status === 'completed' || dealRows[0].status === 'terminated')
+  ) {
+    return { ok: false, error: 'Сделка закрыта — журнал недоступен' };
   }
 
   const parsed = workLogSchema.safeParse(input);

@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -58,7 +58,9 @@ async function loadEditableWorkLog(
   if (actorRole !== 'admin' && wl.masterId !== actorId) {
     return { ok: false, error: 'Этот выезд назначен не на тебя' };
   }
-  if (wl.finalizedAt) {
+  // Блокируем правки и по finalizedAt, и по status='completed' (legacy work_logs из
+  // миграции 0012 имеют completed без finalizedAt — иначе их можно править/финализировать повторно).
+  if (wl.finalizedAt || wl.status === 'completed') {
     return { ok: false, error: 'Выезд уже завершён, изменения недоступны' };
   }
   return { ok: true, wl };
@@ -330,14 +332,21 @@ export async function finalizeVisit(workLogId: string): Promise<Result> {
     };
   }
 
-  await db
+  // Атомарно: финализируем ТОЛЬКО если ещё не финализирован (защита от гонки/двойного тапа).
+  // Если другой запрос успел раньше — returning пуст, выходим без повторного push.
+  const finalized = await db
     .update(dealWorkLogs)
     .set({
       status: 'completed',
       finalizedAt: new Date(),
       performedAt: guard.wl.status === 'planned' ? new Date() : sql`COALESCE(performed_at, NOW())`,
     })
-    .where(eq(dealWorkLogs.id, workLogId));
+    .where(and(eq(dealWorkLogs.id, workLogId), isNull(dealWorkLogs.finalizedAt)))
+    .returning({ id: dealWorkLogs.id });
+
+  if (finalized.length === 0) {
+    return { ok: false, error: 'Выезд уже завершён' };
+  }
 
   // Push менеджеру: выезд завершён. Импорт лениво.
   try {

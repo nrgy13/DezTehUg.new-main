@@ -63,6 +63,11 @@ const nextConfig = {
   trailingSlash: false,
   experimental: {
     optimizePackageImports: ['lucide-react'],
+    serverActions: {
+      // Фото чеклиста мастера до 5 МБ + overhead FormData. Дефолт Next 14 = 1 МБ
+      // молча резал загрузку фото с телефона ещё до входа в server action.
+      bodySizeLimit: '6mb',
+    },
   },
 };
 
