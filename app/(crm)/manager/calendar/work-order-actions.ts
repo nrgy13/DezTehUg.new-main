@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import { eq, asc, and, desc, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
@@ -11,11 +12,13 @@ import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
 import { serviceChecklists, dealChecklistItems } from '@/lib/db/schema/checklists';
+import { activityLog } from '@/lib/db/schema/activity';
 import {
   createWorkOrder,
   type WorkOrderServiceInput,
   type WorkOrderChecklistInput,
 } from '@/lib/visits/create';
+import { MSK_TZ } from '@/lib/datetime/msk';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -294,8 +297,9 @@ export async function createWorkOrderAction(input: {
     }
   }
 
+  let workLogId: string;
   try {
-    await createWorkOrder({
+    const created = await createWorkOrder({
       dealId,
       objectId,
       masterId,
@@ -304,8 +308,37 @@ export async function createWorkOrderAction(input: {
       services: svc,
       checklist,
     });
+    workLogId = created.workLogId;
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Не удалось создать заказ-наряд' };
+  }
+
+  // Push мастеру: назначен новый заказ-наряд (раньше уведомлял только старый
+  // assignMaster, а выезды теперь создаются нарядом → мастер не узнавал о выезде).
+  // Best-effort, ленивый импорт — push не должен ронять создание наряда.
+  try {
+    const { sendPushToUser } = await import('@/lib/push/server');
+    const [info] = await db
+      .select({ contractNumber: deals.contractNumber, objectName: clientObjects.name })
+      .from(deals)
+      .leftJoin(clientObjects, eq(clientObjects.id, objectId))
+      .where(eq(deals.id, dealId))
+      .limit(1);
+    const datePart = plannedAtIso
+      ? ` · ${new Date(plannedAtIso).toLocaleDateString('ru-RU', {
+          timeZone: MSK_TZ,
+          day: '2-digit',
+          month: '2-digit',
+        })}`
+      : '';
+    await sendPushToUser(masterId, {
+      title: 'Новый заказ-наряд',
+      body: `${info?.objectName ?? info?.contractNumber ?? 'Выезд'}${datePart}`,
+      url: `/master/visits/${workLogId}`,
+      tag: `wo-assigned-${workLogId}`,
+    });
+  } catch (err) {
+    console.warn('[createWorkOrderAction] push failed:', err);
   }
 
   revalidatePath('/manager/calendar');
@@ -331,6 +364,7 @@ export async function deleteWorkOrder(workLogId: string): Promise<Result> {
       status: dealWorkLogs.status,
       dealId: dealWorkLogs.dealId,
       objectId: dealWorkLogs.objectId,
+      masterId: dealWorkLogs.masterId,
     })
     .from(dealWorkLogs)
     .where(eq(dealWorkLogs.id, workLogId))
@@ -347,6 +381,38 @@ export async function deleteWorkOrder(workLogId: string): Promise<Result> {
   }
 
   await db.delete(dealWorkLogs).where(eq(dealWorkLogs.id, workLogId));
+
+  // Аудит: удаление наряда было «молчаливым» — фиксируем кто/что удалил.
+  try {
+    const h = await headers();
+    await db.insert(activityLog).values({
+      userId: actor.id,
+      action: 'work_order.delete',
+      entityType: 'deal',
+      entityId: wl.dealId,
+      changesJson: { workLogId, objectId: wl.objectId, masterId: wl.masterId },
+      ip: h.get('x-forwarded-for')?.split(',')[0].trim() ?? null,
+      userAgent: h.get('user-agent') ?? null,
+    });
+  } catch (err) {
+    console.warn('[deleteWorkOrder] activity log failed:', err);
+  }
+
+  // Push мастеру: выезд отменён (best-effort) — иначе у мастера в списке висит
+  // запланированный выезд, которого уже нет.
+  try {
+    if (wl.masterId) {
+      const { sendPushToUser } = await import('@/lib/push/server');
+      await sendPushToUser(wl.masterId, {
+        title: 'Выезд отменён',
+        body: 'Заказ-наряд удалён менеджером',
+        url: '/master',
+        tag: `wo-deleted-${workLogId}`,
+      });
+    }
+  } catch (err) {
+    console.warn('[deleteWorkOrder] push failed:', err);
+  }
 
   revalidatePath('/manager/calendar');
   revalidatePath('/master/calendar');

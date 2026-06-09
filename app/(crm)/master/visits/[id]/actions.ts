@@ -311,22 +311,38 @@ export async function finalizeVisit(workLogId: string): Promise<Result> {
   const guard = await loadEditableWorkLog(workLogId, actor.id, actor.role);
   if (!guard.ok) return { ok: false, error: guard.error };
 
-  // Проверка: все required-template пункты должны быть done или na.
+  // Проверка обязательных пунктов перед финализацией.
   const items = await db
     .select({
       id: dealChecklistItems.id,
       title: dealChecklistItems.title,
       required: dealChecklistItems.required,
       status: dealChecklistItems.status,
+      note: dealChecklistItems.note,
     })
     .from(dealChecklistItems)
     .where(eq(dealChecklistItems.workLogId, workLogId));
 
+  // 1) Обязательные не должны остаться нетронутыми (pending).
   const blocking = items.filter((i) => i.required && i.status === 'pending');
   if (blocking.length > 0) {
     return {
       ok: false,
       error: `Отметь обязательные пункты: ${blocking
+        .map((b) => `«${b.title}»`)
+        .join(', ')}`,
+    };
+  }
+
+  // 2) Вариант A: «неприменимо» на обязательном пункте разрешено, но требует
+  // заметку-обоснование — мастер вправе пометить na, но обязан объяснить почему.
+  const naWithoutNote = items.filter(
+    (i) => i.required && i.status === 'na' && !i.note?.trim(),
+  );
+  if (naWithoutNote.length > 0) {
+    return {
+      ok: false,
+      error: `Обоснуй в заметке, почему неприменимо: ${naWithoutNote
         .map((b) => `«${b.title}»`)
         .join(', ')}`,
     };

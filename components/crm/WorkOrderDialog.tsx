@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { UNIT_OPTIONS } from '@/lib/constants/units';
 import { TREATMENT_METHODS } from '@/lib/constants/treatment';
+import { mskLocalToUtcISO } from '@/lib/datetime/msk';
 import {
   createWorkOrderAction,
   getObjectWorkOrderDefaults,
@@ -204,7 +205,13 @@ export function WorkOrderDialog({
   function confirmInsert(mode: 'append' | 'replace') {
     if (!pendingInsert) return;
     const ins = pendingInsert.items;
-    setChecklist((cur) => (mode === 'replace' ? ins : [...cur, ...ins]));
+    setChecklist((cur) => {
+      if (mode === 'replace') return ins;
+      // Дедуп по заголовку (без регистра) — повторный клик «Добавить» не плодит дубли.
+      const seen = new Set(cur.map((c) => c.title.trim().toLowerCase()));
+      const fresh = ins.filter((c) => !seen.has(c.title.trim().toLowerCase()));
+      return [...cur, ...fresh];
+    });
     setPendingInsert(null);
   }
   async function loadFromTemplates() {
@@ -275,7 +282,9 @@ export function WorkOrderDialog({
       toast.error('Добавь хотя бы одну услугу');
       return;
     }
-    const plannedAtIso = plannedAt ? new Date(plannedAt).toISOString() : null;
+    // Ввод datetime-local трактуем как МСК (а не TZ браузера) — иначе дата наряда
+    // могла уехать на соседний день и флажок напоминания серии не гас.
+    const plannedAtIso = plannedAt ? mskLocalToUtcISO(plannedAt) : null;
     const checklistPayload = checklist
       .filter((c) => c.title.trim())
       .map((c) => ({

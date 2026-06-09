@@ -1,15 +1,22 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { eq, asc } from 'drizzle-orm';
-import { ArrowLeft, MapPin, Phone } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Wrench, FlaskConical } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
-import { deals, dealPriceItems, dealWorkLogs } from '@/lib/db/schema/deals';
+import {
+  deals,
+  dealPriceItems,
+  dealWorkLogs,
+  dealWorkLogServices,
+} from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { dealChecklistItems, type ChecklistPhoto } from '@/lib/db/schema/checklists';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
+import { formatQuantity, unitLabel } from '@/lib/constants/units';
+import { MSK_TZ } from '@/lib/datetime/msk';
 import { VisitChecklist, type VisitItem } from './VisitChecklist';
 import { PageTitle } from '@/components/crm/PageTitle';
 
@@ -53,14 +60,6 @@ export default async function MasterVisitPage({
       .where(eq(dealPriceItems.id, wl.priceItemId))
       .limit(1);
     priceItem = pi ?? null;
-    if (pi?.objectId) {
-      const [obj] = await db
-        .select()
-        .from(clientObjects)
-        .where(eq(clientObjects.id, pi.objectId))
-        .limit(1);
-      object = obj ?? null;
-    }
     if (pi?.serviceId) {
       const [sv] = await db
         .select()
@@ -69,6 +68,48 @@ export default async function MasterVisitPage({
         .limit(1);
       service = sv ?? null;
     }
+  }
+
+  // Объект выезда: прайс-выезд → через позицию прайса; заказ-наряд → напрямую
+  // по dealWorkLogs.objectId. Иначе мастер не видит адрес/контакты на наряде.
+  const objectId = priceItem?.objectId ?? wl.objectId;
+  if (objectId) {
+    const [obj] = await db
+      .select()
+      .from(clientObjects)
+      .where(eq(clientObjects.id, objectId))
+      .limit(1);
+    object = obj ?? null;
+  }
+
+  // Заказ-наряд (priceItemId=null): услуги выезда из snapshot deal_work_log_services
+  // (несколько услуг на выезд, каждая со своим способом и количеством).
+  let woServices: Array<{
+    label: string;
+    method: string | null;
+    unit: typeof dealWorkLogServices.$inferSelect.unit;
+    quantity: string | null;
+  }> = [];
+  if (!wl.priceItemId) {
+    const woRows = await db
+      .select({
+        customName: dealWorkLogServices.customName,
+        method: dealWorkLogServices.method,
+        unit: dealWorkLogServices.unit,
+        quantity: dealWorkLogServices.quantity,
+        serviceName: services.name,
+        serviceShortName: services.shortName,
+      })
+      .from(dealWorkLogServices)
+      .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
+      .where(eq(dealWorkLogServices.workLogId, id))
+      .orderBy(asc(dealWorkLogServices.sortOrder));
+    woServices = woRows.map((r) => ({
+      label: r.customName || r.serviceShortName || r.serviceName || 'Услуга',
+      method: r.method,
+      unit: r.unit,
+      quantity: r.quantity,
+    }));
   }
 
   // Пункты чеклиста
@@ -90,7 +131,9 @@ export default async function MasterVisitPage({
     photos: (Array.isArray(it.photos) ? it.photos : []) as ChecklistPhoto[],
   }));
 
+  const woTitle = woServices.map((s) => s.label).join(', ');
   const serviceLabel =
+    woTitle ||
     priceItem?.customName ||
     (service ? service.shortName ?? service.name : 'Без услуги');
 
@@ -128,6 +171,7 @@ export default async function MasterVisitPage({
             <>
               {' · '}
               {wl.plannedAt.toLocaleString('ru-RU', {
+                timeZone: MSK_TZ,
                 dateStyle: 'medium',
                 timeStyle: 'short',
               })}
@@ -185,6 +229,43 @@ export default async function MasterVisitPage({
             {priceItem?.method && (
               <div className="text-xs text-content-muted">
                 Способ обработки: {priceItem.method}
+              </div>
+            )}
+          </div>
+        </CyberpunkCard>
+      )}
+
+      {/* Услуги и препараты заказ-наряда (snapshot выезда) */}
+      {(woServices.length > 0 || wl.preparations) && (
+        <CyberpunkCard variant="default" hoverEffect={false} className="p-4">
+          <div className="space-y-3 text-sm">
+            {woServices.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-orbitron tracking-wider text-content-muted uppercase">
+                  <Wrench className="w-3.5 h-3.5" /> Услуги
+                </div>
+                <ul className="space-y-1">
+                  {woServices.map((s, i) => (
+                    <li key={i} className="text-content-primary">
+                      {s.label}
+                      {s.method && <span className="text-content-muted"> · {s.method}</span>}
+                      {s.quantity != null && (
+                        <span className="text-content-muted">
+                          {' · '}
+                          {formatQuantity(s.quantity)} {unitLabel(s.unit)}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {wl.preparations && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-orbitron tracking-wider text-content-muted uppercase">
+                  <FlaskConical className="w-3.5 h-3.5" /> Препараты
+                </div>
+                <div className="text-content-primary whitespace-pre-wrap">{wl.preparations}</div>
               </div>
             )}
           </div>

@@ -1,14 +1,16 @@
 import Link from 'next/link';
-import { eq, and, or, gte, desc, asc } from 'drizzle-orm';
+import { eq, and, or, gte, desc, asc, inArray } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { Briefcase, Wrench, ListChecks, Clock, ArrowRight } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
-import { deals, dealPriceItems, dealWorkLogs } from '@/lib/db/schema/deals';
+import { deals, dealPriceItems, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { unitLabel, formatQuantity } from '@/lib/constants/units';
+import { MSK_TZ } from '@/lib/datetime/msk';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
 import { PageTitle } from '@/components/crm/PageTitle';
 
@@ -37,6 +39,9 @@ export default async function MasterDashboard() {
   // Все выезды этого мастера за последние 30 дней + все активные.
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
+  // Объект заказ-наряда — напрямую по dealWorkLogs.objectId (priceItemId=null).
+  const woObjects = alias(clientObjects, 'wo_object');
+
   const rows = await db
     .select({
       id: dealWorkLogs.id,
@@ -47,6 +52,7 @@ export default async function MasterDashboard() {
       performedAt: dealWorkLogs.performedAt,
       dealId: dealWorkLogs.dealId,
       priceItemId: dealWorkLogs.priceItemId,
+      objectId: dealWorkLogs.objectId,
       contractNumber: deals.contractNumber,
       clientShortName: clients.shortName,
       areaM2: dealPriceItems.areaM2,
@@ -55,12 +61,14 @@ export default async function MasterDashboard() {
       serviceId: dealPriceItems.serviceId,
       customName: dealPriceItems.customName,
       objectName: clientObjects.name,
+      woObjectName: woObjects.name,
     })
     .from(dealWorkLogs)
     .leftJoin(deals, eq(deals.id, dealWorkLogs.dealId))
     .leftJoin(clients, eq(clients.id, deals.clientId))
     .leftJoin(dealPriceItems, eq(dealPriceItems.id, dealWorkLogs.priceItemId))
     .leftJoin(clientObjects, eq(clientObjects.id, dealPriceItems.objectId))
+    .leftJoin(woObjects, eq(woObjects.id, dealWorkLogs.objectId))
     .where(
       and(
         eq(dealWorkLogs.masterId, user.id),
@@ -85,6 +93,29 @@ export default async function MasterDashboard() {
   const allServices = await db.select().from(services);
   const svcMap = new Map(allServices.map((s) => [s.id, s.shortName ?? s.name]));
 
+  // Заказ-наряды (priceItemId=null): заголовок из snapshot услуг выезда.
+  const woIds = rows.filter((r) => !r.priceItemId && r.objectId).map((r) => r.id);
+  const svcByWl = new Map<string, string[]>();
+  if (woIds.length > 0) {
+    const woSvc = await db
+      .select({
+        workLogId: dealWorkLogServices.workLogId,
+        customName: dealWorkLogServices.customName,
+        serviceName: services.name,
+        serviceShortName: services.shortName,
+      })
+      .from(dealWorkLogServices)
+      .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
+      .where(inArray(dealWorkLogServices.workLogId, woIds))
+      .orderBy(asc(dealWorkLogServices.sortOrder));
+    for (const s of woSvc) {
+      const label = s.customName || s.serviceShortName || s.serviceName || 'Услуга';
+      const arr = svcByWl.get(s.workLogId) ?? [];
+      arr.push(label);
+      svcByWl.set(s.workLogId, arr);
+    }
+  }
+
   const visits: VisitRow[] = rows.map((r) => ({
     id: r.id,
     status: r.status as 'planned' | 'in_progress' | 'completed',
@@ -95,8 +126,10 @@ export default async function MasterDashboard() {
     contractNumber: r.contractNumber ?? '—',
     clientShortName: r.clientShortName,
     service:
-      r.customName || (r.serviceId ? svcMap.get(r.serviceId) ?? 'Без услуги' : 'Без услуги'),
-    objectName: r.objectName,
+      svcByWl.get(r.id)?.join(', ') ||
+      r.customName ||
+      (r.serviceId ? svcMap.get(r.serviceId) ?? 'Без услуги' : 'Без услуги'),
+    objectName: r.objectName ?? r.woObjectName,
     areaM2: r.areaM2,
     unit: r.unit,
     dealId: r.dealId,
@@ -242,6 +275,7 @@ function fmtVisitDate(v: VisitRow): string {
       : v.startedAt ?? v.plannedAt;
   if (!d) return 'без даты';
   return d.toLocaleString('ru-RU', {
+    timeZone: MSK_TZ,
     day: '2-digit',
     month: '2-digit',
     year: '2-digit',

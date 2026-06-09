@@ -22,6 +22,7 @@ import { users } from '@/lib/db/schema/users';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { formatQuantity, unitLabel } from '@/lib/constants/units';
+import { MSK_TZ } from '@/lib/datetime/msk';
 import { getWorkOrderFormData } from '@/app/(crm)/manager/calendar/work-order-actions';
 import { ObjectActions } from './ObjectActions';
 import { ObjectVisitsSection, type ObjectVisitView } from './ObjectVisitsSection';
@@ -149,6 +150,7 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
     const iso = v.performedAt ?? v.finalizedAt ?? v.startedAt ?? v.plannedAt;
     const dateLabel = iso
       ? iso.toLocaleString('ru-RU', {
+          timeZone: MSK_TZ,
           day: '2-digit',
           month: '2-digit',
           year: '2-digit',

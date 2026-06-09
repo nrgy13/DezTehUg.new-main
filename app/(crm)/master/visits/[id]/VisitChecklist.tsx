@@ -70,6 +70,11 @@ export function VisitChecklist({
   const blockingRequired = items.filter(
     (i) => i.required && i.status === 'pending',
   ).length;
+  // Вариант A: «неприменимо» на обязательном пункте требует заметку-обоснование.
+  const naNeedsNote = items.filter(
+    (i) => i.required && i.status === 'na' && !i.note?.trim(),
+  ).length;
+  const blockingFinalize = blockingRequired + naNeedsNote;
 
   function handleStart() {
     setBusy(true);
@@ -351,7 +356,7 @@ export function VisitChecklist({
           <CyberpunkButton
             type="button"
             onClick={handleFinalize}
-            disabled={busy || blockingRequired > 0}
+            disabled={busy || blockingFinalize > 0}
             className="w-full lg:w-auto shadow-2xl lg:shadow-none"
           >
             {busy ? (
@@ -360,11 +365,15 @@ export function VisitChecklist({
               <Flag className="w-4 h-4 mr-1" />
             )}
             Завершить выезд
-            {blockingRequired > 0 && (
+            {blockingRequired > 0 ? (
               <span className="ml-2 text-xs opacity-70">
                 ({blockingRequired} обяз. пунктов осталось)
               </span>
-            )}
+            ) : naNeedsNote > 0 ? (
+              <span className="ml-2 text-xs opacity-70">
+                (обоснуй N/A: {naNeedsNote})
+              </span>
+            ) : null}
           </CyberpunkButton>
         </div>
       )}
@@ -395,6 +404,12 @@ function ChecklistItemRow({
 }) {
   const [showNote, setShowNote] = useState(!!item.note);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Вариант A: обязательный пункт помечен «неприменимо» без заметки → заметка
+  // становится обязательной (без обоснования выезд не завершить).
+  const needsNoteReason =
+    !readOnly && item.required && item.status === 'na' && !item.note?.trim();
+  const noteVisible = showNote || !!item.note || needsNoteReason;
 
   function statusBtn(target: VisitItem['status'], Icon: React.ComponentType<{ className?: string }>) {
     const active = item.status === target;
@@ -465,7 +480,7 @@ function ChecklistItemRow({
       </div>
 
       {/* Note */}
-      {!readOnly && !showNote && !item.note && (
+      {!readOnly && !noteVisible && (
         <button
           type="button"
           onClick={() => setShowNote(true)}
@@ -475,16 +490,29 @@ function ChecklistItemRow({
         </button>
       )}
 
-      {(showNote || item.note) && (
-        <textarea
-          value={item.note ?? ''}
-          onChange={(e) => onNoteChange(item.id, e.target.value)}
-          onBlur={() => onNoteBlur(item)}
-          placeholder="Заметка по этому пункту"
-          rows={2}
-          disabled={readOnly}
-          className="mt-2 w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:border-neon-orange focus:outline-none"
-        />
+      {noteVisible && (
+        <>
+          <textarea
+            value={item.note ?? ''}
+            onChange={(e) => onNoteChange(item.id, e.target.value)}
+            onBlur={() => onNoteBlur(item)}
+            placeholder={
+              needsNoteReason ? 'Обоснуй: почему пункт неприменим?' : 'Заметка по этому пункту'
+            }
+            rows={2}
+            disabled={readOnly}
+            className={`mt-2 w-full px-2 py-1.5 text-sm border rounded focus:outline-none ${
+              needsNoteReason
+                ? 'border-red-300 bg-red-50/40 focus:border-red-500'
+                : 'border-gray-200 focus:border-neon-orange'
+            }`}
+          />
+          {needsNoteReason && (
+            <p className="text-[11px] text-red-600 mt-1">
+              Обязательный пункт помечен «неприменимо» — впиши причину, без неё выезд не завершить.
+            </p>
+          )}
+        </>
       )}
 
       {/* Photos */}
