@@ -1,7 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { eq, asc, and, desc } from 'drizzle-orm';
+import { eq, asc, and, desc, inArray, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { deals, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
@@ -9,7 +10,12 @@ import { clients } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
-import { createWorkOrder, type WorkOrderServiceInput } from '@/lib/visits/create';
+import { serviceChecklists, dealChecklistItems } from '@/lib/db/schema/checklists';
+import {
+  createWorkOrder,
+  type WorkOrderServiceInput,
+  type WorkOrderChecklistInput,
+} from '@/lib/visits/create';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -57,11 +63,21 @@ export type WorkOrderDefaultService = {
   unit: PriceItemUnit;
   quantity: string | null;
 };
+/** Пункт стартового чеклиста для формы наряда (из прошлого наряда или из шаблонов услуг). */
+export type WorkOrderChecklistDefault = {
+  title: string;
+  description: string | null;
+  required: boolean;
+  source: 'template' | 'manager';
+  sourceTemplateId: string | null;
+};
 export type WorkOrderDefaults = {
   source: 'last_order' | 'object';
   services: WorkOrderDefaultService[];
   preparations: string | null;
   masterId: string | null;
+  /** Стартовый чеклист: из прошлого наряда (source='manager') либо шаблоны услуг (source='template'). */
+  checklist: WorkOrderChecklistDefault[];
 };
 
 /**
@@ -74,6 +90,9 @@ export type WorkOrderDefaults = {
  * clientId (опц.) — сузить дерево до одного клиента (карточка объекта / таб сделки).
  */
 export async function getWorkOrderFormData(clientId?: string): Promise<WorkOrderFormData> {
+  // Гард авторизации (дерево клиентов/договоров/объектов не должно утекать без прав).
+  const actor = await getManager();
+  if (!actor) return { clients: [], masters: [], catalog: [] };
   const [clientRows, dealRows, objectRows, objServiceRows, masterRows, catalogRows] =
     await Promise.all([
       clientId
@@ -171,6 +190,34 @@ export async function getWorkOrderFormData(clientId?: string): Promise<WorkOrder
 }
 
 // ─── Создание заказ-наряда ────────────────────────────────────
+const checklistInputSchema = z.array(
+  z.object({
+    title: z.string().trim().min(2, 'минимум 2 символа в пункте').max(200),
+    description: z.string().trim().max(1000).nullable().optional(),
+    required: z.boolean(),
+    source: z.enum(['template', 'manager']),
+    sourceTemplateId: z.string().uuid().nullable().optional(),
+  }),
+);
+
+// Валидация услуг наряда (раньше количество шло сырьём → -5/'abc' падали уже на уровне PG).
+const woServiceSchema = z.array(
+  z.object({
+    serviceId: z.string().uuid().nullable().optional(),
+    customName: z.string().trim().max(255).nullable().optional(),
+    method: z.string().trim().max(128).nullable().optional(),
+    unit: z.enum(['m2', 'pcs', 'm3']).optional(),
+    quantity: z
+      .union([z.string(), z.number()])
+      .nullable()
+      .optional()
+      .refine(
+        (q) => q == null || q === '' || (Number.isFinite(Number(q)) && Number(q) >= 0),
+        'количество — неотрицательное число',
+      ),
+  }),
+);
+
 export async function createWorkOrderAction(input: {
   dealId: string;
   objectId: string;
@@ -178,6 +225,12 @@ export async function createWorkOrderAction(input: {
   plannedAtIso: string | null;
   preparations: string | null;
   services: WorkOrderServiceInput[];
+  /**
+   * Чеклист для мастера из формы: массив (м.б. пустой = осознанно без пунктов).
+   * Форма ВСЕГДА шлёт массив. undefined бывает только при прямом вызове createWorkOrder
+   * мимо формы → там срабатывает автокопия из шаблонов услуг (обратная совместимость).
+   */
+  checklist?: WorkOrderChecklistInput[];
 }): Promise<Result> {
   const actor = await getManager();
   if (!actor) return { ok: false, error: 'Нет доступа' };
@@ -189,6 +242,21 @@ export async function createWorkOrderAction(input: {
 
   const svc = (input.services ?? []).filter((s) => s.serviceId || s.customName?.trim());
   if (svc.length === 0) return { ok: false, error: 'Добавь хотя бы одну услугу' };
+  const svcParsed = woServiceSchema.safeParse(svc);
+  if (!svcParsed.success) {
+    return { ok: false, error: `Услуги: ${svcParsed.error.errors[0].message}` };
+  }
+
+  // Чеклист (если форма прислала массив — даже пустой): фильтруем пустые, валидируем.
+  let checklist: WorkOrderChecklistInput[] | undefined;
+  if (input.checklist !== undefined) {
+    const cleaned = input.checklist.filter((c) => c?.title?.trim());
+    const parsed = checklistInputSchema.safeParse(cleaned);
+    if (!parsed.success) {
+      return { ok: false, error: `Чеклист: ${parsed.error.errors[0].message}` };
+    }
+    checklist = parsed.data;
+  }
 
   // Объект и договор должны принадлежать одному клиенту.
   const [obj] = await db
@@ -206,6 +274,26 @@ export async function createWorkOrderAction(input: {
     return { ok: false, error: 'Объект и договор принадлежат разным клиентам' };
   }
 
+  // Защита от дубля: не плодим второй активный наряд на тот же объект и день
+  // (двойной клик «Оформить» из панели напоминаний, два открытых таба и т.п.).
+  if (plannedAtIso) {
+    const day = plannedAtIso.slice(0, 10);
+    const [dup] = await db
+      .select({ id: dealWorkLogs.id })
+      .from(dealWorkLogs)
+      .where(
+        and(
+          eq(dealWorkLogs.objectId, objectId),
+          inArray(dealWorkLogs.status, ['planned', 'in_progress']),
+          sql`${dealWorkLogs.plannedAt}::date = ${day}::date`,
+        ),
+      )
+      .limit(1);
+    if (dup) {
+      return { ok: false, error: 'На этот объект уже есть активный наряд на выбранную дату' };
+    }
+  }
+
   try {
     await createWorkOrder({
       dealId,
@@ -214,6 +302,7 @@ export async function createWorkOrderAction(input: {
       plannedAt: plannedAtIso ? new Date(plannedAtIso) : null,
       preparations,
       services: svc,
+      checklist,
     });
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Не удалось создать заказ-наряд' };
@@ -276,7 +365,8 @@ export async function deleteWorkOrder(workLogId: string): Promise<Result> {
  */
 export async function getObjectWorkOrderDefaults(objectId: string): Promise<WorkOrderDefaults> {
   const actor = await getManager();
-  if (!actor) return { source: 'object', services: [], preparations: null, masterId: null };
+  if (!actor)
+    return { source: 'object', services: [], preparations: null, masterId: null, checklist: [] };
 
   // 1) Последний наряд объекта.
   const [last] = await db
@@ -291,17 +381,34 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
     .limit(1);
 
   if (last) {
-    const svc = await db
-      .select({
-        serviceId: dealWorkLogServices.serviceId,
-        customName: dealWorkLogServices.customName,
-        method: dealWorkLogServices.method,
-        unit: dealWorkLogServices.unit,
-        quantity: dealWorkLogServices.quantity,
-      })
-      .from(dealWorkLogServices)
-      .where(eq(dealWorkLogServices.workLogId, last.id))
-      .orderBy(asc(dealWorkLogServices.sortOrder));
+    const [svc, chk] = await Promise.all([
+      db
+        .select({
+          serviceId: dealWorkLogServices.serviceId,
+          customName: dealWorkLogServices.customName,
+          method: dealWorkLogServices.method,
+          unit: dealWorkLogServices.unit,
+          quantity: dealWorkLogServices.quantity,
+        })
+        .from(dealWorkLogServices)
+        .where(eq(dealWorkLogServices.workLogId, last.id))
+        .orderBy(asc(dealWorkLogServices.sortOrder)),
+      db
+        .select({
+          title: dealChecklistItems.title,
+          description: dealChecklistItems.description,
+          required: dealChecklistItems.required,
+        })
+        .from(dealChecklistItems)
+        // Только пункты менеджера/шаблона — НЕ мастерские добавления конкретного выезда.
+        .where(
+          and(
+            eq(dealChecklistItems.workLogId, last.id),
+            inArray(dealChecklistItems.source, ['template', 'manager']),
+          ),
+        )
+        .orderBy(asc(dealChecklistItems.position)),
+    ]);
     return {
       source: 'last_order',
       services: svc.map((s) => ({
@@ -313,6 +420,14 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
       })),
       preparations: last.preparations,
       masterId: last.masterId,
+      // Чеклист прошлого наряда → Регина дальше владеет им (source='manager').
+      checklist: chk.map((c) => ({
+        title: c.title,
+        description: c.description,
+        required: c.required,
+        source: 'manager' as const,
+        sourceTemplateId: null,
+      })),
     };
   }
 
@@ -338,6 +453,22 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
       .orderBy(asc(clientObjectServices.sortOrder)),
   ]);
   const areaM2 = objRow[0]?.areaM2 ?? null;
+  // Стартовый чеклист — шаблоны услуг объекта (нарядов ещё не было).
+  const objServiceIds = Array.from(
+    new Set(objSvc.map((s) => s.serviceId).filter((x): x is string => !!x)),
+  );
+  const templates = objServiceIds.length
+    ? await db
+        .select({
+          id: serviceChecklists.id,
+          title: serviceChecklists.title,
+          description: serviceChecklists.description,
+          required: serviceChecklists.required,
+        })
+        .from(serviceChecklists)
+        .where(inArray(serviceChecklists.serviceId, objServiceIds))
+        .orderBy(asc(serviceChecklists.position))
+    : [];
   return {
     source: 'object',
     services: objSvc.map((s) => ({
@@ -350,5 +481,77 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
     })),
     preparations: null,
     masterId: null,
+    checklist: templates.map((t) => ({
+      title: t.title,
+      description: t.description,
+      required: t.required,
+      source: 'template' as const,
+      sourceTemplateId: t.id,
+    })),
   };
+}
+
+// ─── Чеклист: источники для кнопок формы ──────────────────────
+/** Пункты шаблонов чеклистов по выбранным услугам (кнопка «Из шаблонов услуг»). */
+export async function getServiceChecklistTemplates(
+  serviceIds: string[],
+): Promise<WorkOrderChecklistDefault[]> {
+  const actor = await getManager();
+  if (!actor) return [];
+  const ids = Array.from(new Set(serviceIds.filter((x): x is string => !!x)));
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({
+      id: serviceChecklists.id,
+      title: serviceChecklists.title,
+      description: serviceChecklists.description,
+      required: serviceChecklists.required,
+    })
+    .from(serviceChecklists)
+    .where(inArray(serviceChecklists.serviceId, ids))
+    .orderBy(asc(serviceChecklists.position));
+  return rows.map((t) => ({
+    title: t.title,
+    description: t.description,
+    required: t.required,
+    source: 'template' as const,
+    sourceTemplateId: t.id,
+  }));
+}
+
+/** Пункты чеклиста последнего наряда объекта (кнопка «Из прошлого наряда»). */
+export async function getLastOrderChecklist(
+  objectId: string,
+): Promise<WorkOrderChecklistDefault[]> {
+  const actor = await getManager();
+  if (!actor) return [];
+  const [last] = await db
+    .select({ id: dealWorkLogs.id })
+    .from(dealWorkLogs)
+    .where(eq(dealWorkLogs.objectId, objectId))
+    .orderBy(desc(dealWorkLogs.createdAt))
+    .limit(1);
+  if (!last) return [];
+  const rows = await db
+    .select({
+      title: dealChecklistItems.title,
+      description: dealChecklistItems.description,
+      required: dealChecklistItems.required,
+    })
+    .from(dealChecklistItems)
+    // Только пункты менеджера/шаблона — НЕ мастерские добавления конкретного выезда.
+    .where(
+      and(
+        eq(dealChecklistItems.workLogId, last.id),
+        inArray(dealChecklistItems.source, ['template', 'manager']),
+      ),
+    )
+    .orderBy(asc(dealChecklistItems.position));
+  return rows.map((c) => ({
+    title: c.title,
+    description: c.description,
+    required: c.required,
+    source: 'manager' as const,
+    sourceTemplateId: null,
+  }));
 }
