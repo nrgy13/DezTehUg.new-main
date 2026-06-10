@@ -615,3 +615,137 @@ export async function submitProposalForLead(
     },
   };
 }
+
+// =============================================================
+// Редактирование полей заявки (U в CRUD).
+// Статус/назначение/конвертация — отдельными действиями (updateLeadStatus,
+// takeLead, convertLeadToClient). Здесь — только контактные/предметные поля.
+// =============================================================
+
+const updateLeadSchema = z
+  .object({
+    id: z.string().uuid(),
+    contactName: z.string().trim().max(255).optional().or(z.literal('')),
+    // Телефон НЕ обязателен (заявки с сайта бывают только с email) — но если задан,
+    // проверяем формат. Минимальный контакт гарантируется refine ниже.
+    contactPhone: z
+      .string()
+      .trim()
+      .max(32)
+      .regex(/^[\d+\-\s()]*$/, 'Телефон может содержать только цифры, +, -, пробелы и скобки')
+      .optional()
+      .or(z.literal('')),
+    contactEmail: z.string().trim().email('Некорректный email').max(255).optional().or(z.literal('')),
+    requestedAddress: z.string().trim().max(1000).optional().or(z.literal('')),
+    serviceTypes: z.array(z.string()).optional(),
+    areaM2Estimate: z.number().int().positive().max(10_000_000).optional().nullable(),
+    message: z.string().trim().max(2000).optional().or(z.literal('')),
+  })
+  .refine(
+    (d) =>
+      // Телефон засчитывается только если есть >=5 ЦИФР (а не просто символов:
+      // «-- () » длиной 5 контактом не является).
+      (!!d.contactPhone && d.contactPhone.replace(/\D/g, '').length >= 5) ||
+      (!!d.contactEmail && d.contactEmail.trim().length > 0),
+    { message: 'Нужен телефон (от 5 цифр) или email', path: ['contactPhone'] },
+  );
+
+export async function updateLead(rawInput: unknown): Promise<Result> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Не авторизован' };
+  // Роль-гард: master не должен править заявки (server action в обход middleware).
+  if (actor.role !== 'manager' && actor.role !== 'admin') {
+    return { ok: false, error: 'Недостаточно прав' };
+  }
+
+  const parsed = updateLeadSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    const first = parsed.error.errors[0];
+    return { ok: false, error: first.message, field: first.path.join('.') };
+  }
+  const v = parsed.data;
+
+  const [existing] = await db.select().from(leads).where(eq(leads.id, v.id)).limit(1);
+  if (!existing) return { ok: false, error: 'Заявка не найдена' };
+
+  const next = {
+    contactName: v.contactName ? v.contactName.slice(0, 255) : null,
+    contactPhone: v.contactPhone ? v.contactPhone.slice(0, 32) : null,
+    contactEmail: v.contactEmail ? v.contactEmail.slice(0, 255) : null,
+    requestedAddress: v.requestedAddress || null,
+    serviceTypes: v.serviceTypes && v.serviceTypes.length > 0 ? v.serviceTypes : null,
+    areaM2Estimate: v.areaM2Estimate ?? null,
+    message: v.message || null,
+    updatedAt: new Date(),
+  };
+
+  await db.update(leads).set(next).where(eq(leads.id, v.id));
+
+  // Аудит: фиксируем только реально изменившиеся поля.
+  const changed: Record<string, { from: unknown; to: unknown }> = {};
+  const cmp = (key: string, from: unknown, to: unknown) => {
+    if (from !== to) changed[key] = { from: from ?? null, to };
+  };
+  cmp('contactName', existing.contactName, next.contactName);
+  cmp('contactPhone', existing.contactPhone, next.contactPhone);
+  cmp('contactEmail', existing.contactEmail, next.contactEmail);
+  cmp('requestedAddress', existing.requestedAddress, next.requestedAddress);
+  cmp('areaM2Estimate', existing.areaM2Estimate, next.areaM2Estimate);
+  cmp('message', existing.message, next.message);
+  if (JSON.stringify(existing.serviceTypes ?? null) !== JSON.stringify(next.serviceTypes ?? null)) {
+    changed['serviceTypes'] = { from: existing.serviceTypes ?? null, to: next.serviceTypes };
+  }
+  await logActivity(actor.id, 'lead.update', 'lead', v.id, changed);
+
+  revalidatePath('/manager/leads');
+  revalidatePath('/manager/leads/board');
+  revalidatePath(`/manager/leads/${v.id}`);
+  return { ok: true, data: undefined };
+}
+
+// =============================================================
+// Удаление заявки (D в CRUD). Только для ошибочных/спам/дубль-заявок.
+// FK: lead_status_history → CASCADE (история заявки уходит вместе с ней),
+// deals.lead_id / documents.lead_id → SET NULL (клиент/сделка/документы
+// остаются, теряют лишь обратную ссылку на заявку). Клиент НЕ удаляется.
+// =============================================================
+
+const deleteLeadSchema = z.object({ id: z.string().uuid() });
+
+export async function deleteLead(rawInput: unknown): Promise<Result> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Не авторизован' };
+  if (actor.role !== 'manager' && actor.role !== 'admin') {
+    return { ok: false, error: 'Недостаточно прав' };
+  }
+
+  const parsed = deleteLeadSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.errors[0].message };
+
+  const [existing] = await db.select().from(leads).where(eq(leads.id, parsed.data.id)).limit(1);
+  if (!existing) return { ok: false, error: 'Заявка не найдена' };
+
+  // Защита: сконвертированную заявку НЕ удаляем. Иначе CASCADE снёс бы её историю
+  // стадий (lead_status_history) — а на ней строится аналитика воронки/конверсии.
+  // Для отказа от такой заявки есть статус «Не состоялась». Удаление — только для
+  // ошибочных/спам/дубль-заявок, ещё не привязанных к клиенту.
+  if (existing.clientId) {
+    return {
+      ok: false,
+      error:
+        'Заявка сконвертирована в клиента — удалить нельзя. Используй статус «Не состоялась» (или удали клиента отдельно).',
+    };
+  }
+
+  // Аудит ДО удаления — ПОЛНЫЙ снимок записи (запись и её история уйдут безвозвратно,
+  // снимок — единственный путь восстановления). existing — это уже целый row.
+  await logActivity(actor.id, 'lead.delete', 'lead', parsed.data.id, {
+    snapshot: existing,
+  });
+
+  await db.delete(leads).where(eq(leads.id, parsed.data.id));
+
+  revalidatePath('/manager/leads');
+  revalidatePath('/manager/leads/board');
+  return { ok: true, data: undefined };
+}

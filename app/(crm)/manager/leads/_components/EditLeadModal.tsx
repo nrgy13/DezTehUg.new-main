@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader2, X, Phone, User, MapPin, Mail } from 'lucide-react';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
-import { createLeadManually } from '../actions';
+import { updateLead } from '../actions';
 
 const SERVICES: { code: string; label: string }[] = [
   { code: 'disinsection', label: 'Дезинсекция' },
@@ -18,74 +18,84 @@ const SERVICES: { code: string; label: string }[] = [
   { code: 'water-analysis', label: 'Анализ воды' },
 ];
 
-const SOURCE_LABELS: Record<string, string> = {
-  phone: 'Звонок',
-  manager: 'Менеджер сам',
-  referral: 'Рекомендация',
+export type EditLeadInitial = {
+  id: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  requestedAddress: string | null;
+  areaM2Estimate: number | null;
+  message: string | null;
+  serviceTypes: string[];
 };
 
-export function NewLeadModal({ onClose }: { onClose: () => void }) {
+export function EditLeadModal({
+  lead,
+  onClose,
+}: {
+  lead: EditLeadInitial;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [contactName, setContactName] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
-  const [requestedAddress, setRequestedAddress] = useState('');
-  const [areaM2, setAreaM2] = useState('');
-  const [message, setMessage] = useState('');
-  const [source, setSource] = useState<'phone' | 'manager' | 'referral'>('phone');
-  const [services, setServices] = useState<string[]>([]);
-  const [takeImmediately, setTakeImmediately] = useState(true);
+  const [contactName, setContactName] = useState(lead.contactName ?? '');
+  const [contactPhone, setContactPhone] = useState(lead.contactPhone ?? '');
+  const [contactEmail, setContactEmail] = useState(lead.contactEmail ?? '');
+  const [requestedAddress, setRequestedAddress] = useState(lead.requestedAddress ?? '');
+  const [areaM2, setAreaM2] = useState(lead.areaM2Estimate ? String(lead.areaM2Estimate) : '');
+  const [message, setMessage] = useState(lead.message ?? '');
+  const [services, setServices] = useState<string[]>(lead.serviceTypes ?? []);
 
   const toggleService = (code: string) => {
     setServices((cur) =>
-      cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code]
+      cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code],
     );
   };
 
   const submit = () => {
-    if (!contactPhone.trim()) {
-      toast.error('Телефон обязателен');
+    const phone = contactPhone.trim();
+    const email = contactEmail.trim();
+    // Минимальный контакт: телефон (от 5 цифр) или email — иначе заявку не идентифицировать.
+    if (phone.replace(/\D/g, '').length < 5 && !email) {
+      toast.error('Нужен телефон (от 5 цифр) или email');
       return;
     }
     const rawArea = areaM2.trim();
-    const areaParsed = rawArea ? Number(rawArea) : undefined;
+    const areaParsed = rawArea ? Number(rawArea) : null;
     if (rawArea && (isNaN(areaParsed!) || areaParsed! <= 0)) {
       toast.error('Площадь должна быть положительным числом');
       return;
     }
-    // area_m2_estimate — integer в БД: округляем, иначе zod .int() отклонит дробь.
-    const areaNum = areaParsed != null ? Math.round(areaParsed) : undefined;
+    // Колонка area_m2_estimate — integer: округляем дробь, иначе сервер вернёт
+    // англоязычную zod-ошибку .int() и правка молча не сохранится.
+    const areaNum = areaParsed != null ? Math.round(areaParsed) : null;
 
     startTransition(async () => {
-      const res = await createLeadManually({
+      const res = await updateLead({
+        id: lead.id,
         contactName: contactName.trim() || undefined,
-        contactPhone: contactPhone.trim(),
-        contactEmail: contactEmail.trim() || undefined,
+        contactPhone: phone || undefined,
+        contactEmail: email || undefined,
         requestedAddress: requestedAddress.trim() || undefined,
         areaM2Estimate: areaNum,
         message: message.trim() || undefined,
-        source,
         serviceTypes: services.length > 0 ? services : undefined,
-        takeImmediately,
       });
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success(takeImmediately ? 'Заявка создана и взята в работу' : 'Заявка создана');
+      toast.success('Заявка обновлена');
       onClose();
       router.refresh();
-      // Если хотим сразу перейти на карточку — раскомментировать:
-      // router.push(`/manager/leads/${res.data.leadId}`);
     });
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto"
-      onClick={onClose}
+      onClick={() => !isPending && onClose()}
     >
       <div
         className="bg-bg-primary rounded-xl border border-gray-200 shadow-2xl w-full max-w-2xl my-8"
@@ -95,13 +105,17 @@ export function NewLeadModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-start justify-between p-6 pb-3 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-orbitron font-semibold tracking-wider text-content-primary uppercase">
-              Новая заявка
+              Редактировать заявку
             </h2>
             <p className="text-xs text-content-muted mt-1">
-              Занеси клиента в воронку. Минимум — телефон. Реквизиты и адреса можно дозаполнить потом в карточке.
+              Поправь контакты и детали запроса. Статус и менеджер меняются отдельно.
             </p>
           </div>
-          <button onClick={onClose} className="text-content-muted hover:text-content-primary">
+          <button
+            onClick={() => !isPending && onClose()}
+            disabled={isPending}
+            className="text-content-muted hover:text-content-primary disabled:opacity-50"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -122,17 +136,13 @@ export function NewLeadModal({ onClose }: { onClose: () => void }) {
               />
             </div>
             <div>
-              <Label icon={<Phone className="w-3 h-3" />} required>
-                Телефон
-              </Label>
+              <Label icon={<Phone className="w-3 h-3" />}>Телефон</Label>
               <input
                 type="tel"
                 value={contactPhone}
                 onChange={(e) => setContactPhone(e.target.value)}
                 placeholder="+7 (999) 123-45-67"
                 disabled={isPending}
-                autoFocus
-                required
                 className={inputCls}
               />
             </div>
@@ -189,7 +199,7 @@ export function NewLeadModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* Площадь + Источник */}
+          {/* Площадь */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <Label>Площадь, м²</Label>
@@ -205,26 +215,6 @@ export function NewLeadModal({ onClose }: { onClose: () => void }) {
                 className={inputCls}
               />
             </div>
-            <div>
-              <Label>Источник</Label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['phone', 'manager', 'referral'] as const).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSource(s)}
-                    disabled={isPending}
-                    className={`text-[11px] py-1.5 rounded-md border-2 transition-all ${
-                      source === s
-                        ? 'border-neon-orange bg-neon-orange/10 text-neon-orange'
-                        : 'border-gray-200 text-content-secondary hover:border-neon-orange/40'
-                    }`}
-                  >
-                    {SOURCE_LABELS[s]}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Заметка */}
@@ -239,23 +229,6 @@ export function NewLeadModal({ onClose }: { onClose: () => void }) {
               className={`${inputCls} resize-none`}
             />
           </div>
-
-          {/* Take immediately checkbox */}
-          <label className="flex items-center gap-2 text-sm text-content-secondary cursor-pointer">
-            <input
-              type="checkbox"
-              checked={takeImmediately}
-              onChange={(e) => setTakeImmediately(e.target.checked)}
-              disabled={isPending}
-              className="w-4 h-4 rounded border-gray-300 text-poison-green focus:ring-poison-green/40"
-            />
-            <span>
-              Сразу взять себе в работу
-              <span className="text-xs text-content-muted ml-1">
-                (статус «Связались», менеджер — я)
-              </span>
-            </span>
-          </label>
         </div>
 
         {/* Footer */}
@@ -263,19 +236,14 @@ export function NewLeadModal({ onClose }: { onClose: () => void }) {
           <CyberpunkButton onClick={onClose} variant="ghost" size="default" disabled={isPending}>
             Отмена
           </CyberpunkButton>
-          <CyberpunkButton
-            onClick={submit}
-            disabled={isPending || !contactPhone.trim()}
-            variant="primary"
-            size="default"
-          >
+          <CyberpunkButton onClick={submit} disabled={isPending} variant="primary" size="default">
             {isPending ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Создаю…
+                Сохраняю…
               </>
             ) : (
-              'Создать заявку'
+              'Сохранить'
             )}
           </CyberpunkButton>
         </div>
@@ -290,17 +258,14 @@ const inputCls =
 function Label({
   children,
   icon,
-  required,
 }: {
   children: React.ReactNode;
   icon?: React.ReactNode;
-  required?: boolean;
 }) {
   return (
     <label className="flex items-center gap-1 text-[11px] font-orbitron tracking-wider text-content-secondary mb-1 uppercase">
       {icon}
       {children}
-      {required && <span className="text-neon-orange">*</span>}
     </label>
   );
 }

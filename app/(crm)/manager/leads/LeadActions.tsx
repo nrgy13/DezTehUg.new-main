@@ -3,9 +3,10 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Loader2, UserPlus, Repeat, Building2, User } from 'lucide-react';
+import { Loader2, UserPlus, Repeat, Building2, User, Pencil, Trash2 } from 'lucide-react';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
-import { takeLead, convertLeadToClient } from './actions';
+import { takeLead, convertLeadToClient, deleteLead } from './actions';
+import { EditLeadModal, type EditLeadInitial } from './_components/EditLeadModal';
 
 export function TakeLeadButton({
   leadId,
@@ -197,6 +198,121 @@ export function ConvertLeadButton({
                 )}
               </CyberpunkButton>
               <CyberpunkButton onClick={() => setOpen(false)} variant="ghost" size="default">
+                Отмена
+              </CyberpunkButton>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function EditLeadButton({ lead }: { lead: EditLeadInitial }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <CyberpunkButton variant="secondary" size="sm" onClick={() => setOpen(true)}>
+        <Pencil className="w-4 h-4 mr-2" />
+        Редактировать
+      </CyberpunkButton>
+      {open && <EditLeadModal lead={lead} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+export function DeleteLeadButton({
+  leadId,
+  isConverted,
+}: {
+  leadId: string;
+  isConverted: boolean;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  const confirm = () => {
+    startTransition(async () => {
+      const res = await deleteLead({ id: leadId });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success('Заявка удалена');
+      router.push('/manager/leads');
+      router.refresh();
+    });
+  };
+
+  // Сконвертированную заявку удалять нельзя (сервер тоже это запрещает) — на ней
+  // висит история воронки/аналитика. Кнопку показываем, но недоступной с подсказкой.
+  if (isConverted) {
+    return (
+      <CyberpunkButton
+        variant="ghost"
+        size="sm"
+        disabled
+        title="Заявка сконвертирована в клиента — удаление недоступно. Используй статус «Не состоялась»."
+        className="text-content-muted"
+      >
+        <Trash2 className="w-4 h-4 mr-2" />
+        Удалить
+      </CyberpunkButton>
+    );
+  }
+
+  return (
+    <>
+      <CyberpunkButton
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen(true)}
+        className="text-red-500 hover:text-red-600 hover:bg-red-50"
+      >
+        <Trash2 className="w-4 h-4 mr-2" />
+        Удалить
+      </CyberpunkButton>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => !isPending && setOpen(false)}
+        >
+          <div
+            className="bg-bg-primary rounded-xl border border-gray-200 shadow-2xl p-6 w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-orbitron font-semibold tracking-wider text-content-primary uppercase mb-2">
+              Удалить заявку?
+            </h2>
+            <p className="text-sm text-content-secondary mb-2">
+              Заявка и её история стадий будут удалены безвозвратно. Это для ошибочных, спам
+              или дубль-заявок.
+            </p>
+            <div className="flex items-center gap-3 mt-5">
+              <CyberpunkButton
+                onClick={confirm}
+                disabled={isPending}
+                variant="primary"
+                size="default"
+                className="bg-red-500 hover:bg-red-600 border-red-500 text-white"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Удаляю…
+                  </>
+                ) : (
+                  'Удалить'
+                )}
+              </CyberpunkButton>
+              <CyberpunkButton
+                onClick={() => setOpen(false)}
+                variant="ghost"
+                size="default"
+                disabled={isPending}
+              >
                 Отмена
               </CyberpunkButton>
             </div>

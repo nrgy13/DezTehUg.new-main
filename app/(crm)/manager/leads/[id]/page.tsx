@@ -18,7 +18,7 @@ import { users } from '@/lib/db/schema/users';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { LEAD_LOST_REASON_LABELS } from '@/lib/lead-lost-reasons';
 import { LeadStatusControl } from '../LeadStatusControl';
-import { TakeLeadButton, ConvertLeadButton } from '../LeadActions';
+import { TakeLeadButton, ConvertLeadButton, EditLeadButton, DeleteLeadButton } from '../LeadActions';
 import { getLeadHistory } from '@/lib/lead-stages-server';
 import { LeadHistoryTimeline } from '../_components/LeadHistoryTimeline';
 import { PageTitle } from '@/components/crm/PageTitle';
@@ -99,6 +99,19 @@ export default async function LeadCardPage({ params }: { params: Promise<{ id: s
               alreadyConverted={!!lead.clientId}
               clientId={lead.clientId}
             />
+            <EditLeadButton
+              lead={{
+                id: lead.id,
+                contactName: lead.contactName,
+                contactPhone: lead.contactPhone,
+                contactEmail: lead.contactEmail,
+                requestedAddress: lead.requestedAddress,
+                areaM2Estimate: lead.areaM2Estimate,
+                message: lead.message,
+                serviceTypes: services,
+              }}
+            />
+            <DeleteLeadButton leadId={lead.id} isConverted={!!lead.clientId} />
           </div>
         </div>
       </div>
