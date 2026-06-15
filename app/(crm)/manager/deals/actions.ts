@@ -285,13 +285,21 @@ export async function updateDeal(
     emptyToNull(data.endTime),
   );
 
+  // Номер договора NOT NULL — правим только если форма прислала непустой;
+  // иначе сохраняем существующий (защита от случайного обнуления).
+  const newContractNumber = emptyToNull(data.contractNumber) ?? existing[0].contractNumber;
+  // Сумма договора: пусто → NULL (Регина может очистить).
+  const newTotalAmount = data.totalAmount == null ? null : String(data.totalAmount);
+
   await db
     .update(deals)
     .set({
+      contractNumber: newContractNumber,
       contractDate: data.contractDate,
       contractPlace: emptyToNull(data.contractPlace) ?? 'г. Новороссийск',
       clientId: data.clientId,
       leadId: data.leadId ?? null,
+      totalAmount: newTotalAmount,
       startDate,
       endDate,
       startAt: times.startAt,
@@ -306,7 +314,15 @@ export async function updateDeal(
     })
     .where(eq(deals.id, id));
 
-  await logActivity(actor.id, 'deal.update', id, data);
+  // Аудит: для номера/суммы фиксируем from→to (правка реквизитов = частый источник ошибок).
+  const auditChanges: Record<string, unknown> = { ...data };
+  if (newContractNumber !== existing[0].contractNumber) {
+    auditChanges.contractNumber = { from: existing[0].contractNumber, to: newContractNumber };
+  }
+  if (String(existing[0].totalAmount ?? '') !== String(newTotalAmount ?? '')) {
+    auditChanges.totalAmount = { from: existing[0].totalAmount, to: newTotalAmount };
+  }
+  await logActivity(actor.id, 'deal.update', id, auditChanges);
 
   // Если через форму реквизитов сменили мастера — засеять выезды + push новому.
   await notifyMasterAssigned(

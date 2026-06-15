@@ -8,8 +8,29 @@ export const dealFormSchema = z.object({
   clientId: z.string().uuid('Не выбран клиент'),
   leadId: z.string().uuid().optional().nullable(),
 
+  // Номер договора. Опционален: при СОЗДАНИИ генерируется автоматически
+  // (generatePreliminaryDealNumber), правка номера приходит только из формы
+  // реквизитов при ОБНОВЛЕНИИ. Не уникален в БД — бизнес допускает повторы.
+  contractNumber: z
+    .string()
+    .trim()
+    .max(64, 'Номер договора — до 64 символов')
+    .optional()
+    .or(z.literal('')),
+
   contractDate: z.string().min(1, 'Укажи дату договора'), // YYYY-MM-DD
   contractPlace: z.string().max(128).optional().or(z.literal('')),
+
+  // «Сумма договора» — ручное поле (total_amount). Отдельно от «Итого по прайсу»
+  // (Σ позиций): у годовых договоров сумма договора ≠ цена разовой обработки.
+  // Пусто → undefined (в updateDeal трактуется как «очистить», ставит NULL).
+  totalAmount: z.preprocess(
+    (v) => {
+      if (v === '' || v === null || v === undefined) return undefined;
+      return typeof v === 'string' ? v.replace(',', '.') : v;
+    },
+    z.coerce.number().min(0).max(1_000_000_000).optional(),
+  ),
 
   startDate: z.string().optional().or(z.literal('')),
   endDate: z.string().optional().or(z.literal('')),

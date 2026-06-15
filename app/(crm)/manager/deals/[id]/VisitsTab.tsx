@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -141,9 +142,18 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
               <div className="px-4 py-3 border-b border-gray-200 bg-bg-secondary flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-neon-orange flex-shrink-0 mt-0.5" />
                 <div className="min-w-0">
-                  <div className="font-medium text-content-primary">
-                    {g.objectName ?? 'Без объекта'}
-                  </div>
+                  {g.objectId ? (
+                    <Link
+                      href={`/manager/objects/${g.objectId}`}
+                      className="font-medium text-content-primary hover:text-neon-orange"
+                    >
+                      {g.objectName ?? 'Объект'}
+                    </Link>
+                  ) : (
+                    <div className="font-medium text-content-primary">
+                      {g.objectName ?? 'Без объекта'}
+                    </div>
+                  )}
                   {g.address && (
                     <div className="text-xs text-content-muted mt-0.5">{g.address}</div>
                   )}

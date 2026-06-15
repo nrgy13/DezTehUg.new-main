@@ -118,12 +118,13 @@ export const objectServiceSchema = z.object({
     .or(z.literal('').transform(() => undefined))
     .transform((v) => v ?? 'm2'),
   // Sprint 10: количество услуги (дробное). Запятую → точку, пусто → undefined.
+  // nonnegative (не positive): 0 — валидное кол-во, не должно молча блокировать сабмит формы.
   quantity: z.preprocess(
     (v) => {
       if (v === '' || v === null || v === undefined) return undefined;
       return typeof v === 'string' ? v.replace(',', '.') : v;
     },
-    z.coerce.number().positive().max(1_000_000).optional(),
+    z.coerce.number().nonnegative('Количество не может быть отрицательным').max(1_000_000).optional(),
   ),
   // Релиз B: периодичность обработки (из TREATMENT_FREQUENCIES). Пусто → undefined.
   frequency: optionalTrimmed,
@@ -134,12 +135,13 @@ export const clientObjectSchema = z.object({
   name: z.string().trim().min(1, 'Название объекта обязательно').max(255),
   address: z.string().trim().min(1, 'Адрес обязателен'),
   // Sprint 9: дробная квадратура. Запятую нормализуем в точку, пусто → undefined.
+  // nonnegative (не positive): 0 валиден и не должен молча блокировать сохранение объекта.
   areaM2: z.preprocess(
     (v) => {
       if (v === '' || v === null || v === undefined) return undefined;
       return typeof v === 'string' ? v.replace(',', '.') : v;
     },
-    z.coerce.number().positive().max(1_000_000).optional(),
+    z.coerce.number().nonnegative('Площадь не может быть отрицательной').max(1_000_000).optional(),
   ),
   objectType: optionalTrimmed,
   contactPerson: optionalTrimmed,

@@ -112,9 +112,11 @@ export function ObjectForm({
       if (!result.ok) {
         if (result.field) {
           setError(result.field as keyof FormValues, { message: result.error });
-        } else {
-          toast.error(result.error);
         }
+        // Toast ВСЕГДА: ошибка вложенного поля (напр. services.N.quantity) не
+        // отрисовывается у строк услуг → без тоста сабмит «молча» проваливался
+        // и Регина думала, что объект «не даёт сохранить» (баг ООО Аппетит).
+        toast.error(result.error);
         return;
       }
       toast.success(mode === 'create' ? 'Объект добавлен' : 'Объект обновлён');
@@ -206,6 +208,14 @@ export function ObjectForm({
           <div className="space-y-3">
             {fields.map((f, i) => {
               const isCustom = !watchedServices?.[i]?.serviceId;
+              const rowErr = errors.services?.[i];
+              const rowErrMsg =
+                rowErr?.quantity?.message ??
+                rowErr?.customName?.message ??
+                rowErr?.serviceId?.message ??
+                rowErr?.method?.message ??
+                rowErr?.frequency?.message ??
+                rowErr?.unit?.message;
               return (
                 <div
                   key={f.id}
@@ -276,6 +286,9 @@ export function ObjectForm({
                   >
                     <X className="w-4 h-4" />
                   </button>
+                  {rowErrMsg && (
+                    <p className="col-span-full text-xs text-red-600 -mt-1">{rowErrMsg}</p>
+                  )}
                 </div>
               );
             })}

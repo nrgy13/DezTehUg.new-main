@@ -869,6 +869,25 @@ def main():
             deduped.append(o)
         grp['all_objects'] = deduped
 
+        # Дедупликация прайс-позиций. extend() собирает прайс по договору + всем ДС,
+        # из-за чего одинаковые строки задваивались и раздували сумму сделки в разы
+        # (фикс дублей 2026-06-15: на проде было Гончаров 31×, Устименко 10× и т.д.).
+        seen_pi = set()
+        deduped_pi = []
+        for p in grp['all_price_items']:
+            key = (
+                (p.get('service') or '').strip().lower(),
+                (p.get('object') or '').strip().lower(),
+                str(p.get('area_m2') or ''),
+                str(p.get('price_no_vat') or ''),
+                (p.get('frequency') or '').strip().lower(),
+            )
+            if key in seen_pi:
+                continue
+            seen_pi.add(key)
+            deduped_pi.append(p)
+        grp['all_price_items'] = deduped_pi
+
     grouped = {inn: data for inn, data in by_inn.items()}
     with open(os.path.join(ROOT, 'tmp', 'regina-clients.json'), 'w', encoding='utf-8') as f:
         json.dump(grouped, f, ensure_ascii=False, indent=2)

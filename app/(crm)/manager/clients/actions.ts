@@ -2,13 +2,15 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { eq, and, ne, sql } from 'drizzle-orm';
+import { eq, and, ne, or, inArray, sql } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { clients, type Client } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { activityLog } from '@/lib/db/schema/activity';
 import { dealPriceItems, deals, dealWorkLogs } from '@/lib/db/schema/deals';
+import { documents } from '@/lib/db/schema/documents';
+import { executeDocumentDeletion } from '@/lib/documents/deletion';
 import { auth } from '@/lib/auth';
 import {
   clientFormSchema,
@@ -174,43 +176,107 @@ export async function updateClientStatus(rawInput: unknown): Promise<Result> {
 }
 
 /**
- * Прямое удаление клиента manager или admin. Sprint 8 — Регина получила
- * расширенные права. Защита: если у клиента есть сделки — не удаляем.
+ * Удаление клиента manager или admin.
+ *
+ * Двухшаговое: если у клиента есть зависимости (договоры/документы) и не передан
+ * force — возвращаем needsConfirm с детальным перечнем, чтобы кнопка показала
+ * подробное подтверждение (Саня выбрал каскад вместо мягкого запрета, 2026-06-15).
+ *
+ * При force=true — КАСКАД: документы (файлы из storage + записи) удаляем явно
+ * (FK set null их бы осиротил), затем договоры (каскад снимает price_items /
+ * addendums / work_logs → checklist) и клиента (каскад: client_objects →
+ * object_services; leads.client_id → SET NULL). Полный снимок данных пишем в
+ * activity_log ДО удаления — на случай восстановления.
  */
-export async function deleteClient(id: string): Promise<Result> {
+export type DeleteClientResult =
+  | { ok: true }
+  | { ok: false; error: string }
+  | {
+      ok: false;
+      needsConfirm: true;
+      message: string;
+      dealCount: number;
+      objectCount: number;
+      documentCount: number;
+    };
+
+export async function deleteClient(
+  id: string,
+  opts?: { force?: boolean },
+): Promise<DeleteClientResult> {
   const actor = await getActor();
   if (!actor) return { ok: false, error: 'Не авторизован' };
 
-  const [existing] = await db
-    .select({ id: clients.id, shortName: clients.shortName })
-    .from(clients)
-    .where(eq(clients.id, id))
-    .limit(1);
+  const [existing] = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
   if (!existing) return { ok: false, error: 'Клиент не найден' };
 
-  // Защита: если есть сделки — нельзя удалить
-  const [{ count: dealCount }] = await db
-    .select({ count: sql<number>`count(*)::int` })
+  // Зависимости клиента (для подтверждения + каскада).
+  const dealRows = await db
+    .select({ id: deals.id, contractNumber: deals.contractNumber })
     .from(deals)
     .where(eq(deals.clientId, id));
-  if (dealCount > 0) {
+  const objectRows = await db
+    .select({ id: clientObjects.id, name: clientObjects.name })
+    .from(clientObjects)
+    .where(eq(clientObjects.clientId, id));
+  const dealIds = dealRows.map((d) => d.id);
+  const docRows = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      dealIds.length > 0
+        ? or(eq(documents.clientId, id), inArray(documents.dealId, dealIds))
+        : eq(documents.clientId, id),
+    );
+
+  // Шаг 1: есть зависимости и не подтверждено → запрашиваем подтверждение.
+  if (!opts?.force && (dealRows.length > 0 || docRows.length > 0)) {
+    const parts: string[] = [];
+    if (dealRows.length) parts.push(`${dealRows.length} договор(ов)`);
+    if (objectRows.length) parts.push(`${objectRows.length} объект(ов)`);
+    if (docRows.length) parts.push(`${docRows.length} документ(ов)`);
     return {
       ok: false,
-      error: `У клиента ${dealCount} сделок — удаление невозможно. Сначала удали/расторгни все сделки клиента.`,
+      needsConfirm: true,
+      dealCount: dealRows.length,
+      objectCount: objectRows.length,
+      documentCount: docRows.length,
+      message:
+        `У клиента «${existing.shortName}»: ${parts.join(', ')}. ` +
+        `Каскадное удаление снесёт ВСЁ это БЕЗВОЗВРАТНО (договоры, прайс, заказ-наряды, история воронки и аналитика по ним). ` +
+        `Полный снимок данных сохранится в журнале. Удалить клиента со всем содержимым?`,
     };
   }
 
-  // client_objects, leads, documents — снимутся ON DELETE SET NULL / cascade
-  await db.delete(clients).where(eq(clients.id, id));
+  // Аудит ДО удаления: полный снимок (для восстановления из журнала).
+  await logActivity(actor.id, 'client.delete_cascade', 'client', id, {
+    client: existing,
+    deals: dealRows,
+    objects: objectRows,
+    documentCount: docRows.length,
+    forced: opts?.force ?? false,
+  });
 
-  await logActivity(actor.id, 'client.delete', 'client', id, {
-    shortName: existing.shortName,
+  // Документы: файлы из storage + записи (иначе осиротеют по FK set null).
+  for (const doc of docRows) {
+    const res = await executeDocumentDeletion(doc.id);
+    if (!res.ok) {
+      return { ok: false, error: `Не удалось удалить документ клиента: ${res.error}` };
+    }
+  }
+
+  // Договоры + клиент — в транзакции (каскады Postgres делают остальное).
+  await db.transaction(async (tx) => {
+    if (dealIds.length > 0) {
+      await tx.delete(deals).where(eq(deals.clientId, id));
+    }
+    await tx.delete(clients).where(eq(clients.id, id));
   });
 
   revalidatePath('/manager/clients');
   revalidatePath('/admin/clients');
 
-  return { ok: true, data: undefined };
+  return { ok: true };
 }
 
 // =============================================================

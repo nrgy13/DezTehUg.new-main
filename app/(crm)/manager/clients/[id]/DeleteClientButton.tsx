@@ -16,22 +16,33 @@ export function DeleteClientButton({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  function handleClick() {
-    if (
-      !confirm(
-        `Удалить клиента «${clientName}» безвозвратно? Объекты клиента также будут удалены. Если есть сделки — удаление не выполнится.`,
-      )
-    )
-      return;
-    startTransition(async () => {
-      const res = await deleteClient(clientId);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
+  function finish(res: Awaited<ReturnType<typeof deleteClient>>) {
+    if (res.ok) {
       toast.success('Клиент удалён');
       router.push('/manager/clients');
       router.refresh();
+      return;
+    }
+    // needsConfirm обрабатывается до этого; сюда попадают только ошибки.
+    if (!('needsConfirm' in res)) toast.error(res.error);
+  }
+
+  function handleClick() {
+    startTransition(async () => {
+      // Шаг 1: пробный вызов — сервер сам решает, нужна ли цепочка подтверждений.
+      const probe = await deleteClient(clientId);
+      if (probe.ok) {
+        finish(probe);
+        return;
+      }
+      if ('needsConfirm' in probe) {
+        if (!confirm(probe.message)) return;
+        const forced = await deleteClient(clientId, { force: true });
+        finish(forced);
+        return;
+      }
+      // Нет зависимостей, но всё равно ошибка (напр. не найден / нет прав).
+      toast.error(probe.error);
     });
   }
 
@@ -41,7 +52,7 @@ export function DeleteClientButton({
       onClick={handleClick}
       disabled={isPending}
       className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md border border-red-300/50 disabled:opacity-50 transition-colors"
-      title="Удалить клиента"
+      title={`Удалить клиента «${clientName}»`}
     >
       <Trash2 className="w-4 h-4" />
       Удалить

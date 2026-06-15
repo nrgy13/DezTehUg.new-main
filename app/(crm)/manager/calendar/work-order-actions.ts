@@ -6,7 +6,7 @@ import { eq, asc, and, desc, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { deals, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
+import { deals, dealWorkLogs, dealWorkLogServices, dealPriceItems } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
@@ -519,9 +519,38 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
       .orderBy(asc(clientObjectServices.sortOrder)),
   ]);
   const areaM2 = objRow[0]?.areaM2 ?? null;
+
+  // 2b) Если у объекта НЕТ своих услуг (client_object_services разрежены на проде) —
+  // тянем из позиций прайса по этому объекту. Иначе форма наряда открывалась пустой
+  // («не подтянулись услуги», баг п.9). Дедупим — импортные дубли строк прайса
+  // не должны размножать услуги в форме.
+  let svcRows = objSvc;
+  if (svcRows.length === 0) {
+    const priceRows = await db
+      .select({
+        serviceId: dealPriceItems.serviceId,
+        customName: dealPriceItems.customName,
+        serviceName: services.name,
+        method: dealPriceItems.method,
+        unit: dealPriceItems.unit,
+        quantity: dealPriceItems.areaM2,
+      })
+      .from(dealPriceItems)
+      .leftJoin(services, eq(dealPriceItems.serviceId, services.id))
+      .where(eq(dealPriceItems.objectId, objectId))
+      .orderBy(asc(dealPriceItems.sortOrder));
+    const seen = new Set<string>();
+    svcRows = priceRows.filter((r) => {
+      const key = `${r.serviceId ?? ''}|${(r.customName ?? '').trim().toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
   // Стартовый чеклист — шаблоны услуг объекта (нарядов ещё не было).
   const objServiceIds = Array.from(
-    new Set(objSvc.map((s) => s.serviceId).filter((x): x is string => !!x)),
+    new Set(svcRows.map((s) => s.serviceId).filter((x): x is string => !!x)),
   );
   const templates = objServiceIds.length
     ? await db
@@ -537,7 +566,7 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
     : [];
   return {
     source: 'object',
-    services: objSvc.map((s) => ({
+    services: svcRows.map((s) => ({
       serviceId: s.serviceId,
       // произвольная услуга → имя в customName; из каталога → null (рендерится по serviceId)
       customName: s.serviceId ? null : s.customName ?? s.serviceName ?? null,

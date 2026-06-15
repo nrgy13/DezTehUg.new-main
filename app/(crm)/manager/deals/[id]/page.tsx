@@ -25,6 +25,7 @@ import { AddendumsTab } from './AddendumsTab';
 import { VisitsTab, type ObjectVisitGroup, type VisitView } from './VisitsTab';
 import { getWorkOrderFormData } from '@/app/(crm)/manager/calendar/work-order-actions';
 import { PageTitle } from '@/components/crm/PageTitle';
+import { Breadcrumbs } from '@/components/crm/Breadcrumbs';
 
 export const metadata = { title: 'Сделка — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,7 @@ export const dynamic = 'force-dynamic';
 const TABS = [
   { key: 'requisites', label: 'Реквизиты' },
   { key: 'prices', label: 'Прайс' },
-  { key: 'objects', label: 'Объекты' },
+  { key: 'objects', label: 'Объекты договора' },
   { key: 'visits', label: 'Выезды' },
   { key: 'documents', label: 'Документы' },
   { key: 'addendums', label: 'ДС' },
@@ -334,6 +335,13 @@ export default async function DealDetailPage({
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs
+        items={[
+          { label: 'Клиенты', href: '/manager/clients' },
+          { label: client.shortName, href: `/manager/clients/${client.id}` },
+          { label: deal.contractNumber },
+        ]}
+      />
       <Link
         href="/manager/deals"
         className="inline-flex items-center gap-1 text-sm text-content-muted hover:text-neon-orange"
@@ -392,6 +400,7 @@ export default async function DealDetailPage({
           master={master[0] ?? null}
           allManagers={allManagers}
           allMasters={allMasters}
+          priceTotalWithVat={totalWithVat}
         />
       )}
 

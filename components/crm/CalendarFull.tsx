@@ -212,7 +212,7 @@ export function CalendarFull({
       if (search.trim()) {
         const q = search.trim().toLowerCase();
         const haystack =
-          `${e.contractNumber} ${e.clientShortName ?? ''} ${e.clientPhone ?? ''} ${e.serviceTitle} ${e.objectName ?? ''}`.toLowerCase();
+          `${e.contractNumber} ${e.clientShortName ?? ''} ${e.clientPhone ?? ''} ${e.masterName ?? ''} ${e.serviceTitle} ${e.objectName ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       if (statusFilter.size > 0 && !statusFilter.has(e.status)) return false;
@@ -265,6 +265,9 @@ export function CalendarFull({
 
   // Выезды видимого диапазона календаря (список справа синхронен с открытым месяцем/неделей/днём).
   const visibleEvents = useMemo(() => {
+    // При активном текстовом поиске показываем ВСЕ совпадения (как в списке клиентов),
+    // а не только видимый месяц — иначе найденный выезд из другого месяца не виден.
+    if (search.trim()) return filteredEvents;
     if (!viewRange) return [] as SerializedDealEvent[];
     return filteredEvents.filter((e) => {
       const d = eventDate(e);
@@ -272,7 +275,7 @@ export function CalendarFull({
       const t = d.getTime();
       return t >= viewRange.start && t < viewRange.end;
     });
-  }, [filteredEvents, viewRange]);
+  }, [filteredEvents, viewRange, search]);
 
   const dayGroups = useMemo(() => groupVisitsByDay(visibleEvents), [visibleEvents]);
 
@@ -433,7 +436,7 @@ export function CalendarFull({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Номер / клиент / телефон"
+            placeholder="Номер / клиент / телефон / мастер / услуга"
             className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:border-poison-green/60 focus:ring-1 focus:ring-poison-green/30"
           />
           {search && (

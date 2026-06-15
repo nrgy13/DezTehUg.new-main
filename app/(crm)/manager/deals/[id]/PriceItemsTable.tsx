@@ -120,7 +120,7 @@ export function PriceItemsTable({
           <tfoot className="bg-bg-secondary/50 border-t border-gray-200">
             <tr>
               <td colSpan={5} className="px-4 py-3 text-right text-xs uppercase font-orbitron tracking-wider text-content-muted">
-                Итого
+                Итого по прайсу
               </td>
               <td className="px-4 py-3 text-right text-content-secondary">
                 {fmt(totalNoVat)}
@@ -173,7 +173,7 @@ export function PriceItemsTable({
         {items.length > 0 && (
           <div className="flex items-center justify-between p-3 bg-bg-secondary/50">
             <span className="text-xs uppercase font-orbitron tracking-wider text-content-muted">
-              Итого
+              Итого по прайсу
             </span>
             <span className="font-orbitron font-bold text-content-primary">
               {fmt(totalWithVat)} ₽

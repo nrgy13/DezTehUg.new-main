@@ -21,6 +21,7 @@ export function DealRequisitesTab({
   master,
   allManagers,
   allMasters,
+  priceTotalWithVat,
 }: {
   deal: Deal;
   client: Client;
@@ -28,10 +29,16 @@ export function DealRequisitesTab({
   master: UserShort;
   allManagers: { id: string; fullName: string; role: string }[];
   allMasters: { id: string; fullName: string; role: string }[];
+  /** Итого по прайсу (Σ price_with_vat) — для сверки с «Суммой договора». */
+  priceTotalWithVat: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  const [contractNumber, setContractNumber] = useState(deal.contractNumber ?? '');
+  const [totalAmount, setTotalAmount] = useState(
+    deal.totalAmount != null ? String(deal.totalAmount) : '',
+  );
   const [contractDate, setContractDate] = useState(deal.contractDate ?? '');
   const [contractPlace, setContractPlace] = useState(deal.contractPlace ?? '');
   const [startDate, setStartDate] = useState(deal.startDate ?? '');
@@ -53,6 +60,8 @@ export function DealRequisitesTab({
       const res = await updateDeal(deal.id, {
         clientId: deal.clientId,
         leadId: deal.leadId,
+        contractNumber,
+        totalAmount,
         contractDate,
         contractPlace,
         startDate,
@@ -121,6 +130,19 @@ export function DealRequisitesTab({
           </div>
         </Field>
 
+        <Field label="Номер договора">
+          {editing ? (
+            <NeonInput
+              value={contractNumber}
+              onChange={(e) => setContractNumber(e.target.value)}
+              placeholder="ДТЮ-28/01/26-16"
+              disabled={isPending}
+            />
+          ) : (
+            <span className="font-mono">{deal.contractNumber}</span>
+          )}
+        </Field>
+
         <Field label="Дата договора">
           {editing ? (
             <NeonInput
@@ -131,6 +153,38 @@ export function DealRequisitesTab({
             />
           ) : (
             formatDate(deal.contractDate)
+          )}
+        </Field>
+
+        <Field label="Сумма договора">
+          {editing ? (
+            <div className="space-y-1">
+              <NeonInput
+                type="text"
+                inputMode="decimal"
+                value={totalAmount}
+                onChange={(e) => setTotalAmount(e.target.value)}
+                placeholder="напр. 80000"
+                disabled={isPending}
+              />
+              <button
+                type="button"
+                onClick={() => setTotalAmount(String(priceTotalWithVat))}
+                disabled={isPending}
+                className="text-[11px] text-content-muted hover:text-neon-orange"
+              >
+                ≈ подставить итог по прайсу: {formatMoney(priceTotalWithVat)} ₽
+              </button>
+            </div>
+          ) : (
+            <div>
+              <span className="text-content-primary">
+                {deal.totalAmount != null ? `${formatMoney(deal.totalAmount)} ₽` : '—'}
+              </span>
+              <div className="text-xs text-content-muted">
+                Итого по прайсу: {formatMoney(priceTotalWithVat)} ₽
+              </div>
+            </div>
           )}
         </Field>
 
@@ -297,6 +351,12 @@ function formatDate(d: string | null): string {
   if (!d) return '—';
   const [y, m, day] = d.split('-');
   return `${day}.${m}.${y}`;
+}
+
+function formatMoney(v: number | string): string {
+  const n = typeof v === 'string' ? Number(v) : v;
+  if (isNaN(n)) return String(v);
+  return new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2 }).format(n);
 }
 
 /** ISO timestamp → 'HH:MM' в TZ='Europe/Moscow'. */

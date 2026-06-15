@@ -27,6 +27,7 @@ import { getWorkOrderFormData } from '@/app/(crm)/manager/calendar/work-order-ac
 import { ObjectActions } from './ObjectActions';
 import { ObjectVisitsSection, type ObjectVisitView } from './ObjectVisitsSection';
 import { PageTitle } from '@/components/crm/PageTitle';
+import { Breadcrumbs, type Crumb } from '@/components/crm/Breadcrumbs';
 
 export const dynamic = 'force-dynamic';
 
@@ -176,12 +177,22 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
 
   const backHref = `/manager/clients/${object.clientId}?tab=objects`;
 
+  const crumbs: Crumb[] = [
+    { label: 'Клиенты', href: '/manager/clients' },
+    ...(client ? [{ label: client.shortName, href: `/manager/clients/${client.id}` }] : []),
+    deal
+      ? { label: deal.contractNumber, href: `/manager/deals/${deal.id}?tab=objects` }
+      : { label: 'Без договора' },
+    { label: object.name },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
+        <Breadcrumbs items={crumbs} />
         <Link
           href={backHref}
-          className="inline-flex items-center gap-1 text-sm text-content-muted hover:text-neon-orange transition-colors mb-2"
+          className="inline-flex items-center gap-1 text-sm text-content-muted hover:text-neon-orange transition-colors mt-2 mb-2"
         >
           <ChevronLeft className="w-4 h-4" />К объектам клиента
         </Link>

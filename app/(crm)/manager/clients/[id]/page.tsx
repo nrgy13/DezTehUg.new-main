@@ -18,6 +18,7 @@ import { CreateDealButton } from './CreateDealButton';
 import { DeleteClientButton } from './DeleteClientButton';
 import { ClientObjectsList } from './ClientObjectsList';
 import { PageTitle } from '@/components/crm/PageTitle';
+import { Breadcrumbs } from '@/components/crm/Breadcrumbs';
 import { deals } from '@/lib/db/schema/deals';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,7 @@ type Tab = 'requisites' | 'objects' | 'deals' | 'history';
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'requisites', label: 'Реквизиты', icon: ScrollText },
-  { id: 'objects', label: 'Объекты', icon: Boxes },
+  { id: 'objects', label: 'Все объекты', icon: Boxes },
   { id: 'deals', label: 'Договоры', icon: FileText },
   { id: 'history', label: 'История', icon: HistoryIcon },
 ];
@@ -54,9 +55,15 @@ export default async function ClientCardPage({
   return (
     <div className="space-y-6">
       <div>
+        <Breadcrumbs
+          items={[
+            { label: 'Клиенты', href: '/manager/clients' },
+            { label: client.shortName },
+          ]}
+        />
         <Link
           href="/manager/clients"
-          className="inline-flex items-center gap-1 text-sm text-content-muted hover:text-neon-orange transition-colors mb-2"
+          className="inline-flex items-center gap-1 text-sm text-content-muted hover:text-neon-orange transition-colors mt-2 mb-2"
         >
           <ChevronLeft className="w-4 h-4" />
           К списку клиентов

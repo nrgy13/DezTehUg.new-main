@@ -175,7 +175,7 @@ export default async function DealsListPage({
               <th className="text-left px-4 py-3 w-32">Дата</th>
               <th className="text-left px-4 py-3">Клиент</th>
               <th className="text-left px-4 py-3 w-32">Статус</th>
-              <th className="text-right px-4 py-3 w-32">Сумма</th>
+              <th className="text-right px-4 py-3 w-32">Сумма договора</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
