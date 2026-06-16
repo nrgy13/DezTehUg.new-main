@@ -127,7 +127,7 @@ export default async function DealDetailPage({
   const dealObjects = objects.filter((o) => o.dealId === id);
   const attachableObjects = objects
     .filter((o) => o.dealId === null)
-    .map((o) => ({ id: o.id, name: o.name, address: o.address }));
+    .map((o) => ({ id: o.id, name: o.name, address: o.address, objectType: o.objectType }));
 
   // Услуги объектов договора (несколько на объект) с именами из каталога.
   const dealObjectIds = dealObjects.map((o) => o.id);

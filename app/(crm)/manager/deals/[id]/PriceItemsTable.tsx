@@ -345,7 +345,7 @@ function PriceItemDialog({
                 <option value="">— не указан —</option>
                 {objects.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {o.name}
+                    {`${o.name}${o.objectType ? ` — ${o.objectType}` : ''}${o.address ? ` · ${o.address}` : ''}`}
                   </option>
                 ))}
               </select>

@@ -135,8 +135,12 @@ export function ObjectForm({
           <Field label="Название объекта *" error={errors.name?.message} hint="Столовая «Эллада»">
             <NeonInput {...register('name')} placeholder="Столовая «Эллада»" />
           </Field>
-          <Field label="Тип" error={errors.objectType?.message} hint="столовая, склад, офис...">
-            <NeonInput {...register('objectType')} placeholder="столовая" />
+          <Field
+            label="Метка"
+            error={errors.objectType?.message}
+            hint="ярлык для различения объектов одной сети: «Хадыжи-Парус», «Склад №2». В документы не идёт"
+          >
+            <NeonInput {...register('objectType')} placeholder="напр. Хадыжи-Парус" />
           </Field>
           <Field label="Адрес *" error={errors.address?.message} className="md:col-span-2">
             <NeonInput {...register('address')} placeholder="г. Анапа, ул. Гребенская, 5" />

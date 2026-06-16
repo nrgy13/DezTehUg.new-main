@@ -22,7 +22,7 @@ type DealObject = {
   services: ObjectService[];
 };
 
-type Attachable = { id: string; name: string; address: string };
+type Attachable = { id: string; name: string; address: string; objectType: string | null };
 
 function formatDate(d: string | null): string {
   if (!d) return '—';
@@ -100,7 +100,7 @@ export function DealObjectsTab({
               <option value="">— выберите объект клиента —</option>
               {attachable.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {o.name} · {o.address}
+                  {`${o.name}${o.objectType ? ` — ${o.objectType}` : ''} · ${o.address}`}
                 </option>
               ))}
             </select>
