@@ -8,6 +8,7 @@ import { clients } from '@/lib/db/schema/clients';
 import { deals } from '@/lib/db/schema/deals';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { PageTitle } from '@/components/crm/PageTitle';
+import { DeleteDocumentButton } from './DeleteDocumentButton';
 
 export const metadata = { title: 'Документы — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -221,16 +222,22 @@ export default async function DocumentsListPage({
                         </span>
                       </td>
                       <td className="px-4 py-2">
-                        {r.docxKey && (
-                          <a
-                            href={`/api/documents/${r.id}/download`}
-                            className="inline-flex items-center gap-1 text-xs text-poison-green hover:underline"
-                            title="Скачать DOCX"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            DOCX
-                          </a>
-                        )}
+                        <div className="flex items-center justify-end gap-3">
+                          {r.docxKey && (
+                            <a
+                              href={`/api/documents/${r.id}/download`}
+                              className="inline-flex items-center gap-1 text-xs text-poison-green hover:underline"
+                              title="Скачать DOCX"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              DOCX
+                            </a>
+                          )}
+                          <DeleteDocumentButton
+                            id={r.id}
+                            label={`${typeLabel(r.type)} ${r.number ?? ''}`.trim()}
+                          />
+                        </div>
                       </td>
                     </tr>
                   );
