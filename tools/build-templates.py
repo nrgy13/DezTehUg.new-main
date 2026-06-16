@@ -515,6 +515,14 @@ def build_inspection_report():
     p.add_run(' от ')
     p.add_run('{contract.date}').bold = True
 
+    # Контактное лицо на объекте (из карточки объекта) — добавлено по запросу,
+    # чтобы в АО был ответственный на месте, как в АВР и заказ-наряде.
+    p = para(doc)
+    p.add_run('Контактное лицо на объекте: ')
+    p.add_run('{contact.fio}').bold = True
+    p.add_run(', тел. ')
+    p.add_run('{contact.phone}').bold = True
+
     para(doc)
     object_services_table_with_loop(doc)
     para(doc)
