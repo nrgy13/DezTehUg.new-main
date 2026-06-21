@@ -121,12 +121,32 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       frequency: p.frequency ?? '',
       priceNet: formatMoney(p.priceNoVat),
       priceGross: formatMoney(p.priceWithVat),
+      // Сумма НДС на строку (для прайс-таблиц ДС с колонкой «НДС 5%»).
+      vatLine: formatMoney(Number(p.priceWithVat) - Number(p.priceNoVat)),
       vatRate: Number(p.vatRate),
       quantity: 1,
       unit: 'усл.',
       amount: formatMoney(p.priceWithVat),
     };
   });
+
+  // Прайс, сгруппированный по объекту — для ДС (несколько прайс-таблиц,
+  // у каждой свой объект+адрес заголовком). Внешний цикл {#priceItemsByObject},
+  // внутри — {#items}. Порядок объектов сохраняется (Map по first-seen).
+  const pioMap = new Map<
+    string,
+    { objectName: string; objectAddress: string; items: typeof priceItems }
+  >();
+  for (const pi of priceItems) {
+    const key = `${pi.objectName}|||${pi.objectAddress}`;
+    let g = pioMap.get(key);
+    if (!g) {
+      g = { objectName: pi.objectName, objectAddress: pi.objectAddress, items: [] };
+      pioMap.set(key, g);
+    }
+    g.items.push(pi);
+  }
+  const priceGroupsByObject = Array.from(pioMap.values());
 
   const totalNet = priceItemsRaw.reduce((sum, p) => sum + Number(p.priceNoVat), 0);
   const totalGross = priceItemsRaw.reduce((sum, p) => sum + Number(p.priceWithVat), 0);
@@ -233,6 +253,8 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
           shortName: client.shortName ?? '',
           fullName: client.fullName ?? client.shortName ?? '',
           directorName: client.directorName ?? '',
+          // Инициалы для подписей: «Дёмин Алексей Анатольевич» → «А.А.Дёмин» (как в бумаге).
+          directorShort: initialsName(client.directorName ?? ''),
           directorRole: client.directorRole ?? '',
           actingBasis: client.actingBasis ?? '',
           legalAddress: client.legalAddress ?? '',
@@ -256,6 +278,7 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       service: o.objectType ?? '',
     })),
     priceItems,
+    priceItemsByObject: priceGroupsByObject,
     // Sprint 10: услуги объекта для таблицы АО/АВР + строка-перечень + одиночные
     // поля под формат шаблона Регины ({object.*}, {contact.*}, {master.fio}, {services}).
     objectServices,
@@ -428,4 +451,19 @@ function formatMoney(n: string | number): string {
   const v = typeof n === 'string' ? Number(n) : n;
   if (isNaN(v)) return String(n);
   return new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2 }).format(v);
+}
+
+/**
+ * ФИО → инициалы для подписей: «Дёмин Алексей Анатольевич» → «А.А.Дёмин».
+ * Формат хранения directorName — «Фамилия Имя Отчество». Если частей меньше —
+ * возвращаем как есть (одно слово) или «И.Фамилия».
+ */
+function initialsName(full: string): string {
+  const parts = full.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0];
+  const [last, first, middle] = parts;
+  const i1 = first ? `${first[0]}.` : '';
+  const i2 = middle ? `${middle[0]}.` : '';
+  return `${i1}${i2}${last}`;
 }
