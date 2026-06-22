@@ -32,6 +32,7 @@ contact.fio/phone; object.name/address/area; totalNet/totalGross/vatAmount;
        {#priceItems}{objectName}{serviceName}{area}{priceGross}{vatLine}{frequency}{objectAddress}{/priceItems}
        {#priceItemsByObject}{objectName}{objectAddress}{#items}...{/items}{/priceItemsByObject}  (ДС, мульти-объект)
 """
+import copy
 import re
 import sys
 from docx import Document
@@ -59,6 +60,169 @@ def set_merge(p, new_text):
     text_runs[0].text = new_text
     for r in text_runs[1:]:
         r.text = ""
+
+
+def replace_run(p, needle, new, whole=False):
+    """Точечная замена в ПЕРВОМ текстовом run, содержащем needle.
+    whole=True — заменить весь run на new (для подчёркиваний/дат с переменным числом
+    пробелов); whole=False — заменить только подстроку needle→new.
+    Картиночные run'ы (логотип/QR) НЕ трогаем. Возвращает True, если нашёл."""
+    for r in p.runs:
+        if has_drawing(r):
+            continue
+        if needle in r.text:
+            r.text = new if whole else r.text.replace(needle, new)
+            return True
+    return False
+
+
+def append_run(p, text):
+    """Дописать run с text в конец параграфа, скопировав формат (rPr) первого
+    значащего текстового run — чтобы шрифт/размер совпадали с меткой строки."""
+    new_r = p.add_run(text)
+    for r in p.runs:
+        if r is new_r or has_drawing(r):
+            continue
+        if r.text.strip():
+            rpr = r._r.find(qn('w:rPr'))
+            if rpr is not None:
+                new_r._r.insert(0, copy.deepcopy(rpr))
+            break
+    return new_r
+
+
+def table_to_object_cycle(t, header_rows=1):
+    """Превратить таблицу №|Объект|Адрес|Площадь|Услуга в один цикл-ряд {#objectServices}.
+    Оставляет header_rows строк-заголовков, первую строку данных делает циклом,
+    остальные строки данных удаляет."""
+    data_row = t.rows[header_rows]
+    vals = ["{#objectServices}{index}", "{objectName}", "{objectAddress}",
+            "{areaLabel}", "{serviceName}{/objectServices}"]
+    for c, v in zip(data_row.cells, vals):
+        set_merge(c.paragraphs[0], v)
+        for extra in c.paragraphs[1:]:
+            extra._p.getparent().remove(extra._p)
+    for tr in [r._tr for r in t.rows[header_rows + 1:]]:
+        tr.getparent().remove(tr)
+
+
+def table_to_price_cycle(t, header_rows=1):
+    """Прайс-таблицу Наименование|Услуга|Площадь|Цена|Кратность|Адрес → цикл {#priceItems}.
+    Оставляет header, первую строку данных делает циклом, остальные удаляет."""
+    data_row = t.rows[header_rows]
+    vals = ["{#priceItems}{objectName}", "{serviceName}", "{area}",
+            "{priceGross}", "{frequency}", "{objectAddress}{/priceItems}"]
+    for c, v in zip(data_row.cells, vals):
+        set_merge(c.paragraphs[0], v)
+        for extra in c.paragraphs[1:]:
+            extra._p.getparent().remove(extra._p)
+    for tr in [r._tr for r in t.rows[header_rows + 1:]]:
+        tr.getparent().remove(tr)
+
+
+def table_to_items_cycle(t, header_rows=1):
+    """Прайс-таблица ДС → ВЛОЖЕННЫЙ цикл {#items} (внутри {#priceItemsByObject}).
+    Колонки: Наименование|Площадь|без НДС|НДС 5%|с НДС|Периодичность."""
+    data_row = t.rows[header_rows]
+    vals = ["{#items}{serviceName}", "{area}", "{priceNet}",
+            "{vatLine}", "{priceGross}", "{frequency}{/items}"]
+    for c, v in zip(data_row.cells, vals):
+        set_merge(c.paragraphs[0], v)
+        for extra in c.paragraphs[1:]:
+            extra._p.getparent().remove(extra._p)
+    for tr in [r._tr for r in t.rows[header_rows + 1:]]:
+        tr.getparent().remove(tr)
+
+
+# Инициалы в строке подписи: «/А.А.Дёмин/», «/А.Е.Мороз/» → «/{client.directorShort}/».
+SIG_INITIALS = re.compile(r'/\s*[А-ЯЁ]\.[А-ЯЁ]\.[А-ЯЁ][а-яё]+\s*/')
+
+
+def fill_signature_cell(cell):
+    """Блок подписи Заказчика (правая ячейка): строка с инициалами «/Х.Х.Фамилия/» →
+    «/{client.directorShort}/» (подчёркивания сохраняем); строка с ролью+названием →
+    «{client.directorRole} {client.shortName}». Универсально для договора и ДС."""
+    for p in cell.paragraphs:
+        t = full_text(p)
+        if not t.strip():
+            continue
+        if SIG_INITIALS.search(t):
+            set_merge(p, SIG_INITIALS.sub('/{client.directorShort}/', t))
+        elif "директор" in t.lower():
+            set_merge(p, "{client.directorRole} {client.shortName}")
+
+
+# Реквизиты Заказчика (правая ячейка TABLE 0): якорь в исходной строке → новый текст параграфа.
+# Порядок важен — «Расчетный счет»/«Корр. счет» различаем полными словами.
+REQ_RULES = [
+    ("ЗАКАЗЧИК", "ЗАКАЗЧИК:"),
+    ("Юридический адрес", "Юридический адрес: {client.legalAddress}"),
+    ("Фактический адрес", "Фактический адрес: {client.postalAddress}"),
+    ("Расчетный счет", "Расчетный счет: {client.bankAccount}"),
+    ("Корр. счет", "Корр. счет: {client.bankCorrAccount}"),
+    ("БИК", "БИК: {client.bankBik}"),
+    ("ОГРН", "ОГРН {client.ogrn}"),
+    ("ИНН", "ИНН {client.inn} КПП {client.kpp}"),
+    ("Сбербанк", "{client.bankName}"),
+    ("Тел.", "Тел. {client.phone}"),
+    ("Е-mail", "Е-mail: {client.email}"),
+    ("АРУМ СЕРВИС", "{client.shortName}"),
+]
+
+# Реквизиты Заказчика в ДС (формат ИП Белавина чуть другой: «Почтовый адрес», КПП и ОГРН
+# отдельными строками, двоеточия после меток). Якорь в исходной строке → новый текст.
+DS_REQ_RULES = [
+    ("ЗАКАЗЧИК", "ЗАКАЗЧИК:"),
+    ("Юридический адрес", "Юридический адрес: {client.legalAddress}"),
+    ("Почтовый адрес", "Почтовый адрес: {client.postalAddress}"),
+    ("Расчетный счет", "Расчетный счет: {client.bankAccount}"),
+    ("Корр. счет", "Корр. счет: {client.bankCorrAccount}"),
+    ("БИК", "БИК: {client.bankBik}"),
+    ("ОГРН", "ОГРН: {client.ogrn}"),
+    ("КПП", "КПП: {client.kpp}"),
+    ("ИНН", "ИНН: {client.inn}"),
+    ("СБЕРБАНК", "{client.bankName}"),
+    ("Тел", "Тел.: {client.phone}"),
+    ("Е-mail", "Е-mail: {client.email}"),
+    ("Аппетит", "{client.shortName}"),
+]
+
+
+def fill_requisites_cell(cell, rules):
+    """Заменить реквизиты ПОСТРОЧНО, сохраняя разрывы строк <w:br/>.
+    ⚠️ Реквизиты бывают двух форматов: отдельный параграф на строку (договор) ИЛИ
+    несколько строк в одном параграфе через <w:br/> (ДС). Поэтому режем по \\n (текст
+    run'а включает <w:br/> как \\n), применяем первое подходящее правило к КАЖДОЙ строке
+    и пересобираем параграф с теми же разрывами — иначе set_merge на весь параграф
+    затирает соседние строки."""
+    for p in cell.paragraphs:
+        full = "".join(r.text for r in p.runs)
+        if not full.strip():
+            continue
+        new_lines = []
+        for line in full.split("\n"):
+            repl = line
+            if line.strip():
+                for marker, new in rules:
+                    if marker in line:
+                        repl = new
+                        break
+            new_lines.append(repl)
+        # сохранить формат (rPr) первого run, затем пересоздать run'ы + разрывы
+        rpr = None
+        for r in p.runs:
+            el = r._r.find(qn('w:rPr'))
+            if el is not None:
+                rpr = copy.deepcopy(el)
+                break
+        for r in list(p.runs):
+            r._r.getparent().remove(r._r)
+        for i, line in enumerate(new_lines):
+            run = p.add_run(line)
+            if rpr is not None:
+                run._r.insert(0, copy.deepcopy(rpr))
+            if i < len(new_lines) - 1:
+                run.add_break()
 
 
 # ─────────────────────────────── АО (act_inspection) ✅ ГОТОВ ───────────────────────────────
@@ -95,46 +259,190 @@ def build_ao():
     print("OK ao ->", out)
 
 
-# ─────────────────────────────── АВР (act_work) — TODO ───────────────────────────────
+# ─────────────────────────────── АВР (act_work) ✅ ГОТОВ ───────────────────────────────
 def build_avr():
-    """Источник: DTUdocs/Акт по проведению работ ... Столовая СОК Анапа.docx → templates/work-completion-report.docx
-    Замены: «№___ от <дата>»→«№{act.number} от {act.date} г.»; заказчик→{client.shortName}, ИНН→{client.inn};
-      контакт ФИО/тел→{act.responsibleName}/{act.responsiblePhone}; «Дезинфектор: <фио>»→{act.disinfector};
-      ссылка на договор «№<num> от <дата>»→«№{contract.number} от {contract.date}».
-    «соответствует/не соответствует» и «совпадает/не совпадает» — ОСТАВИТЬ статикой (выбор руками, решение Сани).
-    «Уполномоченное лицо» внизу — АВТО: {act.responsibleName}/{act.responsibleRole}/{act.responsiblePhone}.
-    Таблица №|Объект|Адрес|Площадь|Услуга → цикл {#objectServices} (как в АО).
-    ⚠️ ПРОВЕРИТЬ <a:blip> в выводе (логотип+QR)."""
-    raise NotImplementedError("build_avr: см. tmp/plans/templates-plan.md и карту замен в плане")
+    """Источник: DTUdocs/Акт по проведению работ ИП Белавина О.В. Столовая СОК Анапа.docx
+       → templates/work-completion-report.docx
+    Структура (inspect-docx): blip=2 (лого+QR в заголовке P0!), 38 параграфов, 1 таблица 3x5.
+    Решения Сани: соответствует/совпадает — статикой (выбор руками); уполномоченное лицо — авто.
+    Форматы (build-data): act.date/contract.date = «7 апреля 2026 г.» (С « г.»); act.number = офиц. номер."""
+    src = f"{ROOT}/DTUdocs/Акт по проведению работ ИП Белавина О.В. Столовая СОК Анапа.docx"
+    out = f"{ROOT}/templates/work-completion-report.docx"
+    doc = Document(src)
+    P = doc.paragraphs
+
+    def find(substr):
+        for p in P:
+            if substr in full_text(p):
+                return p
+        return None
+
+    # P0 — заголовок (содержит лого+QR!): № под номер + дата. Только точечная замена run'ов.
+    p0 = find("АКТ О ПРИЕМКЕ")
+    replace_run(p0, "_____", "№{act.number} ", whole=True)  # «№ _____ _» → «№{act.number} » (пробел перед «от»)
+    replace_run(p0, "30.03.2026", "{act.date}", whole=True)  # «30.03.2026 г.» → «{act.date}» (уже с «г.»)
+
+    # Заказчик + ИНН (чистые текстовые параграфы — склейка через set_merge)
+    set_merge(find("«Аппетит»"), "{client.shortName}")
+    set_merge(find("ИНН: 2320155529"), "ИНН: {client.inn}")
+
+    # Контакт заказчика (есть переносы \n → точечно)
+    p_ct = find("Александр Витальевич Сафронов")
+    replace_run(p_ct, "Александр Витальевич Сафронов", "{act.responsibleName}", whole=True)
+    replace_run(p_ct, "8-904-492-54-63", "{act.responsiblePhone}", whole=True)
+
+    # Дезинфектор (блок ИСПОЛНИТЕЛЯ, есть переносы → точечно; ИНН/ОГРНИП Белавиной — статика)
+    p_di = find("Дезинфектор:")
+    replace_run(p_di, "Нечепоренко", "{act.disinfector}", whole=True)
+    replace_run(p_di, "Д.И.", "", whole=True)
+
+    # Ссылка на договор (чистый абзац) — собираем заново, чтобы не задвоить год/«г.»
+    set_merge(
+        find("является неотъемлемой частью Договора"),
+        "2. Настоящий АКТ является неотъемлемой частью Договора №{contract.number} "
+        "от {contract.date}, оформлен в установленном порядке, содержит перечень "
+        "выполняемых работ, предоставленных «Исполнителем»",
+    )
+
+    # Уполномоченное лицо (АВТО, решение Сани) — дописываем значение справа от метки
+    append_run(find("Фамилия Имя Отчество"), "{act.responsibleName}")
+    append_run(find("Должность"), "{act.responsibleRole}")
+    append_run(find("Телефон"), "{act.responsiblePhone}")
+
+    # Таблица объектов/услуг → цикл {#objectServices} (как в АО)
+    table_to_object_cycle(doc.tables[0], header_rows=1)
+
+    doc.save(out)
+    print("OK avr ->", out)
 
 
-# ─────────────────────────────── Договор (contract) — TODO ───────────────────────────────
+# ─────────────────────────────── Договор (contract) ✅ ГОТОВ ───────────────────────────────
 def build_dogovor():
     """Источник: DTU_docs_clients/Договора на заключение — копия/Договор ООО АРУМ СЕРВИС от 01.01.2026.docx
        → templates/contract-services.docx
-    Замены: номер/дата/место→{contract.number/date/place}; вводный абзац Заказчик→{client.fullName},
-      «в лице {client.directorRole} {client.directorName}», «на основании {client.actingBasis}»; срок→{contract.endDate};
-      блок реквизитов Заказчика (TABLE 0, правая ячейка)→{client.legalAddress/postalAddress/inn/kpp/ogrn/
-      bankAccount/bankName/bankBik/bankCorrAccount/phone/email}; подписи (TABLE 1/3/6)→
-      «{client.directorRole} {client.shortName} /{client.directorShort}/».
-    Приложение №2 «СТОИМОСТЬ УСЛУГ» (прайс-таблица) → цикл {#priceItems}{objectName}|{serviceName}|{area}|
-      {priceGross}|{frequency}|{objectAddress}{/priceItems}.
-    СТАТИКА: юр.текст 1-8, Исполнитель (=CONTRACT_PROVIDER), Приложение №1 «ЗАЯВКА» (пустой бланк), TABLE 5 «Прочие услуги».
-    ⚠️ Исполнитель совпадает с provider 1:1 — оставить статикой."""
-    raise NotImplementedError("build_dogovor: см. план")
+    Структура (inspect-docx): blip=0, 172 параграфа, 7 таблиц.
+      TABLE0 = реквизиты сторон (правая=Заказчик), TABLE1/3/6 = подписи (правая=Заказчик),
+      TABLE2 = бланк заявки (статика), TABLE4 (46x6) = прайс клиента → {#priceItems},
+      TABLE5 = прочие услуги прейскурант (статика).
+    СТАТИКА: преамбула Исполнителя (P7), юр.текст 1-8, заявка, прочие услуги.
+    ⚠️ contract.endDate может быть пуст → «действует по , если» (fallback в build-data добавлен)."""
+    src = (f"{ROOT}/DTU_docs_clients/Договора на заключение — копия/"
+           "Договор ООО АРУМ СЕРВИС от 01.01.2026.docx")
+    out = f"{ROOT}/templates/contract-services.docx"
+    doc = Document(src)
+    P = doc.paragraphs
+
+    def find(substr):
+        for p in P:
+            if substr in full_text(p):
+                return p
+        return None
+
+    # Преамбула: номер / дата / место
+    set_merge(find("ДОГОВОР НА ОКАЗАНИЕ УСЛУГ"), "ДОГОВОР НА ОКАЗАНИЕ УСЛУГ №{contract.number}")
+    set_merge(find("Дата заключения"), "Дата заключения: {contract.date}")
+    set_merge(find("Место заключения"), "Место заключения: {contract.place}")
+    # Вводный абзац Заказчика (статика Исполнителя выше — НЕ трогаем)
+    set_merge(
+        find("заключили договор о нижеследующем"),
+        "и {client.fullName}, в лице {client.directorRole} {client.directorName}, "
+        "действующего на основании {client.actingBasis}, именуемое в дальнейшем «Заказчик» "
+        "с другой стороны, вместе именуемые «Стороны», заключили договор о нижеследующем:",
+    )
+    # Срок действия (8.1)
+    set_merge(
+        find("Договор вступает в силу"),
+        "8.1.\tДоговор вступает в силу с момента его подписания и действует по {contract.endDate}, "
+        "если ни одна из Сторон не заявят о прекращении его действия за один месяц до окончания "
+        "календарного года, Договор считается пролонгированным на прежних условиях и на очередной "
+        "календарный год. Количество продлений действия Договора не ограничивается. Исполнитель имеет "
+        "право не чаще чем один раз в квартал пересматривать условия положения Приложения № 2 "
+        "настоящего Договора, о чем он обязан письменно уведомить Заказчика.",
+    )
+    # Приложения №1/№2 — номер договора
+    set_merge(find("Приложение № 1 к Договору"), "Приложение № 1 к Договору №{contract.number}")
+    set_merge(find("Приложение № 2 к Договору"), "Приложение № 2 к Договору №{contract.number}")
+    # Даты приложений («от 01 января 2026 г», оба = дата договора)
+    for p in P:
+        if full_text(p).strip().startswith("от 01 января"):
+            set_merge(p, "от {contract.date}")
+    # Заголовок прайса — убрать конкретный объект (артефакт договора АРУМ), оставить «СТОИМОСТЬ УСЛУГ»
+    p_price = find("СТОИМОСТЬ УСЛУГ")
+    for needle in ["с. Небуг", "ороссийское", "помещение 13", "Hidens", "»"]:
+        replace_run(p_price, needle, "", whole=True)
+    # Дата начала работ
+    set_merge(
+        find("Дата начала работ"),
+        "Дата начала работ по дезинсекции, дезинфекции и дератизации объекта - {contract.date}",
+    )
+
+    # Реквизиты Заказчика (TABLE0, правая ячейка)
+    fill_requisites_cell(doc.tables[0].rows[0].cells[1], REQ_RULES)
+    # Подписи Заказчика (TABLE 1/3/6, правая ячейка)
+    for ti in (1, 3, 6):
+        fill_signature_cell(doc.tables[ti].rows[0].cells[1])
+    # Прайс клиента (TABLE4) → цикл {#priceItems}
+    table_to_price_cycle(doc.tables[4])
+
+    doc.save(out)
+    print("OK dogovor ->", out)
 
 
-# ─────────────────────────────── ДС (addendum) — TODO, сложный ───────────────────────────────
+# ─────────────────────────────── ДС (addendum) ✅ ГОТОВ ───────────────────────────────
 def build_ds():
     """Источник: DTUdocs/ДС№2 ООО Аппетит.docx → templates/agreement-addendum.docx
-    Замены: «№N»→{addendum.number}, «№<договор>»→{contract.number}, даты ДС/договора→{addendum.date}/{contract.date},
-      место→{addendum.place}, Заказчик (преамбула + TABLE реквизитов)→{client.*}, подпись→{client.directorShort}.
-    ⚠️ МУЛЬТИ-ОБЪЕКТ (решение Сани — вложенный цикл): несколько прайс-таблиц, у каждой свой объект+адрес заголовком.
-      Использовать {#priceItemsByObject}: абзац-заголовок «{objectName} ({objectAddress})» + таблица с {#items}...{/items}.
-      Колонка «НДС 5%» (рубли на строку) → {vatLine}. Колонки: Наименование→{serviceName}, Площадь→{area},
-      без НДС→{priceNet}, НДС 5%→{vatLine}, с НДС→{priceGross}, Периодичность→{frequency}.
-    NB: в build-data есть priceItemsByObject (группировка) + vatLine + directorShort (коммит 4b5f404)."""
-    raise NotImplementedError("build_ds: см. план; мульти-объект через {#priceItemsByObject}")
+    Структура (inspect-docx): blip=0, 24 параграфа, 4 таблицы.
+      TABLE0/1 (3x6) = прайс по объекту 1/2 (мульти-объект), TABLE2 (2x2) = реквизиты,
+      TABLE3 (1x2) = подписи. P12/P13 = заголовки-адреса объектов.
+    МУЛЬТИ-ОБЪЕКТ (решение Сани): внешний цикл {#priceItemsByObject} оборачивает
+      [заголовок-абзац объекта + прайс-таблицу]; внутри таблицы — {#items}.
+      P12 открывает цикл, P13 закрывает, TABLE1 (дубль) удаляется — docxtemplater
+      повторит «заголовок+таблицу» для каждого объекта."""
+    src = f"{ROOT}/DTUdocs/ДС№2 ООО Аппетит.docx"
+    out = f"{ROOT}/templates/agreement-addendum.docx"
+    doc = Document(src)
+    P = doc.paragraphs
+
+    def find(substr):
+        for p in P:
+            if substr in full_text(p):
+                return p
+        return None
+
+    # Шапка ДС: номер ДС + номер договора + даты + место
+    set_merge(find("Дополнительное соглашение"),
+              "Дополнительное соглашение №{addendum.number} к ДОГОВОРУ №{contract.number}")
+    set_merge(find("на оказание услуг от"), "на оказание услуг от {contract.date}")
+    set_merge(find("Дата заключения"), "Дата заключения: {addendum.date}")
+    set_merge(find("Место заключения"), "Место заключения: {addendum.place}")
+    # Преамбула Заказчика (точь-в-точь ДС — без «в лице директора», он в подписи)
+    set_merge(find("заключили договор о нижеследующем"),
+              "и {client.fullName}, действующего на основании {client.actingBasis}, "
+              "именуемое в дальнейшем «Заказчик» с другой стороны, вместе именуемые "
+              "«Стороны», заключили договор о нижеследующем:")
+    # Отсылка к Приложению №2 договора (номер договора + дата договора)
+    set_merge(find("дополнить следующими данными"),
+              "Приложение №2 к Договору №{contract.number} на оказание услуг по проведению "
+              "дезинсекционных мероприятий от {contract.date} дополнить следующими данными. "
+              "Исполнитель применяет УСН со ставкой НДС-5%:")
+
+    # Ссылки на таблицы ДО структурных правок (индексы сдвинутся после удаления)
+    t_price0, t_price1, t_req, t_sign = doc.tables[0], doc.tables[1], doc.tables[2], doc.tables[3]
+
+    # МУЛЬТИ-ОБЪЕКТ: P12 → открыть внешний цикл (заголовок объекта), P13 → закрыть
+    set_merge(find("столовая СОК Анапа Нептун"),
+              "{#priceItemsByObject}{objectName} ({objectAddress})")
+    set_merge(find("Курортная Деревня"), "{/priceItemsByObject}")
+    # TABLE0 — вложенный цикл строк {#items}; TABLE1 (дубль 2-го объекта) удаляем
+    table_to_items_cycle(t_price0)
+    t_price1._tbl.getparent().remove(t_price1._tbl)
+
+    # Реквизиты Заказчика (правая ячейка) + подпись Заказчика
+    fill_requisites_cell(t_req.rows[0].cells[1], DS_REQ_RULES)
+    fill_signature_cell(t_sign.rows[0].cells[1])
+
+    doc.save(out)
+    print("OK ds ->", out)
 
 
 BUILDERS = {"ao": build_ao, "avr": build_avr, "dogovor": build_dogovor, "ds": build_ds}

@@ -314,7 +314,11 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         number: deal?.contractNumber ?? ctx.documentNumber,
         date: formatHumanDate(deal?.contractDate ?? ctx.documentDate),
         place: deal?.contractPlace ?? 'г. Новороссийск',
-        endDate: deal?.endDate ? formatHumanDate(deal.endDate) : '',
+        // Срок договора. Если не задан — по умолчанию 31 декабря года заключения
+        // (договор пролонгируется; иначе шаблон даёт «действует по , если…»).
+        endDate: deal?.endDate
+          ? formatHumanDate(deal.endDate)
+          : formatHumanDate(`${(deal?.contractDate ?? ctx.documentDate).slice(0, 4)}-12-31`),
         ...(ctx.overrides ?? {}),
       };
       break;

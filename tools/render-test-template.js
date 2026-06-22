@@ -37,9 +37,15 @@ const data = {
   priceItems: [
     { index: 1, objectName: 'Столовая', objectAddress: 'г. Тест, ул. Тестовая, 1', serviceName: 'Дезинсекция', area: '100', areaUnitLabel: 'м²', method: '', frequency: 'Ежемесячно', priceNet: '4 761,90', priceGross: '5 000,00', vatLine: '238,10', vatRate: 5, amount: '5 000,00' },
   ],
+  // Два объекта — проверяет мульти-объектный ДС ({#priceItemsByObject} повторяет
+  // заголовок-абзац + прайс-таблицу; первый объект с двумя строками, второй с одной).
   priceItemsByObject: [
     { objectName: 'Столовая', objectAddress: 'г. Тест, ул. Тестовая, 1', items: [
       { index: 1, serviceName: 'Дезинсекция', area: '100', priceNet: '4 761,90', vatLine: '238,10', priceGross: '5 000,00', frequency: 'Ежемесячно' },
+      { index: 2, serviceName: 'Дератизация', area: '100', priceNet: '2 857,14', vatLine: '142,86', priceGross: '3 000,00', frequency: 'По заявке' },
+    ] },
+    { objectName: 'Склад', objectAddress: 'г. Тест, ул. Складская, 5', items: [
+      { index: 1, serviceName: 'Дезинсекция', area: '250', priceNet: '7 142,86', vatLine: '357,14', priceGross: '7 500,00', frequency: 'Ежемесячно' },
     ] },
   ],
   totalNet: '4 761,90', totalGross: '5 000,00', vatAmount: '238,10', services: 'Дезинсекция — 100 м²',
