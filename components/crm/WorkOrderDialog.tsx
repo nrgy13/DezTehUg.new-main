@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { UNIT_OPTIONS } from '@/lib/constants/units';
 import { TREATMENT_METHODS } from '@/lib/constants/treatment';
@@ -122,6 +123,24 @@ export function WorkOrderDialog({
     [data.clients, clientId],
   );
 
+  // Combobox-опции для клиента и объекта (поиск по подстроке вместо нативного select).
+  const clientOptions = useMemo<ComboboxOption[]>(
+    () => data.clients.map((c) => ({ value: c.id, label: c.shortName, keywords: [c.shortName] })),
+    [data.clients],
+  );
+  // Объект подписываем «Имя — Метка · Адрес» (как в прайсе/привязке) — чтобы различать
+  // одноимённые объекты сетей (Гончаров «Хадыжи»: 31 магазин с одним именем). Искать
+  // можно по имени/метке/адресу.
+  const objectOptions = useMemo<ComboboxOption[]>(
+    () =>
+      (client?.objects ?? []).map((o) => ({
+        value: o.id,
+        label: `${o.name}${o.objectType ? ` — ${o.objectType}` : ''}${o.address ? ` · ${o.address}` : ''}`,
+        keywords: [o.name, o.objectType, o.address].filter((x): x is string => !!x),
+      })),
+    [client],
+  );
+
   // Подгрузка дефолтов услуг/препаратов/мастера по объекту (последний наряд → услуги объекта).
   async function loadObject(v: string) {
     setObjectId(v);
@@ -155,7 +174,16 @@ export function WorkOrderDialog({
 
   // Применяем preset при открытии (объект → подгружаем дефолты).
   useEffect(() => {
-    if (preset?.objectId) loadObject(preset.objectId);
+    if (preset?.objectId) {
+      // Подстраховка: combobox объекта показывает подпись из опций, а опции зависят
+      // от выбранного клиента. Если caller дал objectId без clientId — выведем клиента
+      // из дерева, иначе строка объекта осталась бы пустой (placeholder при непустом id).
+      if (!preset.clientId) {
+        const owner = data.clients.find((c) => c.objects.some((o) => o.id === preset.objectId));
+        if (owner) setClientId(owner.id);
+      }
+      loadObject(preset.objectId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -336,19 +364,15 @@ export function WorkOrderDialog({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="wo-client">Клиент</Label>
-                <select
+                <Combobox
                   id="wo-client"
-                  className={fieldClass}
+                  options={clientOptions}
                   value={clientId}
-                  onChange={(e) => onClient(e.target.value)}
-                >
-                  <option value="">— выбери клиента —</option>
-                  {data.clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.shortName}
-                    </option>
-                  ))}
-                </select>
+                  onChange={onClient}
+                  placeholder="— выбери клиента —"
+                  searchPlaceholder="Поиск по названию…"
+                  emptyText="Клиент не найден"
+                />
               </div>
               <div>
                 <Label htmlFor="wo-deal">Договор</Label>
@@ -373,20 +397,16 @@ export function WorkOrderDialog({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="wo-object">Объект</Label>
-                <select
+                <Combobox
                   id="wo-object"
-                  className={fieldClass}
+                  options={objectOptions}
                   value={objectId}
-                  onChange={(e) => loadObject(e.target.value)}
+                  onChange={loadObject}
+                  placeholder="— объект —"
+                  searchPlaceholder="Поиск по имени или адресу…"
+                  emptyText="Объект не найден"
                   disabled={!client}
-                >
-                  <option value="">— объект —</option>
-                  {client?.objects.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
               <div>
                 <Label htmlFor="wo-master">Мастер</Label>

@@ -41,6 +41,10 @@ export type WorkOrderObjectService = {
 export type WorkOrderObject = {
   id: string;
   name: string;
+  // Метка (object_type) + адрес — чтобы различать одноимённые объекты сетей
+  // (напр. Гончаров «Хадыжи»: 31 магазин с одинаковым именем) в выпадашке наряда.
+  objectType: string | null;
+  address: string;
   areaM2: string | null;
   services: WorkOrderObjectService[];
 };
@@ -112,6 +116,8 @@ export async function getWorkOrderFormData(clientId?: string): Promise<WorkOrder
         .select({
           id: clientObjects.id,
           name: clientObjects.name,
+          objectType: clientObjects.objectType,
+          address: clientObjects.address,
           areaM2: clientObjects.areaM2,
           clientId: clientObjects.clientId,
         })
@@ -166,7 +172,14 @@ export async function getWorkOrderFormData(clientId?: string): Promise<WorkOrder
   const objByClient = new Map<string, WorkOrderObject[]>();
   for (const o of objectRows) {
     const arr = objByClient.get(o.clientId) ?? [];
-    arr.push({ id: o.id, name: o.name, areaM2: o.areaM2, services: svcByObject.get(o.id) ?? [] });
+    arr.push({
+      id: o.id,
+      name: o.name,
+      objectType: o.objectType,
+      address: o.address,
+      areaM2: o.areaM2,
+      services: svcByObject.get(o.id) ?? [],
+    });
     objByClient.set(o.clientId, arr);
   }
 
