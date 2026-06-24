@@ -472,7 +472,10 @@ export function WorkOrderDialog({
                         <option value="__custom__">— своя услуга —</option>
                         {data.catalog.map((c) => (
                           <option key={c.id} value={c.id}>
-                            {c.shortName ?? c.name}
+                            {/* Полное название (с видом в скобках) — у Регины несколько услуг
+                                с одинаковым коротким именем «Дезинсекция», но разным видом
+                                (тараканы/осы/муравьи). Короткое имя их не различало. */}
+                            {c.name}
                           </option>
                         ))}
                       </select>

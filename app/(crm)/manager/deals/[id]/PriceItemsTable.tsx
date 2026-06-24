@@ -363,7 +363,9 @@ function PriceItemDialog({
                 <option value="">— своя услуга —</option>
                 {services.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.shortName ?? s.name}
+                    {/* Полное название (с видом) — короткое имя у нескольких услуг
+                        совпадает («Дезинсекция»), различает только полное. */}
+                    {s.name}
                   </option>
                 ))}
               </select>
