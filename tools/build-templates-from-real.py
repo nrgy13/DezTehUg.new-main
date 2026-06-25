@@ -37,7 +37,9 @@ import re
 import sys
 from docx import Document
 from docx.shared import Pt
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 
 ROOT = __import__('os').path.abspath(__import__('os').path.join(__import__('os').path.dirname(__file__), '..'))
 
@@ -89,6 +91,28 @@ def append_run(p, text):
                 new_r._r.insert(0, copy.deepcopy(rpr))
             break
     return new_r
+
+
+def set_paragraph_parts(p, parts):
+    """Пересоздать параграф из частей [(text, bold)], сохранив базовый формат
+    (size/font) первого текстового run, но переопределив жирность по каждой части.
+    Нужно когда set_merge схлопнул бы смешанное форматирование (напр. преамбула,
+    где жирное только название компании)."""
+    base_rpr = None
+    for r in p.runs:
+        if not has_drawing(r) and r.text.strip():
+            el = r._r.find(qn('w:rPr'))
+            if el is not None:
+                base_rpr = copy.deepcopy(el)
+            break
+    for r in list(p.runs):
+        if not has_drawing(r):
+            r._r.getparent().remove(r._r)
+    for text, bold in parts:
+        run = p.add_run(text)
+        if base_rpr is not None:
+            run._r.insert(0, copy.deepcopy(base_rpr))
+        run.bold = bold
 
 
 def table_to_object_cycle(t, header_rows=1):
@@ -150,6 +174,56 @@ def fill_signature_cell(cell):
             set_merge(p, SIG_INITIALS.sub('/{client.directorShort}/', t))
         elif "директор" in t.lower():
             set_merge(p, "{client.directorRole} {client.shortName}")
+
+
+def set_table_cell_margins(table, top=60, bottom=60, left=120, right=120):
+    """Задать внутренние отступы ячеек таблицы (в twips) — чтобы текст не лип к границам.
+    Действует на всю таблицу через tblPr/tblCellMar (сохраняется при повторе цикла)."""
+    tblPr = table._tbl.tblPr
+    existing = tblPr.find(qn('w:tblCellMar'))
+    if existing is not None:
+        tblPr.remove(existing)
+    mar = OxmlElement('w:tblCellMar')
+    for side, val in (('top', top), ('left', left), ('bottom', bottom), ('right', right)):
+        el = OxmlElement(f'w:{side}')
+        el.set(qn('w:w'), str(val))
+        el.set(qn('w:type'), 'dxa')
+        mar.append(el)
+    tblPr.append(mar)
+
+
+def space_before_paragraph(p, pts=18):
+    """Добавить вертикальный отступ перед параграфом (для «Подписи сторон» и т.п.)."""
+    p.paragraph_format.space_before = Pt(pts)
+
+
+def finalize_signatures(t, empty=2):
+    """Привести ОБЕ ячейки подписи к одинаковому жёсткому виду:
+    [строка имени/роли][empty пустых][строка подписи /Фамилия/].
+    Так и верхняя строка, и подпись стоят на одном уровне в обеих колонках,
+    независимо от исходной (разной в TABLE 1/3/6) структуры ячеек."""
+    for c in t.rows[0].cells:
+        title = next((p for p in c.paragraphs
+                      if full_text(p).strip() and '____' not in full_text(p)), None)
+        sign = next((p for p in c.paragraphs if '____' in full_text(p)), None)
+        if title is None or sign is None:
+            continue
+        # снять переносы и в заголовке (TABLE6: «\nИП Белавина» — ведущий перенос сдвигал
+        # имя вниз), и в строке подписи (set_merge мог оставить <w:br>/буквальный \n)
+        for p in (title, sign):
+            for r in p.runs:
+                for br in r._r.findall(qn('w:br')):
+                    r._r.remove(br)
+                if '\n' in r.text:
+                    r.text = r.text.replace('\n', '')
+        # оставить только заголовок и подпись, убрав весь остальной (пустой) мусор
+        keep = {title._p, sign._p}
+        for p in list(c.paragraphs):
+            if p._p not in keep:
+                p._p.getparent().remove(p._p)
+        # вставить ровно `empty` пустых параграфов между заголовком и подписью
+        for _ in range(empty):
+            sign.insert_paragraph_before('')
 
 
 # Реквизиты Заказчика (правая ячейка TABLE 0): якорь в исходной строке → новый текст параграфа.
@@ -282,9 +356,9 @@ def build_avr():
     replace_run(p0, "_____", "№{act.number} ", whole=True)  # «№ _____ _» → «№{act.number} » (пробел перед «от»)
     replace_run(p0, "30.03.2026", "{act.date}", whole=True)  # «30.03.2026 г.» → «{act.date}» (уже с «г.»)
 
-    # Заказчик + ИНН (чистые текстовые параграфы — склейка через set_merge)
+    # Заказчик (обычный) + ИНН (метка жирная, значение обычное — как в оригинале)
     set_merge(find("«Аппетит»"), "{client.shortName}")
-    set_merge(find("ИНН: 2320155529"), "ИНН: {client.inn}")
+    set_paragraph_parts(find("ИНН: 2320155529"), [("ИНН: ", True), ("{client.inn}", False)])
 
     # Контакт заказчика (есть переносы \n → точечно)
     p_ct = find("Александр Витальевич Сафронов")
@@ -296,18 +370,21 @@ def build_avr():
     replace_run(p_di, "Нечепоренко", "{act.disinfector}", whole=True)
     replace_run(p_di, "Д.И.", "", whole=True)
 
-    # Ссылка на договор (чистый абзац) — собираем заново, чтобы не задвоить год/«г.»
-    set_merge(
-        find("является неотъемлемой частью Договора"),
-        "2. Настоящий АКТ является неотъемлемой частью Договора №{contract.number} "
-        "от {contract.date}, оформлен в установленном порядке, содержит перечень "
-        "выполняемых работ, предоставленных «Исполнителем»",
-    )
+    # Ссылка на договор — собираем заново (не задвоить год/«г.»); № и дата жирные (как в оригинале)
+    set_paragraph_parts(find("является неотъемлемой частью Договора"), [
+        ("2. Настоящий АКТ является неотъемлемой частью Договора ", False),
+        ("№", True),
+        ("{contract.number} ", False),
+        ("от {contract.date}", True),
+        (", оформлен в установленном порядке, содержит перечень выполняемых работ, "
+         "предоставленных «Исполнителем»", False),
+    ])
 
-    # Уполномоченное лицо (АВТО, решение Сани) — дописываем значение справа от метки
-    append_run(find("Фамилия Имя Отчество"), "{act.responsibleName}")
-    append_run(find("Должность"), "{act.responsibleRole}")
-    append_run(find("Телефон"), "{act.responsiblePhone}")
+    # Уполномоченное лицо (АВТО, решение Сани) — «метка: значение» вместо прочерка-табуляции
+    # (иначе значение прилипало в конец линии и длинный телефон переносился на 2 строки)
+    set_merge(find("Фамилия Имя Отчество"), "Фамилия Имя Отчество: {act.responsibleName}")
+    set_merge(find("Должность"), "Должность: {act.responsibleRole}")
+    set_merge(find("Телефон"), "Телефон: {act.responsiblePhone}")
 
     # Таблица объектов/услуг → цикл {#objectServices} (как в АО)
     table_to_object_cycle(doc.tables[0], header_rows=1)
@@ -342,13 +419,15 @@ def build_dogovor():
     set_merge(find("ДОГОВОР НА ОКАЗАНИЕ УСЛУГ"), "ДОГОВОР НА ОКАЗАНИЕ УСЛУГ №{contract.number}")
     set_merge(find("Дата заключения"), "Дата заключения: {contract.date}")
     set_merge(find("Место заключения"), "Место заключения: {contract.place}")
-    # Вводный абзац Заказчика (статика Исполнителя выше — НЕ трогаем)
-    set_merge(
-        find("заключили договор о нижеследующем"),
-        "и {client.fullName}, в лице {client.directorRole} {client.directorName}, "
-        "действующего на основании {client.actingBasis}, именуемое в дальнейшем «Заказчик» "
-        "с другой стороны, вместе именуемые «Стороны», заключили договор о нижеследующем:",
-    )
+    # Вводный абзац Заказчика (статика Исполнителя выше — НЕ трогаем).
+    # Название компании — жирное (как в оригинале), остальное обычное.
+    set_paragraph_parts(find("заключили договор о нижеследующем"), [
+        ("и ", False),
+        ("{client.fullName}", True),
+        (", в лице {client.directorRole} {client.directorName}, действующего на основании "
+         "{client.actingBasis}, именуемое в дальнейшем «Заказчик» с другой стороны, "
+         "вместе именуемые «Стороны», заключили договор о нижеследующем:", False),
+    ])
     # Срок действия (8.1)
     set_merge(
         find("Договор вступает в силу"),
@@ -366,10 +445,9 @@ def build_dogovor():
     for p in P:
         if full_text(p).strip().startswith("от 01 января"):
             set_merge(p, "от {contract.date}")
-    # Заголовок прайса — убрать конкретный объект (артефакт договора АРУМ), оставить «СТОИМОСТЬ УСЛУГ»
-    p_price = find("СТОИМОСТЬ УСЛУГ")
-    for needle in ["с. Небуг", "ороссийское", "помещение 13", "Hidens", "»"]:
-        replace_run(p_price, needle, "", whole=True)
+    # Заголовок прайса — убрать конкретный объект (артефакт договора АРУМ) + лишние
+    # пустые строки от него; оставить просто «СТОИМОСТЬ УСЛУГ»
+    set_merge(find("СТОИМОСТЬ УСЛУГ"), "СТОИМОСТЬ УСЛУГ")
     # Дата начала работ
     set_merge(
         find("Дата начала работ"),
@@ -378,11 +456,16 @@ def build_dogovor():
 
     # Реквизиты Заказчика (TABLE0, правая ячейка)
     fill_requisites_cell(doc.tables[0].rows[0].cells[1], REQ_RULES)
-    # Подписи Заказчика (TABLE 1/3/6, правая ячейка)
+    # Подписи Заказчика (TABLE 1/3/6, правая ячейка) + выравнивание подписей по низу
     for ti in (1, 3, 6):
         fill_signature_cell(doc.tables[ti].rows[0].cells[1])
+        finalize_signatures(doc.tables[ti])
     # Прайс клиента (TABLE4) → цикл {#priceItems}
     table_to_price_cycle(doc.tables[4])
+    # Отступ перед заголовками «Подписи сторон» (а то прижато к таблице выше)
+    for p in doc.paragraphs:
+        if full_text(p).strip() == "Подписи сторон":
+            space_before_paragraph(p, 18)
 
     doc.save(out)
     print("OK dogovor ->", out)
@@ -415,11 +498,15 @@ def build_ds():
     set_merge(find("на оказание услуг от"), "на оказание услуг от {contract.date}")
     set_merge(find("Дата заключения"), "Дата заключения: {addendum.date}")
     set_merge(find("Место заключения"), "Место заключения: {addendum.place}")
-    # Преамбула Заказчика (точь-в-точь ДС — без «в лице директора», он в подписи)
-    set_merge(find("заключили договор о нижеследующем"),
-              "и {client.fullName}, действующего на основании {client.actingBasis}, "
-              "именуемое в дальнейшем «Заказчик» с другой стороны, вместе именуемые "
-              "«Стороны», заключили договор о нижеследующем:")
+    # Преамбула Заказчика (точь-в-точь ДС — без «в лице директора», он в подписи).
+    # Название компании и слово «Заказчик» — жирные (как в оригинале).
+    set_paragraph_parts(find("заключили договор о нижеследующем"), [
+        ("и ", False),
+        ("{client.fullName}", True),
+        (", действующего на основании {client.actingBasis}, именуемое в дальнейшем ", False),
+        ("«Заказчик»", True),
+        (" с другой стороны, вместе именуемые «Стороны», заключили договор о нижеследующем:", False),
+    ])
     # Отсылка к Приложению №2 договора (номер договора + дата договора)
     set_merge(find("дополнить следующими данными"),
               "Приложение №2 к Договору №{contract.number} на оказание услуг по проведению "
@@ -429,17 +516,27 @@ def build_ds():
     # Ссылки на таблицы ДО структурных правок (индексы сдвинутся после удаления)
     t_price0, t_price1, t_req, t_sign = doc.tables[0], doc.tables[1], doc.tables[2], doc.tables[3]
 
-    # МУЛЬТИ-ОБЪЕКТ: P12 → открыть внешний цикл (заголовок объекта), P13 → закрыть
-    set_merge(find("столовая СОК Анапа Нептун"),
-              "{#priceItemsByObject}{objectName} ({objectAddress})")
+    # МУЛЬТИ-ОБЪЕКТ: открывающий/закрывающий теги — в ОТДЕЛЬНЫХ параграфах, а заголовок
+    # объекта внутри цикла одним параграфом. Иначе docxtemplater тащит формат P12 на 1-й
+    # объект, P13 — на 2-й (заголовки получались разного вида). Пустой параграф открытия
+    # даёт ещё и отступ между блоками объектов.
+    p_obj = find("столовая СОК Анапа Нептун")  # P12 — формат заголовка (жирный, центр)
+    p_obj.insert_paragraph_before("{#priceItemsByObject}")
+    set_merge(p_obj, "{objectName} ({objectAddress})")
     set_merge(find("Курортная Деревня"), "{/priceItemsByObject}")
     # TABLE0 — вложенный цикл строк {#items}; TABLE1 (дубль 2-го объекта) удаляем
     table_to_items_cycle(t_price0)
+    set_table_cell_margins(t_price0, top=60, bottom=60, left=120, right=120)  # воздух в ячейках
     t_price1._tbl.getparent().remove(t_price1._tbl)
 
-    # Реквизиты Заказчика (правая ячейка) + подпись Заказчика
+    # Реквизиты Заказчика (правая ячейка) + подпись Заказчика (выровнять по низу)
     fill_requisites_cell(t_req.rows[0].cells[1], DS_REQ_RULES)
     fill_signature_cell(t_sign.rows[0].cells[1])
+    finalize_signatures(t_sign)
+    # Отступ перед «Подписи сторон»
+    for p in doc.paragraphs:
+        if full_text(p).strip() == "Подписи сторон":
+            space_before_paragraph(p, 18)
 
     doc.save(out)
     print("OK ds ->", out)

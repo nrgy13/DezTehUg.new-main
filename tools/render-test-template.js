@@ -47,6 +47,9 @@ const data = {
     { objectName: 'Склад', objectAddress: 'г. Тест, ул. Складская, 5', items: [
       { index: 1, serviceName: 'Дезинсекция', area: '250', priceNet: '7 142,86', vatLine: '357,14', priceGross: '7 500,00', frequency: 'Ежемесячно' },
     ] },
+    { objectName: 'Цех №3', objectAddress: 'г. Тест, пр. Заводской, 12', items: [
+      { index: 1, serviceName: 'Дератизация', area: '80', priceNet: '1 904,76', vatLine: '95,24', priceGross: '2 000,00', frequency: 'По заявке' },
+    ] },
   ],
   totalNet: '4 761,90', totalGross: '5 000,00', vatAmount: '238,10', services: 'Дезинсекция — 100 м²',
 };
