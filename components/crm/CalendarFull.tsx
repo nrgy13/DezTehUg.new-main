@@ -449,9 +449,11 @@ export function CalendarFull({
           )}
         </div>
 
-        {/* Статусы выезда */}
+        {/* Статусы выезда (в активном календаре только planned/in_progress — completed уходят в Историю) */}
         <div className="flex flex-wrap gap-1">
-          {Object.entries(STATUS_LABEL).map(([key, label]) => {
+          {Object.entries(STATUS_LABEL)
+            .filter(([key]) => key !== 'completed')
+            .map(([key, label]) => {
             const cnt = statusCounts[key] ?? 0;
             const active = statusFilter.has(key);
             return (

@@ -1,7 +1,12 @@
 import { requireRole } from '@/lib/auth/helpers';
-import { getDealEvents, serializeForClient } from '@/lib/calendar/deal-events';
+import {
+  getDealEvents,
+  getVisitHistory,
+  serializeForClient,
+  serializeVisitHistory,
+} from '@/lib/calendar/deal-events';
 import { getObjectReminders } from '@/lib/calendar/object-reminders';
-import { CalendarFull } from '@/components/crm/CalendarFull';
+import { CalendarWithHistory } from '@/components/crm/CalendarWithHistory';
 import { PageTitle } from '@/components/crm/PageTitle';
 import { getWorkOrderFormData } from './work-order-actions';
 import { WorkOrderLauncher } from './WorkOrderLauncher';
@@ -13,16 +18,18 @@ export const dynamic = 'force-dynamic';
 export default async function ManagerCalendarPage() {
   const user = await requireRole('manager');
   const isAdmin = user.role === 'admin';
-  const [events, workOrderData, reminders] = await Promise.all([
+  const [events, history, workOrderData, reminders] = await Promise.all([
     getDealEvents({
       kind: 'manager',
       userId: user.id,
       isAdmin,
     }),
+    getVisitHistory({ kind: 'manager', userId: user.id, isAdmin }),
     getWorkOrderFormData(),
     getObjectReminders({ userId: user.id, isAdmin }),
   ]);
   const serialized = serializeForClient(events);
+  const historySerialized = serializeVisitHistory(history);
 
   return (
     <div className="space-y-4">
@@ -31,7 +38,12 @@ export default async function ManagerCalendarPage() {
         <WorkOrderLauncher data={workOrderData} />
       </div>
       <ObjectRemindersPanel reminders={reminders} formData={workOrderData} />
-      <CalendarFull events={serialized} dealHrefBase="/manager/deals" canDragDates />
+      <CalendarWithHistory
+        active={serialized}
+        history={historySerialized}
+        dealHrefBase="/manager/deals"
+        canDragDates
+      />
     </div>
   );
 }

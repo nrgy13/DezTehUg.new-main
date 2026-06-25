@@ -1,13 +1,14 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
-import { eq, and, gte, or, asc, inArray } from 'drizzle-orm';
+import { eq, and, gte, or, asc, desc, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { deals, dealPriceItems, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
+import { dealChecklistItems } from '@/lib/db/schema/checklists';
 
 // SERVER-ONLY: запросы для календарей.
 // Sprint 6: календарь показывает ВЫЕЗДЫ (work_logs), не периоды сделок.
@@ -104,13 +105,17 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
   // Объект заказ-наряда — напрямую по dealWorkLogs.objectId (а не через позицию прайса).
   const woObjects = alias(clientObjects, 'wo_object');
 
-  const conditions = [] as Array<ReturnType<typeof eq>>;
+  const conditions: SQL[] = [];
 
   // Мастер видит только свои выезды. Менеджер/админ — ВСЕ выезды (Релиз B:
   // операционный календарь общий, менеджер по факту один, мастера общие).
   if (mode.kind === 'master') {
     conditions.push(eq(dealWorkLogs.masterId, mode.userId));
   }
+
+  // Активный календарь — только запланированные и в работе.
+  // Выполненные выезды уходят в отдельную «Историю» (getVisitHistory).
+  conditions.push(inArray(dealWorkLogs.status, ['planned', 'in_progress']));
 
   // Берём только выезды с датой в окне (или вообще без даты — покажем в «no-date»)
   conditions.push(
@@ -191,6 +196,9 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
     let start: Date | null = null;
     let end: Date | null = null;
 
+    // NB: completed-выезды отфильтрованы из этого запроса (inArray planned/in_progress выше),
+    // поэтому ветка completed недостижима — выполненные обрабатываются в getVisitHistory.
+    // Оставлена для полноты switch по статусу.
     if (status === 'completed') {
       start = r.performedAt ?? r.startedAt ?? r.plannedAt;
       end = r.finalizedAt ?? (start ? addHours(start, DEFAULT_VISIT_HOURS) : null);
@@ -304,4 +312,154 @@ export function groupByWeek(events: DealEvent[]): EventGroup[] {
     out.push({ key: 'no-date', label: 'Без даты', events: map.get('no-date')! });
   }
   return out;
+}
+
+// ─── История выполненных выездов ──────────────────────────────
+export type VisitHistoryItem = {
+  /** workLogId. */
+  id: string;
+  dealId: string;
+  contractNumber: string;
+  clientShortName: string | null;
+  /** Мастер, выполнивший выезд (work_log.masterId, не назначенный по сделке). */
+  masterName: string | null;
+  objectName: string | null;
+  /** Дата выполнения (performedAt ?? finalizedAt ?? startedAt ?? plannedAt). */
+  completedAt: Date | null;
+  services: string[];
+  preparations: string | null;
+  checklistDone: number;
+  checklistTotal: number;
+};
+
+/**
+ * История выполненных выездов (status = completed). БЕЗ ограничения по давности —
+ * вся история, новые сверху (по дате выполнения). Для вкладки «История» в
+ * календаре менеджера и кабинете мастера.
+ */
+export async function getVisitHistory(mode: Mode): Promise<VisitHistoryItem[]> {
+  const masterAlias = alias(users, 'master_user');
+  const woObjects = alias(clientObjects, 'wo_object');
+
+  const conditions: SQL[] = [eq(dealWorkLogs.status, 'completed')];
+  if (mode.kind === 'master') {
+    conditions.push(eq(dealWorkLogs.masterId, mode.userId));
+  }
+
+  const rows = await db
+    .select({
+      workLogId: dealWorkLogs.id,
+      preparations: dealWorkLogs.preparations,
+      plannedAt: dealWorkLogs.plannedAt,
+      startedAt: dealWorkLogs.startedAt,
+      performedAt: dealWorkLogs.performedAt,
+      finalizedAt: dealWorkLogs.finalizedAt,
+      dealId: deals.id,
+      contractNumber: deals.contractNumber,
+      clientShortName: clients.shortName,
+      serviceShortName: services.shortName,
+      serviceName: services.name,
+      customName: dealPriceItems.customName,
+      objectName: clientObjects.name,
+      workLogObjectId: dealWorkLogs.objectId,
+      woObjectName: woObjects.name,
+      masterFullName: masterAlias.fullName,
+    })
+    .from(dealWorkLogs)
+    .leftJoin(deals, eq(deals.id, dealWorkLogs.dealId))
+    .leftJoin(clients, eq(clients.id, deals.clientId))
+    .leftJoin(dealPriceItems, eq(dealPriceItems.id, dealWorkLogs.priceItemId))
+    .leftJoin(services, eq(services.id, dealPriceItems.serviceId))
+    .leftJoin(clientObjects, eq(clientObjects.id, dealPriceItems.objectId))
+    .leftJoin(woObjects, eq(woObjects.id, dealWorkLogs.objectId))
+    .leftJoin(masterAlias, eq(masterAlias.id, dealWorkLogs.masterId))
+    .where(and(...conditions))
+    // Предохранитель от неограниченного роста истории. finalizedAt у completed всегда
+    // проставлен (finalizeVisit). Точный порядок (по completedAt) — in-memory sort ниже.
+    .orderBy(desc(dealWorkLogs.finalizedAt))
+    .limit(500);
+
+  const wlIds = rows.map((r) => r.workLogId);
+
+  // Услуги заказ-нарядов берём из snapshot (несколько услуг на выезд).
+  const svcByWl = new Map<string, string[]>();
+  const woIds = rows.filter((r) => r.workLogObjectId).map((r) => r.workLogId);
+  if (woIds.length > 0) {
+    const woSvc = await db
+      .select({
+        workLogId: dealWorkLogServices.workLogId,
+        customName: dealWorkLogServices.customName,
+        serviceName: services.name,
+        serviceShortName: services.shortName,
+      })
+      .from(dealWorkLogServices)
+      .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
+      .where(inArray(dealWorkLogServices.workLogId, woIds))
+      .orderBy(asc(dealWorkLogServices.sortOrder));
+    for (const s of woSvc) {
+      const label = s.customName || s.serviceShortName || s.serviceName || 'Услуга';
+      const arr = svcByWl.get(s.workLogId) ?? [];
+      arr.push(label);
+      svcByWl.set(s.workLogId, arr);
+    }
+  }
+
+  // Чеклист: done/total на каждый выезд (in-memory подсчёт).
+  const doneByWl = new Map<string, number>();
+  const totalByWl = new Map<string, number>();
+  if (wlIds.length > 0) {
+    const items = await db
+      .select({ workLogId: dealChecklistItems.workLogId, status: dealChecklistItems.status })
+      .from(dealChecklistItems)
+      .where(inArray(dealChecklistItems.workLogId, wlIds));
+    for (const it of items) {
+      totalByWl.set(it.workLogId, (totalByWl.get(it.workLogId) ?? 0) + 1);
+      if (it.status === 'done') {
+        doneByWl.set(it.workLogId, (doneByWl.get(it.workLogId) ?? 0) + 1);
+      }
+    }
+  }
+
+  const out: VisitHistoryItem[] = rows.map((r) => {
+    const completedAt = r.performedAt ?? r.finalizedAt ?? r.startedAt ?? r.plannedAt;
+    const woServices = svcByWl.get(r.workLogId);
+    const visitServices =
+      woServices && woServices.length > 0
+        ? woServices
+        : [r.customName || r.serviceShortName || r.serviceName || 'Без услуги'];
+    return {
+      id: r.workLogId,
+      dealId: r.dealId ?? '',
+      contractNumber: r.contractNumber ?? '—',
+      clientShortName: r.clientShortName,
+      masterName: r.masterFullName,
+      objectName: r.woObjectName ?? r.objectName,
+      completedAt,
+      services: visitServices,
+      preparations: r.preparations,
+      checklistDone: doneByWl.get(r.workLogId) ?? 0,
+      checklistTotal: totalByWl.get(r.workLogId) ?? 0,
+    };
+  });
+
+  // Новые сверху — по дате выполнения.
+  out.sort((a, b) => {
+    const ta = a.completedAt ? a.completedAt.getTime() : 0;
+    const tb = b.completedAt ? b.completedAt.getTime() : 0;
+    return tb - ta;
+  });
+
+  return out;
+}
+
+export type SerializedVisitHistoryItem = Omit<VisitHistoryItem, 'completedAt'> & {
+  completedAt: string | null;
+};
+
+/** Сериализует историю для client component (Date → ISO). */
+export function serializeVisitHistory(items: VisitHistoryItem[]): SerializedVisitHistoryItem[] {
+  return items.map((i) => ({
+    ...i,
+    completedAt: i.completedAt ? i.completedAt.toISOString() : null,
+  }));
 }
