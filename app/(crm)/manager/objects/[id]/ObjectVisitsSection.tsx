@@ -3,11 +3,26 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, CalendarClock, Wrench, FlaskConical, ListChecks, ExternalLink } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  Copy,
+  Loader2,
+  CalendarClock,
+  Wrench,
+  FlaskConical,
+  ListChecks,
+  ExternalLink,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { WorkOrderDialog } from '@/components/crm/WorkOrderDialog';
-import { deleteWorkOrder, type WorkOrderFormData } from '@/app/(crm)/manager/calendar/work-order-actions';
+import {
+  deleteWorkOrder,
+  getWorkOrderDuplicateData,
+  type WorkOrderFormData,
+  type WorkOrderDuplicateData,
+} from '@/app/(crm)/manager/calendar/work-order-actions';
 
 export type ObjectVisitView = {
   id: string;
@@ -49,6 +64,9 @@ export function ObjectVisitsSection({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Дублирование: снимок наряда + полное дерево → форма-копия (можно сменить цель).
+  const [dup, setDup] = useState<Extract<WorkOrderDuplicateData, { ok: true }> | null>(null);
+  const [dupLoadingId, setDupLoadingId] = useState<string | null>(null);
 
   function handleDelete(id: string) {
     if (!confirm('Удалить запланированный выезд? Действие необратимо.')) return;
@@ -65,6 +83,22 @@ export function ObjectVisitsSection({
     });
   }
 
+  function handleDuplicate(id: string) {
+    if (dupLoadingId) return; // не плодим параллельные загрузки копии (гонка показа чужих данных)
+    setDupLoadingId(id);
+    startTransition(async () => {
+      try {
+        const res = await getWorkOrderDuplicateData(id);
+        if (res.ok) setDup(res);
+        else toast.error(res.error);
+      } catch {
+        toast.error('Не удалось загрузить наряд для копирования');
+      } finally {
+        setDupLoadingId(null);
+      }
+    });
+  }
+
   return (
     <CyberpunkCard variant="default" hoverEffect={false} className="p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -74,7 +108,8 @@ export function ObjectVisitsSection({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neon-orange border border-neon-orange/40 rounded hover:bg-neon-orange/10"
+          disabled={dupLoadingId !== null || dup !== null}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neon-orange border border-neon-orange/40 rounded hover:bg-neon-orange/10 disabled:opacity-50 disabled:pointer-events-none"
         >
           <Plus className="w-3.5 h-3.5" />
           Создать выезд
@@ -119,6 +154,20 @@ export function ObjectVisitsSection({
                       <ExternalLink className="w-3 h-3" />В договоре
                     </Link>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => handleDuplicate(v.id)}
+                    disabled={dupLoadingId !== null}
+                    className="p-1.5 text-content-muted hover:text-neon-orange hover:bg-neon-orange/10 rounded border border-gray-200 disabled:opacity-50"
+                    title="Дублировать наряд (можно перенести на другой объект/договор)"
+                    aria-label="Дублировать наряд"
+                  >
+                    {dupLoadingId === v.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                   {v.status === 'planned' && (
                     <button
                       type="button"
@@ -171,6 +220,14 @@ export function ObjectVisitsSection({
           data={formData}
           preset={{ clientId, dealId: dealId ?? undefined, objectId }}
           onClose={() => setOpen(false)}
+        />
+      )}
+
+      {dup && (
+        <WorkOrderDialog
+          data={dup.formData}
+          duplicatePrefill={dup.prefill}
+          onClose={() => setDup(null)}
         />
       )}
     </CyberpunkCard>

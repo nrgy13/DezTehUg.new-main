@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import {
   Plus,
   Trash2,
+  Copy,
+  Loader2,
   ChevronDown,
   ChevronRight,
   CheckCircle2,
@@ -20,7 +22,12 @@ import {
 } from 'lucide-react';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { WorkOrderDialog } from '@/components/crm/WorkOrderDialog';
-import { deleteWorkOrder, type WorkOrderFormData } from '@/app/(crm)/manager/calendar/work-order-actions';
+import {
+  deleteWorkOrder,
+  getWorkOrderDuplicateData,
+  type WorkOrderFormData,
+  type WorkOrderDuplicateData,
+} from '@/app/(crm)/manager/calendar/work-order-actions';
 
 export type VisitItemView = {
   id: string;
@@ -80,6 +87,9 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Дублирование: подгружаем снимок наряда + полное дерево, открываем форму-копию.
+  const [dup, setDup] = useState<Extract<WorkOrderDuplicateData, { ok: true }> | null>(null);
+  const [dupLoadingId, setDupLoadingId] = useState<string | null>(null);
 
   function toggle(workLogId: string) {
     setExpanded((prev) => {
@@ -105,6 +115,22 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
     });
   }
 
+  function handleDuplicate(id: string) {
+    if (dupLoadingId) return; // не плодим параллельные загрузки копии (гонка показа чужих данных)
+    setDupLoadingId(id);
+    startTransition(async () => {
+      try {
+        const res = await getWorkOrderDuplicateData(id);
+        if (res.ok) setDup(res);
+        else toast.error(res.error);
+      } catch {
+        toast.error('Не удалось загрузить наряд для копирования');
+      } finally {
+        setDupLoadingId(null);
+      }
+    });
+  }
+
   const hasAnyVisit = groups.some((g) => g.visits.length > 0);
 
   return (
@@ -116,7 +142,8 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neon-orange border border-neon-orange/40 rounded hover:bg-neon-orange/10"
+          disabled={dupLoadingId !== null || dup !== null}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neon-orange border border-neon-orange/40 rounded hover:bg-neon-orange/10 disabled:opacity-50 disabled:pointer-events-none"
         >
           <Plus className="w-3.5 h-3.5" />
           Заказ-наряд
@@ -175,6 +202,9 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
                         onToggle={() => toggle(v.id)}
                         onDelete={() => handleDelete(v.id)}
                         deleting={isPending && deletingId === v.id}
+                        onDuplicate={() => handleDuplicate(v.id)}
+                        duplicating={dupLoadingId === v.id}
+                        dupBusy={dupLoadingId !== null}
                       />
                     ))}
                   </ul>
@@ -196,6 +226,9 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
                           onToggle={() => toggle(v.id)}
                           onDelete={() => handleDelete(v.id)}
                           deleting={isPending && deletingId === v.id}
+                          onDuplicate={() => handleDuplicate(v.id)}
+                          duplicating={dupLoadingId === v.id}
+                          dupBusy={dupLoadingId !== null}
                         />
                       ))}
                     </ul>
@@ -213,6 +246,14 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
           onClose={() => setOpen(false)}
         />
       )}
+
+      {dup && (
+        <WorkOrderDialog
+          data={dup.formData}
+          duplicatePrefill={dup.prefill}
+          onClose={() => setDup(null)}
+        />
+      )}
     </div>
   );
 }
@@ -224,12 +265,18 @@ function VisitListItem({
   onToggle,
   onDelete,
   deleting,
+  onDuplicate,
+  duplicating,
+  dupBusy,
 }: {
   v: VisitView;
   isOpen: boolean;
   onToggle: () => void;
   onDelete: () => void;
   deleting: boolean;
+  onDuplicate: () => void;
+  duplicating: boolean;
+  dupBusy: boolean;
 }) {
   const doneCount = v.items.filter((i) => i.status === 'done').length;
   const naCount = v.items.filter((i) => i.status === 'na').length;
@@ -280,18 +327,34 @@ function VisitListItem({
             )}
           </div>
         </button>
-        {v.status === 'planned' && (
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             type="button"
-            onClick={onDelete}
-            disabled={deleting}
-            className="flex-shrink-0 p-1.5 text-content-muted hover:text-red-600 hover:bg-red-50 rounded border border-gray-200 disabled:opacity-50"
-            title="Удалить выезд"
-            aria-label="Удалить выезд"
+            onClick={onDuplicate}
+            disabled={dupBusy}
+            className="p-1.5 text-content-muted hover:text-neon-orange hover:bg-neon-orange/10 rounded border border-gray-200 disabled:opacity-50"
+            title="Дублировать наряд (можно перенести на другой объект/договор)"
+            aria-label="Дублировать наряд"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            {duplicating ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
           </button>
-        )}
+          {v.status === 'planned' && (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={deleting}
+              className="p-1.5 text-content-muted hover:text-red-600 hover:bg-red-50 rounded border border-gray-200 disabled:opacity-50"
+              title="Удалить выезд"
+              aria-label="Удалить выезд"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {isOpen && v.items.length > 0 && (

@@ -24,6 +24,9 @@ import {
   getLastOrderChecklist,
   type WorkOrderFormData,
   type WorkOrderChecklistDefault,
+  type WorkOrderDefaultService,
+  type WorkOrderDuplicateService,
+  type WorkOrderDuplicatePrefill,
 } from '@/app/(crm)/manager/calendar/work-order-actions';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
@@ -83,6 +86,32 @@ function trimNum(s: string | null): string {
   return Number.isFinite(n) ? String(n) : s;
 }
 
+// Услуга-дефолт (из последнего наряда / дубля) → строка формы.
+function svcToRow(s: WorkOrderDefaultService): SvcRow {
+  return {
+    serviceId: s.serviceId ?? '',
+    customName: s.customName ?? '',
+    method: s.method ?? '',
+    unit: s.unit,
+    quantity: trimNum(s.quantity),
+  };
+}
+
+// Услуга дубля → строка формы. Если услуга деактивирована (нет в активном каталоге) —
+// показываем её как «свою» с именем-снимком, иначе select был бы пустым без поля ввода.
+function dupSvcToRow(s: WorkOrderDuplicateService, catalogIds: Set<string>): SvcRow {
+  if (s.serviceId && !catalogIds.has(s.serviceId)) {
+    return {
+      serviceId: '',
+      customName: s.customName ?? s.serviceName ?? '',
+      method: s.method ?? '',
+      unit: s.unit,
+      quantity: trimNum(s.quantity),
+    };
+  }
+  return svcToRow(s);
+}
+
 /**
  * Форма заказ-наряда. Рендерить только когда открыт (вызывающий: `{open && <... />}`),
  * чтобы preset применялся при каждом открытии. Используется из календаря (кнопка),
@@ -91,27 +120,46 @@ function trimNum(s: string | null): string {
 export function WorkOrderDialog({
   data,
   preset,
+  duplicatePrefill,
   onClose,
   onCreated,
 }: {
   data: WorkOrderFormData;
   preset?: WorkOrderPreset;
+  /**
+   * Режим дублирования: форма открывается с данными конкретного наряда (клиент/договор/
+   * объект/мастер/услуги/препараты/чеклист), дата пустая. Поля цели редактируемы — копию
+   * можно перенести на другой объект/договор/клиента (услуги/чеклист не перетираются).
+   */
+  duplicatePrefill?: WorkOrderDuplicatePrefill;
   onClose: () => void;
   onCreated?: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const hasClients = data.clients.length > 0;
+  const isDuplicate = !!duplicatePrefill;
 
-  const [clientId, setClientId] = useState(preset?.clientId ?? '');
-  const [dealId, setDealId] = useState(preset?.dealId ?? '');
-  const [objectId, setObjectId] = useState('');
-  const [masterId, setMasterId] = useState('');
+  const [clientId, setClientId] = useState(duplicatePrefill?.clientId ?? preset?.clientId ?? '');
+  const [dealId, setDealId] = useState(duplicatePrefill?.dealId ?? preset?.dealId ?? '');
+  const [objectId, setObjectId] = useState(duplicatePrefill?.objectId ?? '');
+  // Мастер дубля — только если он ещё мастер (мог сменить роль/уволиться); иначе пусто.
+  const [masterId, setMasterId] = useState(
+    duplicatePrefill?.masterId && data.masters.some((m) => m.id === duplicatePrefill.masterId)
+      ? duplicatePrefill.masterId
+      : '',
+  );
   const [plannedAt, setPlannedAt] = useState(preset?.plannedAtLocal ?? ''); // datetime-local
-  const [preparations, setPreparations] = useState('');
-  const [rows, setRows] = useState<SvcRow[]>([]);
+  const [preparations, setPreparations] = useState(duplicatePrefill?.preparations ?? '');
+  const [rows, setRows] = useState<SvcRow[]>(() => {
+    if (!duplicatePrefill) return [];
+    const catalogIds = new Set(data.catalog.map((c) => c.id));
+    return duplicatePrefill.services.map((s) => dupSvcToRow(s, catalogIds));
+  });
   const [loadingDefaults, setLoadingDefaults] = useState(false);
-  const [checklist, setChecklist] = useState<ChecklistRow[]>([]);
+  const [checklist, setChecklist] = useState<ChecklistRow[]>(
+    duplicatePrefill ? toChkRows(duplicatePrefill.checklist) : [],
+  );
   const [chkLoading, setChkLoading] = useState(false);
   const [pendingInsert, setPendingInsert] = useState<{
     items: ChecklistRow[];
@@ -145,6 +193,9 @@ export function WorkOrderDialog({
   async function loadObject(v: string) {
     setObjectId(v);
     setPendingInsert(null);
+    // Режим дубля: услуги/препараты/чеклист уже скопированы из исходного наряда —
+    // смена объекта (перенос копии) НЕ должна затирать их дефолтами целевого объекта.
+    if (isDuplicate) return;
     if (!v) {
       setRows([]);
       setChecklist([]);
@@ -153,15 +204,7 @@ export function WorkOrderDialog({
     setLoadingDefaults(true);
     try {
       const d = await getObjectWorkOrderDefaults(v);
-      setRows(
-        d.services.map((s) => ({
-          serviceId: s.serviceId ?? '',
-          customName: s.customName ?? '',
-          method: s.method ?? '',
-          unit: s.unit,
-          quantity: trimNum(s.quantity),
-        })),
-      );
+      setRows(d.services.map(svcToRow));
       setChecklist(toChkRows(d.checklist));
       if (d.source === 'last_order') {
         setPreparations(d.preparations ?? '');
@@ -174,6 +217,8 @@ export function WorkOrderDialog({
 
   // Применяем preset при открытии (объект → подгружаем дефолты).
   useEffect(() => {
+    // В режиме дубля данные уже подставлены из duplicatePrefill — дефолты по объекту не тянем.
+    if (isDuplicate) return;
     if (preset?.objectId) {
       // Подстраховка: combobox объекта показывает подпись из опций, а опции зависят
       // от выбранного клиента. Если caller дал objectId без clientId — выведем клиента
@@ -191,9 +236,12 @@ export function WorkOrderDialog({
     setClientId(v);
     setDealId('');
     setObjectId('');
-    setRows([]);
-    setChecklist([]);
     setPendingInsert(null);
+    // В режиме дубля услуги/чеклист/препараты переносятся на нового клиента — не чистим.
+    if (!isDuplicate) {
+      setRows([]);
+      setChecklist([]);
+    }
   }
 
   // ── Чеклист: ручные правки ──
@@ -297,6 +345,12 @@ export function WorkOrderDialog({
       toast.error('Выбери мастера');
       return;
     }
+    // Дубль создаёт копию → дата обязательна (иначе молча уйдёт наряд без даты,
+    // вопреки подсказке «поставь новую дату»).
+    if (isDuplicate && !plannedAt) {
+      toast.error('Поставь дату выезда для копии');
+      return;
+    }
     const services = rows
       .filter((r) => r.serviceId || r.customName.trim())
       .map((r) => ({
@@ -349,9 +403,16 @@ export function WorkOrderDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-orbitron uppercase tracking-wide">
-            Новый заказ-наряд
+            {isDuplicate ? 'Дублировать заказ-наряд' : 'Новый заказ-наряд'}
           </DialogTitle>
         </DialogHeader>
+
+        {isDuplicate && hasClients && (
+          <p className="text-xs text-content-muted -mt-1">
+            Скопировано из наряда. Поставь новую дату; при необходимости смени объект, договор
+            или клиента — услуги, препараты и чеклист перенесутся.
+          </p>
+        )}
 
         {!hasClients ? (
           <p className="text-sm text-content-muted py-6 text-center">
@@ -442,7 +503,12 @@ export function WorkOrderDialog({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <Label>
-                  Услуги {objectId ? '(из прошлого наряда — можно править)' : ''}
+                  Услуги{' '}
+                  {isDuplicate
+                    ? '(скопировано — можно править)'
+                    : objectId
+                      ? '(из прошлого наряда — можно править)'
+                      : ''}
                   {loadingDefaults && (
                     <Loader2 className="inline w-3 h-3 ml-1.5 animate-spin text-content-muted" />
                   )}

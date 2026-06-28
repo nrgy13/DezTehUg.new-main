@@ -88,6 +88,29 @@ export type WorkOrderDefaults = {
 };
 
 /**
+ * Снимок конкретного наряда для дублирования: всё, кроме даты (её ставят заново).
+ * В отличие от getObjectWorkOrderDefaults (берёт ПОСЛЕДНИЙ наряд объекта) — это
+ * данные ИМЕННО выбранного наряда. clientId/dealId/objectId — исходная цель, но в
+ * форме их можно сменить (перенос копии на другой объект/договор/клиента).
+ */
+/** Услуга-снимок дубля + имя из каталога (для fallback, если услуга деактивирована). */
+export type WorkOrderDuplicateService = WorkOrderDefaultService & {
+  serviceName: string | null;
+};
+export type WorkOrderDuplicatePrefill = {
+  clientId: string;
+  dealId: string;
+  objectId: string;
+  masterId: string | null;
+  preparations: string | null;
+  services: WorkOrderDuplicateService[];
+  checklist: WorkOrderChecklistDefault[];
+};
+export type WorkOrderDuplicateData =
+  | { ok: true; formData: WorkOrderFormData; prefill: WorkOrderDuplicatePrefill }
+  | { ok: false; error: string };
+
+/**
  * Дерево клиент → { договоры, объекты } для формы заказ-наряда.
  * Объект и договор выбираются НЕЗАВИСИМО (объект = адрес клиента, договор =
  * основание). Показываем клиентов, у кого есть хотя бы один договор И один объект.
@@ -662,4 +685,97 @@ export async function getLastOrderChecklist(
     source: 'manager' as const,
     sourceTemplateId: null,
   }));
+}
+
+// ─── Дублирование наряда ──────────────────────────────────────
+/**
+ * Данные для формы «Дублировать наряд»: снимок выбранного наряда (услуги, препараты,
+ * мастер, чеклист менеджера/шаблона) + ПОЛНОЕ дерево клиентов, чтобы копию можно было
+ * перенести на другой объект/договор/клиента. Дату форма ставит заново (защита от
+ * дубля на тот же день). Чеклист-пункты мастера конкретного выезда НЕ копируются.
+ */
+export async function getWorkOrderDuplicateData(
+  workLogId: string,
+): Promise<WorkOrderDuplicateData> {
+  const actor = await getManager();
+  if (!actor) return { ok: false, error: 'Нет доступа' };
+
+  const [wl] = await db
+    .select({
+      id: dealWorkLogs.id,
+      dealId: dealWorkLogs.dealId,
+      objectId: dealWorkLogs.objectId,
+      masterId: dealWorkLogs.masterId,
+      preparations: dealWorkLogs.preparations,
+      clientId: deals.clientId,
+    })
+    .from(dealWorkLogs)
+    .innerJoin(deals, eq(dealWorkLogs.dealId, deals.id))
+    .where(eq(dealWorkLogs.id, workLogId))
+    .limit(1);
+  if (!wl) return { ok: false, error: 'Наряд не найден' };
+  if (!wl.objectId) {
+    return { ok: false, error: 'У наряда нет объекта — копировать нечего' };
+  }
+
+  const [formData, svc, chk] = await Promise.all([
+    // Полное дерево (без clientId) — чтобы цель копии можно было сменить.
+    getWorkOrderFormData(),
+    db
+      .select({
+        serviceId: dealWorkLogServices.serviceId,
+        customName: dealWorkLogServices.customName,
+        serviceName: services.name,
+        method: dealWorkLogServices.method,
+        unit: dealWorkLogServices.unit,
+        quantity: dealWorkLogServices.quantity,
+      })
+      .from(dealWorkLogServices)
+      .leftJoin(services, eq(dealWorkLogServices.serviceId, services.id))
+      .where(eq(dealWorkLogServices.workLogId, wl.id))
+      .orderBy(asc(dealWorkLogServices.sortOrder)),
+    db
+      .select({
+        title: dealChecklistItems.title,
+        description: dealChecklistItems.description,
+        required: dealChecklistItems.required,
+      })
+      .from(dealChecklistItems)
+      // Только пункты менеджера/шаблона — НЕ мастерские добавления конкретного выезда.
+      .where(
+        and(
+          eq(dealChecklistItems.workLogId, wl.id),
+          inArray(dealChecklistItems.source, ['template', 'manager']),
+        ),
+      )
+      .orderBy(asc(dealChecklistItems.position)),
+  ]);
+
+  return {
+    ok: true,
+    formData,
+    prefill: {
+      clientId: wl.clientId,
+      dealId: wl.dealId,
+      objectId: wl.objectId,
+      masterId: wl.masterId,
+      preparations: wl.preparations,
+      services: svc.map((s) => ({
+        serviceId: s.serviceId,
+        customName: s.customName,
+        serviceName: s.serviceName,
+        method: s.method,
+        unit: s.unit,
+        quantity: s.quantity,
+      })),
+      // Скопированные пункты переходят во владение менеджеру (как в getLastOrderChecklist).
+      checklist: chk.map((c) => ({
+        title: c.title,
+        description: c.description,
+        required: c.required,
+        source: 'manager' as const,
+        sourceTemplateId: null,
+      })),
+    },
+  };
 }
