@@ -14,6 +14,7 @@ import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { ClientTypeBadge } from '@/components/crm/ClientStatusBadge';
 import { DealStatusBadge } from '@/components/crm/DealStatusBadge';
 import { ClientStatusControl } from '../ClientStatusControl';
+import { ClientCategoryControl } from '../ClientCategoryControl';
 import { CreateDealButton } from './CreateDealButton';
 import { DeleteClientButton } from './DeleteClientButton';
 import { ClientObjectsList } from './ClientObjectsList';
@@ -71,9 +72,10 @@ export default async function ClientCardPage({
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
             <PageTitle>{client.shortName}</PageTitle>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <ClientTypeBadge type={client.type} />
               <ClientStatusControl clientId={client.id} initial={client.status} />
+              <ClientCategoryControl clientId={client.id} initial={client.category} />
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -365,6 +367,7 @@ const ACTION_LABEL: Record<string, string> = {
   'client.create': 'Создан клиент',
   'client.update': 'Обновлены реквизиты',
   'client.status_change': 'Изменён статус',
+  'client.category_change': 'Изменена категория',
   'object.create': 'Добавлен объект',
   'object.update': 'Обновлён объект',
   'object.delete': 'Удалён объект',

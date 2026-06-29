@@ -23,6 +23,15 @@ export const clientSourceEnum = pgEnum('client_source', [
   'other',
 ]);
 
+// Категория клиента — информационная метка для директора (НЕ статус жизненного цикла).
+// new=Новый, old=Старый, permanent=Постоянный, tender=Тендер.
+export const clientCategoryEnum = pgEnum('client_category', [
+  'new',
+  'old',
+  'permanent',
+  'tender',
+]);
+
 export const clients = pgTable('clients', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
 
@@ -55,6 +64,8 @@ export const clients = pgTable('clients', {
   // Метаданные
   source: clientSourceEnum('source').notNull().default('manager'),
   status: clientStatusEnum('status').notNull().default('lead'),
+  // Категория для директора. Дефолт 'old' — при миграции 0020 все текущие клиенты = «Старый».
+  category: clientCategoryEnum('category').notNull().default('old'),
   notes: text('notes'),
 
   // Зарезервировано для будущих расширений (не ломая миграции)
@@ -73,5 +84,6 @@ export const clients = pgTable('clients', {
 export type ClientType = (typeof clientTypeEnum.enumValues)[number];
 export type ClientStatus = (typeof clientStatusEnum.enumValues)[number];
 export type ClientSource = (typeof clientSourceEnum.enumValues)[number];
+export type ClientCategory = (typeof clientCategoryEnum.enumValues)[number];
 export type Client = typeof clients.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;

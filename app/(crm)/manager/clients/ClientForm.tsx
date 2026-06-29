@@ -39,6 +39,7 @@ export function ClientForm({ mode, initial }: Props) {
         notes: initial.notes ?? undefined,
         source: initial.source,
         status: initial.status,
+        category: initial.category,
         assignedManagerId: initial.assignedManagerId ?? undefined,
         inn: initial.inn ?? undefined,
         ...(initial.type === 'legal'
@@ -59,6 +60,7 @@ export function ClientForm({ mode, initial }: Props) {
         type: 'legal',
         source: 'manager',
         status: 'lead',
+        category: 'new',
       };
 
   const {
@@ -385,6 +387,17 @@ export function ClientForm({ mode, initial }: Props) {
               <option value="active">Активный</option>
               <option value="inactive">Неактивный</option>
               <option value="blocked">Заблокирован</option>
+            </select>
+          </Field>
+          <Field label="Категория" error={errors.category?.message} className="md:col-span-2">
+            <select
+              {...register('category')}
+              className="h-11 w-full rounded-md bg-bg-primary px-3 text-sm border border-gray-200 focus:border-poison-green focus:ring-2 focus:ring-poison-green/20 focus:outline-none"
+            >
+              <option value="new">Новый</option>
+              <option value="old">Старый</option>
+              <option value="permanent">Постоянный</option>
+              <option value="tender">Тендер</option>
             </select>
           </Field>
           <Field label="Заметки менеджера" error={errors.notes?.message} className="md:col-span-2">

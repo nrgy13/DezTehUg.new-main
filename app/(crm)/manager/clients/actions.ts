@@ -16,6 +16,7 @@ import {
   clientFormSchema,
   clientObjectSchema,
   updateClientStatusSchema,
+  updateClientCategorySchema,
   type ObjectServiceInput,
 } from './schemas';
 
@@ -167,6 +168,33 @@ export async function updateClientStatus(rawInput: unknown): Promise<Result> {
   await logActivity(actor.id, 'client.status_change', 'client', id, {
     from: existing.status,
     to: status,
+  });
+
+  revalidatePath('/manager/clients');
+  revalidatePath(`/manager/clients/${id}`);
+
+  return { ok: true, data: undefined };
+}
+
+export async function updateClientCategory(rawInput: unknown): Promise<Result> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Не авторизован' };
+
+  const parsed = updateClientCategorySchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.errors[0].message };
+  const { id, category } = parsed.data;
+
+  const [existing] = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
+  if (!existing) return { ok: false, error: 'Клиент не найден' };
+
+  await db
+    .update(clients)
+    .set({ category, updatedAt: new Date() })
+    .where(eq(clients.id, id));
+
+  await logActivity(actor.id, 'client.category_change', 'client', id, {
+    from: existing.category,
+    to: category,
   });
 
   revalidatePath('/manager/clients');

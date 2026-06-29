@@ -36,6 +36,8 @@ const baseFields = {
   notes: optionalTrimmed,
   source: z.enum(['website', 'phone', 'manager', 'recurring', 'referral', 'other']),
   status: z.enum(['lead', 'active', 'inactive', 'blocked']),
+  // Категория-метка для директора. default('old') — safety net, если форма не прислала значение.
+  category: z.enum(['new', 'old', 'permanent', 'tender']).default('old'),
   assignedManagerId: z
     .string()
     .uuid('Некорректный ID менеджера')
@@ -98,6 +100,11 @@ export const clientFormSchema = z.discriminatedUnion('type', [
 export const updateClientStatusSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(['lead', 'active', 'inactive', 'blocked']),
+});
+
+export const updateClientCategorySchema = z.object({
+  id: z.string().uuid(),
+  category: z.enum(['new', 'old', 'permanent', 'tender']),
 });
 
 // === Услуга объекта (Sprint 9: несколько услуг на объект) ===

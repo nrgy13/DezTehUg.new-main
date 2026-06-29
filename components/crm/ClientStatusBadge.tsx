@@ -1,4 +1,4 @@
-import type { ClientStatus, ClientType } from '@/lib/db/schema/clients';
+import type { ClientStatus, ClientType, ClientCategory } from '@/lib/db/schema/clients';
 
 const STATUS_STYLE: Record<ClientStatus, { bg: string; text: string; border: string; label: string }> = {
   lead: {
@@ -32,6 +32,34 @@ const TYPE_LABEL: Record<ClientType, string> = {
   individual: 'Физлицо',
 };
 
+// Категория клиента (метка для директора). 4 различимых цвета палитры.
+const CATEGORY_STYLE: Record<ClientCategory, { bg: string; text: string; border: string; label: string }> = {
+  new: {
+    bg: 'bg-electric-blue/10',
+    text: 'text-electric-blue',
+    border: 'border-electric-blue/40',
+    label: 'Новый',
+  },
+  old: {
+    bg: 'bg-content-muted/10',
+    text: 'text-content-muted',
+    border: 'border-content-muted/40',
+    label: 'Старый',
+  },
+  permanent: {
+    bg: 'bg-poison-green/10',
+    text: 'text-poison-green',
+    border: 'border-poison-green/40',
+    label: 'Постоянный',
+  },
+  tender: {
+    bg: 'bg-purple-50',
+    text: 'text-purple-600',
+    border: 'border-purple-300',
+    label: 'Тендер',
+  },
+};
+
 export function ClientStatusBadge({ status }: { status: ClientStatus }) {
   const s = STATUS_STYLE[status];
   return (
@@ -52,6 +80,17 @@ export function ClientTypeBadge({ type }: { type: ClientType }) {
       }`}
     >
       {TYPE_LABEL[type]}
+    </span>
+  );
+}
+
+export function ClientCategoryBadge({ category }: { category: ClientCategory }) {
+  const s = CATEGORY_STYLE[category];
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-orbitron font-medium uppercase tracking-tight border ${s.bg} ${s.text} ${s.border}`}
+    >
+      {s.label}
     </span>
   );
 }

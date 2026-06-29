@@ -3,10 +3,18 @@ import { and, or, eq, ilike, desc, sql, count } from 'drizzle-orm';
 import { Plus, Search } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
-import { clients, type ClientStatus, type ClientType } from '@/lib/db/schema/clients';
+import {
+  clients,
+  clientTypeEnum,
+  clientStatusEnum,
+  clientCategoryEnum,
+  type ClientStatus,
+  type ClientType,
+  type ClientCategory,
+} from '@/lib/db/schema/clients';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
-import { ClientStatusBadge, ClientTypeBadge } from '@/components/crm/ClientStatusBadge';
+import { ClientStatusBadge, ClientTypeBadge, ClientCategoryBadge } from '@/components/crm/ClientStatusBadge';
 import { PageTitle } from '@/components/crm/PageTitle';
 
 export const metadata = { title: 'Клиенты — ДезТехЮг CRM' };
@@ -18,6 +26,7 @@ type SearchParams = {
   q?: string;
   type?: ClientType | 'all';
   status?: ClientStatus | 'all';
+  category?: ClientCategory | 'all';
   mine?: '1';
   page?: string;
 };
@@ -31,8 +40,20 @@ export default async function ClientsListPage({
   const sp = await searchParams;
 
   const q = sp.q?.trim() ?? '';
-  const filterType = sp.type && sp.type !== 'all' ? sp.type : undefined;
-  const filterStatus = sp.status && sp.status !== 'all' ? sp.status : undefined;
+  // Валидируем enum-значения из URL перед запросом: мусорный ?type=bogus/?category=bogus иначе
+  // вызовет ошибку каста enum в PostgreSQL → 500. Невалидное или 'all' → фильтр не применяется.
+  const filterType =
+    sp.type && (clientTypeEnum.enumValues as readonly string[]).includes(sp.type)
+      ? (sp.type as ClientType)
+      : undefined;
+  const filterStatus =
+    sp.status && (clientStatusEnum.enumValues as readonly string[]).includes(sp.status)
+      ? (sp.status as ClientStatus)
+      : undefined;
+  const filterCategory =
+    sp.category && (clientCategoryEnum.enumValues as readonly string[]).includes(sp.category)
+      ? (sp.category as ClientCategory)
+      : undefined;
   const onlyMine = sp.mine === '1';
   const page = Math.max(1, Number(sp.page) || 1);
   const offset = (page - 1) * PAGE_SIZE;
@@ -51,6 +72,7 @@ export default async function ClientsListPage({
   }
   if (filterType) conditions.push(eq(clients.type, filterType));
   if (filterStatus) conditions.push(eq(clients.status, filterStatus));
+  if (filterCategory) conditions.push(eq(clients.category, filterCategory));
   if (onlyMine) conditions.push(eq(clients.assignedManagerId, user.id));
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -69,6 +91,7 @@ export default async function ClientsListPage({
       phone: clients.phone,
       email: clients.email,
       status: clients.status,
+      category: clients.category,
       createdAt: clients.createdAt,
     })
     .from(clients)
@@ -96,7 +119,7 @@ export default async function ClientsListPage({
 
       <CyberpunkCard variant="default" hoverEffect={false} className="p-4">
         <form className="grid grid-cols-1 md:grid-cols-12 gap-3" action="" method="get">
-          <div className="md:col-span-5 relative">
+          <div className="md:col-span-12 relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-content-muted pointer-events-none" />
             <input
               type="text"
@@ -109,7 +132,7 @@ export default async function ClientsListPage({
           <select
             name="type"
             defaultValue={sp.type ?? 'all'}
-            className="md:col-span-2 h-11 rounded-md bg-bg-primary px-3 text-sm border border-gray-200 focus:border-poison-green focus:ring-2 focus:ring-poison-green/20 focus:outline-none"
+            className="md:col-span-3 h-11 rounded-md bg-bg-primary px-3 text-sm border border-gray-200 focus:border-poison-green focus:ring-2 focus:ring-poison-green/20 focus:outline-none"
           >
             <option value="all">Все типы</option>
             <option value="legal">Юрлица</option>
@@ -118,13 +141,24 @@ export default async function ClientsListPage({
           <select
             name="status"
             defaultValue={sp.status ?? 'all'}
-            className="md:col-span-2 h-11 rounded-md bg-bg-primary px-3 text-sm border border-gray-200 focus:border-poison-green focus:ring-2 focus:ring-poison-green/20 focus:outline-none"
+            className="md:col-span-3 h-11 rounded-md bg-bg-primary px-3 text-sm border border-gray-200 focus:border-poison-green focus:ring-2 focus:ring-poison-green/20 focus:outline-none"
           >
             <option value="all">Все статусы</option>
             <option value="lead">Лиды</option>
             <option value="active">Активные</option>
             <option value="inactive">Неактивные</option>
             <option value="blocked">Заблокированы</option>
+          </select>
+          <select
+            name="category"
+            defaultValue={sp.category ?? 'all'}
+            className="md:col-span-3 h-11 rounded-md bg-bg-primary px-3 text-sm border border-gray-200 focus:border-poison-green focus:ring-2 focus:ring-poison-green/20 focus:outline-none"
+          >
+            <option value="all">Все категории</option>
+            <option value="new">Новый</option>
+            <option value="old">Старый</option>
+            <option value="permanent">Постоянный</option>
+            <option value="tender">Тендер</option>
           </select>
           <label className="md:col-span-2 flex items-center gap-2 text-sm text-content-secondary cursor-pointer">
             <input
@@ -145,11 +179,11 @@ export default async function ClientsListPage({
       {rows.length === 0 ? (
         <CyberpunkCard variant="default" hoverEffect={false} className="p-10 text-center">
           <p className="text-content-muted text-sm">
-            {q || filterType || filterStatus || onlyMine
+            {q || filterType || filterStatus || filterCategory || onlyMine
               ? 'По вашему запросу ничего не найдено. Попробуйте изменить фильтры.'
               : 'Пока ни одного клиента нет.'}
           </p>
-          {!q && !filterType && !filterStatus && !onlyMine && (
+          {!q && !filterType && !filterStatus && !filterCategory && !onlyMine && (
             <div className="mt-4">
               <CyberpunkButton href="/manager/clients/new" variant="primary">
                 Создать первого
@@ -168,6 +202,7 @@ export default async function ClientsListPage({
                 <Th>ИНН</Th>
                 <Th>Контакты</Th>
                 <Th>Статус</Th>
+                <Th>Категория</Th>
               </tr>
             </thead>
             <tbody>
@@ -197,6 +232,9 @@ export default async function ClientsListPage({
                   <td className="px-4 py-3">
                     <ClientStatusBadge status={c.status} />
                   </td>
+                  <td className="px-4 py-3">
+                    <ClientCategoryBadge category={c.category} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -216,6 +254,7 @@ export default async function ClientsListPage({
                 </div>
                 <div className="flex items-center flex-wrap gap-2 mb-1.5">
                   <ClientTypeBadge type={c.type} />
+                  <ClientCategoryBadge category={c.category} />
                   {c.inn && (
                     <span className="font-mono text-xs text-content-muted">ИНН {c.inn}</span>
                   )}
@@ -259,6 +298,7 @@ function Pagination({
     if (sp.q) params.set('q', sp.q);
     if (sp.type) params.set('type', sp.type);
     if (sp.status) params.set('status', sp.status);
+    if (sp.category) params.set('category', sp.category);
     if (sp.mine) params.set('mine', sp.mine);
     params.set('page', String(page));
     return `?${params.toString()}`;
