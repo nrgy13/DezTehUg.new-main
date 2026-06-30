@@ -13,6 +13,7 @@ import type { EventClickArg, EventContentArg, EventDropArg, DatesSetArg } from '
 import { Search, X, Calendar as CalendarIcon, Phone, Wrench, User as UserIcon, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { updateVisitPlannedAt } from '@/app/(crm)/manager/deals/[id]/visits-actions';
+import { VisitActButtons } from '@/components/crm/VisitActButtons';
 import './calendar.css';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -147,11 +148,14 @@ export function CalendarFull({
   events,
   dealHrefBase,
   canDragDates = false,
+  canGenerateActs = false,
 }: {
   events: SerializedDealEvent[];
   dealHrefBase: string;
   /** Может ли пользователь переносить даты drag-n-drop (manager/admin = true, master = false) */
   canDragDates?: boolean;
+  /** Показывать кнопки генерации актов (АО/АВР) на карточке выезда — только manager/admin. */
+  canGenerateActs?: boolean;
 }) {
   const router = useRouter();
   const calendarRef = useRef<FullCalendar | null>(null);
@@ -532,7 +536,12 @@ export function CalendarFull({
               </span>
             </div>
             <div className="relative overflow-y-auto flex-1 min-h-0 pr-1">
-              <VisitsList groups={dayGroups} dealHrefBase={dealHrefBase} onHoverDay={setHoveredDate} />
+              <VisitsList
+                groups={dayGroups}
+                dealHrefBase={dealHrefBase}
+                onHoverDay={setHoveredDate}
+                canGenerateActs={canGenerateActs}
+              />
             </div>
           </div>
 
@@ -638,11 +647,14 @@ function VisitsList({
   groups,
   dealHrefBase,
   onHoverDay,
+  canGenerateActs,
 }: {
   groups: VisitDayGroup[];
   dealHrefBase: string;
   /** Подсветить день в календаре (key=YYYY-MM-DD) или снять подсветку (null). */
   onHoverDay: (key: string | null) => void;
+  /** Кнопки генерации актов на карточке выезда (только manager/admin). */
+  canGenerateActs: boolean;
 }) {
   if (groups.length === 0) {
     return (
@@ -664,8 +676,8 @@ function VisitsList({
             onMouseLeave={() => onHoverDay(null)}
           >
             {g.events.map((e) => (
+              <div key={e.id}>
               <a
-                key={e.id}
                 href={visitHref(dealHrefBase, e)}
                 className="block px-3 py-2.5 rounded-lg border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors"
                 style={{ borderLeftWidth: 3, borderLeftColor: STATUS_BORDER[e.status] ?? '#94a3b8' }}
@@ -736,6 +748,12 @@ function VisitsList({
                   </div>
                 )}
               </a>
+              {canGenerateActs && e.objectName !== null && (
+                <div className="flex items-center gap-1 mt-1 mb-1 pl-3">
+                  <VisitActButtons dealId={e.dealId} workLogId={e.id} />
+                </div>
+              )}
+              </div>
             ))}
           </div>
         </div>

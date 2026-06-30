@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { WorkOrderDialog } from '@/components/crm/WorkOrderDialog';
+import { VisitActButtons } from '@/components/crm/VisitActButtons';
 import {
   deleteWorkOrder,
   getWorkOrderDuplicateData,
@@ -198,6 +199,8 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
                       <VisitListItem
                         key={v.id}
                         v={v}
+                        dealId={dealId}
+                        hasObject={g.objectId !== null}
                         isOpen={expanded.has(v.id)}
                         onToggle={() => toggle(v.id)}
                         onDelete={() => handleDelete(v.id)}
@@ -222,6 +225,8 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
                         <VisitListItem
                           key={v.id}
                           v={v}
+                          dealId={dealId}
+                          hasObject={g.objectId !== null}
                           isOpen={expanded.has(v.id)}
                           onToggle={() => toggle(v.id)}
                           onDelete={() => handleDelete(v.id)}
@@ -261,6 +266,8 @@ export function VisitsTab({ dealId, clientId, formData, groups }: Props) {
 // Один выезд в списке (раскрывается чеклист). Удаление доступно только для planned.
 function VisitListItem({
   v,
+  dealId,
+  hasObject,
   isOpen,
   onToggle,
   onDelete,
@@ -270,6 +277,8 @@ function VisitListItem({
   dupBusy,
 }: {
   v: VisitView;
+  dealId: string;
+  hasObject: boolean;
   isOpen: boolean;
   onToggle: () => void;
   onDelete: () => void;
@@ -328,6 +337,7 @@ function VisitListItem({
           </div>
         </button>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {hasObject && <VisitActButtons dealId={dealId} workLogId={v.id} />}
           <button
             type="button"
             onClick={onDuplicate}

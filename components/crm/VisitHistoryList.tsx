@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Search, X, MapPin, Wrench, User as UserIcon, FlaskConical, ListChecks } from 'lucide-react';
 import type { SerializedVisitHistoryItem } from '@/lib/calendar/deal-events';
+import { VisitActButtons } from '@/components/crm/VisitActButtons';
 
 // Ссылка на выезд: у мастера — на страницу выезда, у менеджера — на сделку (таб «Выезды»).
 function historyHref(hrefBase: string, item: SerializedVisitHistoryItem): string {
@@ -60,9 +61,12 @@ function timeOnly(iso: string | null): string {
 export function VisitHistoryList({
   items,
   hrefBase,
+  canGenerateActs = false,
 }: {
   items: SerializedVisitHistoryItem[];
   hrefBase: string;
+  /** Кнопки генерации актов (АО/АВР) на карточке выезда — только manager/admin. */
+  canGenerateActs?: boolean;
 }) {
   const [search, setSearch] = useState('');
 
@@ -119,8 +123,8 @@ export function VisitHistoryList({
               </div>
               <div className="space-y-2">
                 {g.items.map((it) => (
+                  <div key={it.id}>
                   <a
-                    key={it.id}
                     href={historyHref(hrefBase, it)}
                     className="block px-3 py-2.5 rounded-lg border border-gray-200 hover:border-neon-orange/40 hover:bg-neon-orange/5 transition-colors"
                     style={{ borderLeftWidth: 3, borderLeftColor: '#10b981' }}
@@ -188,6 +192,12 @@ export function VisitHistoryList({
                       </div>
                     )}
                   </a>
+                  {canGenerateActs && it.dealId && it.objectName && (
+                    <div className="flex items-center gap-1 mt-1 mb-1 pl-3">
+                      <VisitActButtons dealId={it.dealId} workLogId={it.id} />
+                    </div>
+                  )}
+                  </div>
                 ))}
               </div>
             </div>

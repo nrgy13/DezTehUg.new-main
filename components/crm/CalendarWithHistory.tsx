@@ -19,11 +19,14 @@ export function CalendarWithHistory({
   history,
   dealHrefBase,
   canDragDates = false,
+  canGenerateActs = false,
 }: {
   active: SerializedDealEvent[];
   history: SerializedVisitHistoryItem[];
   dealHrefBase: string;
   canDragDates?: boolean;
+  /** Кнопки генерации актов (АО/АВР) на карточках выездов — только manager/admin. */
+  canGenerateActs?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('active');
 
@@ -60,9 +63,14 @@ export function CalendarWithHistory({
       </div>
 
       {tab === 'active' ? (
-        <CalendarFull events={active} dealHrefBase={dealHrefBase} canDragDates={canDragDates} />
+        <CalendarFull
+          events={active}
+          dealHrefBase={dealHrefBase}
+          canDragDates={canDragDates}
+          canGenerateActs={canGenerateActs}
+        />
       ) : (
-        <VisitHistoryList items={history} hrefBase={dealHrefBase} />
+        <VisitHistoryList items={history} hrefBase={dealHrefBase} canGenerateActs={canGenerateActs} />
       )}
     </div>
   );

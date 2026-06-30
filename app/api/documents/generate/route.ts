@@ -18,6 +18,9 @@ const inputSchema = z.object({
   overrides: z.record(z.unknown()).optional(),
   priceItemIds: z.array(z.string().uuid()).optional(),
   objectId: z.string().uuid().optional(),
+  // Вариант «акт по снимку выезда»: услуги/мастер/дата берутся из этого заказ-наряда,
+  // а не из объекта. objectId/dealId выводятся из выезда внутри генератора.
+  workLogId: z.string().uuid().optional(),
 });
 
 export async function POST(request: Request) {
@@ -47,7 +50,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { type, dealId, addendumId, clientId, format, overrides, priceItemIds, objectId } =
+  const { type, dealId, addendumId, clientId, format, overrides, priceItemIds, objectId, workLogId } =
     parsed.data;
 
   if (!dealId && !clientId) {
@@ -68,6 +71,7 @@ export async function POST(request: Request) {
       actorId: session.user.id,
       priceItemIds,
       objectId,
+      workLogId,
     });
 
     await db.insert(activityLog).values({

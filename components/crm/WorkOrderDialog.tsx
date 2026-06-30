@@ -183,7 +183,10 @@ export function WorkOrderDialog({
     () =>
       (client?.objects ?? []).map((o) => ({
         value: o.id,
-        label: `${o.name}${o.objectType ? ` — ${o.objectType}` : ''}${o.address ? ` · ${o.address}` : ''}`,
+        // Имя + метка на первой строке, адрес — ОТДЕЛЬНОЙ строкой (description): у сетей
+        // (Хадыжи: 31 магазин с одним именем) различает только адрес, в одной строке он резался.
+        label: `${o.name}${o.objectType ? ` — ${o.objectType}` : ''}`,
+        description: o.address ?? undefined,
         keywords: [o.name, o.objectType, o.address].filter((x): x is string => !!x),
       })),
     [client],

@@ -2,7 +2,14 @@ import { eq, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { clients, type Client } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
-import { deals, dealPriceItems, dealAddendums, dealWorkLogs, type Deal } from '@/lib/db/schema/deals';
+import {
+  deals,
+  dealPriceItems,
+  dealAddendums,
+  dealWorkLogs,
+  dealWorkLogServices,
+  type Deal,
+} from '@/lib/db/schema/deals';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
 import { CONTRACT_PROVIDER } from '@/lib/contract-provider';
@@ -27,6 +34,9 @@ export type BuildContext = {
   /** Sprint 9: если задано — акт по конкретному объекту (АО/АВР). Сужает прайс и
    *  список объектов до этого объекта. */
   objectId?: string;
+  /** Акт по снимку выезда (АО/АВР по наряду): услуги из dealWorkLogServices, мастер/дата
+   *  из выезда, объект выводится из него. Если не задан — генерация по объекту как раньше. */
+  workLogId?: string;
 };
 
 /**
@@ -51,6 +61,42 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
     const cRows = await db.select().from(clients).where(eq(clients.id, ctx.clientId)).limit(1);
     client = cRows[0] ?? null;
   }
+
+  // Вариант «акт по снимку выезда» (АО/АВР по конкретному наряду): грузим выезд — из него
+  // берём объект, мастера, дату и услуги (snapshot dealWorkLogServices) вместо данных объекта.
+  // workLogId не задан → visit=null, вся логика ниже работает по объекту как раньше.
+  let visit: {
+    id: string;
+    objectId: string | null;
+    masterId: string;
+    performedAt: Date | null;
+    plannedAt: Date | null;
+    areaM2: number | null;
+  } | null = null;
+  if (ctx.workLogId) {
+    const vRows = await db
+      .select({
+        id: dealWorkLogs.id,
+        objectId: dealWorkLogs.objectId,
+        masterId: dealWorkLogs.masterId,
+        performedAt: dealWorkLogs.performedAt,
+        plannedAt: dealWorkLogs.plannedAt,
+        areaM2: dealWorkLogs.areaM2,
+      })
+      .from(dealWorkLogs)
+      .where(eq(dealWorkLogs.id, ctx.workLogId))
+      .limit(1);
+    visit = vRows[0] ?? null;
+    // Выезд мог быть удалён (гонка: открыли список → наряд удалили → нажали «АО»).
+    // Без явной ошибки сгенерился бы пустой акт с присвоенным номером — лучше упасть.
+    if (!visit) throw new Error(`Выезд ${ctx.workLogId} не найден`);
+  }
+
+  // Объект акта: явный ctx.objectId, иначе — объект выезда. Сужает прайс/объекты/услуги.
+  const objectId = ctx.objectId ?? visit?.objectId ?? undefined;
+  // Дата выезда (для даты акта в варианте по наряду) — факт выполнения или плановая.
+  const visitDateIso =
+    (visit?.performedAt ?? visit?.plannedAt)?.toISOString().slice(0, 10) ?? null;
 
   // Объекты клиента
   const objects = client
@@ -85,8 +131,8 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
     : [];
 
   // Sprint 9: акт по объекту — сначала сужаем прайс до позиций этого объекта.
-  const priceItemsByObject = ctx.objectId
-    ? priceItemsAll.filter((p) => p.objectId === ctx.objectId)
+  const priceItemsByObject = objectId
+    ? priceItemsAll.filter((p) => p.objectId === objectId)
     : priceItemsAll;
 
   const priceItemsRaw =
@@ -105,7 +151,7 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
   const objMap = new Map(objects.map((o) => [o.id, o]));
 
   // Sprint 9: для акта по объекту список объектов в шаблоне сужаем до него одного.
-  const templateObjects = ctx.objectId ? objects.filter((o) => o.id === ctx.objectId) : objects;
+  const templateObjects = objectId ? objects.filter((o) => o.id === objectId) : objects;
 
   const priceItems = priceItemsRaw.map((p, idx) => {
     const obj = p.objectId ? objMap.get(p.objectId) : null;
@@ -182,8 +228,8 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
   // Sprint 10: услуги объекта — источник таблицы для АО/АВР по объекту
   // (№ | Объект | Адрес | Площадь+Единица | Услуга). Цен нет — акт технический.
   const isObjectAct =
-    !!ctx.objectId && (ctx.type === 'act_inspection' || ctx.type === 'act_work');
-  const targetObject = ctx.objectId ? objMap.get(ctx.objectId) ?? null : null;
+    !!objectId && (ctx.type === 'act_inspection' || ctx.type === 'act_work');
+  const targetObject = objectId ? objMap.get(objectId) ?? null : null;
 
   let objectServices: Array<{
     index: number;
@@ -198,19 +244,35 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
   }> = [];
   let servicesLine = '';
   if (isObjectAct) {
-    const svcRows = await db
-      .select({
-        customName: clientObjectServices.customName,
-        method: clientObjectServices.method,
-        unit: clientObjectServices.unit,
-        quantity: clientObjectServices.quantity,
-        serviceShort: services.shortName,
-        serviceFull: services.name,
-      })
-      .from(clientObjectServices)
-      .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
-      .where(eq(clientObjectServices.objectId, ctx.objectId!))
-      .orderBy(asc(clientObjectServices.sortOrder));
+    // Источник услуг таблицы акта: СНИМОК выезда (если генерим по наряду — те услуги,
+    // что реально в этом наряде) ИЛИ услуги объекта (генерация из карточки объекта).
+    const svcRows = visit
+      ? await db
+          .select({
+            customName: dealWorkLogServices.customName,
+            method: dealWorkLogServices.method,
+            unit: dealWorkLogServices.unit,
+            quantity: dealWorkLogServices.quantity,
+            serviceShort: services.shortName,
+            serviceFull: services.name,
+          })
+          .from(dealWorkLogServices)
+          .leftJoin(services, eq(dealWorkLogServices.serviceId, services.id))
+          .where(eq(dealWorkLogServices.workLogId, visit.id))
+          .orderBy(asc(dealWorkLogServices.sortOrder))
+      : await db
+          .select({
+            customName: clientObjectServices.customName,
+            method: clientObjectServices.method,
+            unit: clientObjectServices.unit,
+            quantity: clientObjectServices.quantity,
+            serviceShort: services.shortName,
+            serviceFull: services.name,
+          })
+          .from(clientObjectServices)
+          .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
+          .where(eq(clientObjectServices.objectId, objectId!))
+          .orderBy(asc(clientObjectServices.sortOrder));
 
     objectServices = svcRows.map((r, i) => {
       // Кол-во услуги; если не задано — берём площадь объекта (как в бумажных АВР).
@@ -234,13 +296,14 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       .join('; ');
   }
 
-  // Sprint 10: дезинфектор = назначенный мастер сделки (для АО/АВР).
+  // Дезинфектор: мастер ВЫЕЗДА (если генерим по наряду) ИЛИ назначенный мастер сделки.
   let masterName = '';
-  if (isObjectAct && deal?.assignedMasterId) {
+  const masterSourceId = visit?.masterId ?? deal?.assignedMasterId ?? null;
+  if (isObjectAct && masterSourceId) {
     const [m] = await db
       .select({ fullName: users.fullName })
       .from(users)
-      .where(eq(users.id, deal.assignedMasterId))
+      .where(eq(users.id, masterSourceId))
       .limit(1);
     masterName = m?.fullName ?? '';
   }
@@ -341,10 +404,12 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       };
       data.act = {
         number: ctx.documentNumber,
-        date: formatHumanDate(ctx.documentDate),
+        // По наряду — дата акта = дата выезда (факт работ), иначе дата документа.
+        date: formatHumanDate(visitDateIso ?? ctx.documentDate),
         qualityCheck: 'соответствует',
         areaCheck: 'совпадает',
         actualArea:
+          (visit?.areaM2 ?? 0) ||
           workLogs.reduce((s, w) => s + (w.areaM2 ?? 0), 0) ||
           priceItemsRaw.reduce((s, p) => s + Number(p.areaM2), 0) ||
           (targetObject?.areaM2 ? Number(targetObject.areaM2) : 0),
@@ -370,7 +435,8 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
     case 'act_inspection':
       data.report = {
         number: ctx.documentNumber,
-        date: formatHumanDate(ctx.documentDate),
+        // По наряду — дата обследования = дата выезда, иначе дата документа.
+        date: formatHumanDate(visitDateIso ?? ctx.documentDate),
         objectStatus: 'удовлетворительное',
         deviations: '',
         description: '',

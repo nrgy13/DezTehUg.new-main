@@ -43,6 +43,7 @@ export default async function ManagerCalendarPage() {
         history={historySerialized}
         dealHrefBase="/manager/deals"
         canDragDates
+        canGenerateActs
       />
     </div>
   );

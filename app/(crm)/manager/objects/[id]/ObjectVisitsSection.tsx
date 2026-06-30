@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { WorkOrderDialog } from '@/components/crm/WorkOrderDialog';
+import { VisitActButtons } from '@/components/crm/VisitActButtons';
 import {
   deleteWorkOrder,
   getWorkOrderDuplicateData,
@@ -146,6 +147,7 @@ export function ObjectVisitsSection({
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {v.dealId && <VisitActButtons dealId={v.dealId} workLogId={v.id} />}
                   {v.dealId && (
                     <Link
                       href={`/manager/deals/${v.dealId}?tab=visits`}

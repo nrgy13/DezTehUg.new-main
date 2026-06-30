@@ -24,6 +24,12 @@ export type ComboboxOption = {
    * value у нас = uuid, по нему ничего не найдётся, искать только по keywords/label.
    */
   keywords?: string[];
+  /**
+   * Вторичная строка под label (адрес объекта и т.п.). Показывается приглушённо
+   * ОТДЕЛЬНОЙ строкой в списке (label-truncate резал бы длинный «имя · адрес» — для
+   * одноимённых объектов сети различитель = адрес, его нельзя терять).
+   */
+  description?: string;
 };
 
 /**
@@ -79,8 +85,17 @@ export function Combobox({
             className,
           )}
         >
-          <span className={cn('truncate', !selected && 'text-content-muted')}>
-            {selected ? selected.label : placeholder}
+          <span
+            className={cn('truncate', !selected && 'text-content-muted')}
+            title={
+              selected ? [selected.label, selected.description].filter(Boolean).join(' · ') : undefined
+            }
+          >
+            {selected
+              ? selected.description
+                ? `${selected.label} · ${selected.description}`
+                : selected.label
+              : placeholder}
           </span>
           <ChevronsUpDown className="w-4 h-4 shrink-0 opacity-50" />
         </button>
@@ -109,11 +124,16 @@ export function Combobox({
               >
                 <Check
                   className={cn(
-                    'mr-2 h-4 w-4 shrink-0',
+                    'mr-2 h-4 w-4 shrink-0 mt-0.5',
                     value === opt.value ? 'opacity-100 text-neon-orange' : 'opacity-0',
                   )}
                 />
-                <span className="truncate">{opt.label}</span>
+                <span className="flex flex-col min-w-0">
+                  <span className="truncate">{opt.label}</span>
+                  {opt.description && (
+                    <span className="truncate text-xs text-content-muted">{opt.description}</span>
+                  )}
+                </span>
               </CommandItem>
             ))}
           </CommandList>
