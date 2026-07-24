@@ -1,12 +1,14 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import {
   deals,
   dealPriceItems,
+  dealAddendums,
+  dealWorkLogs,
   type DealStatus,
 } from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
@@ -501,8 +503,72 @@ export async function assignMaster(
 // DELETE
 // =============================================================
 
+export type DealContents = {
+  priceItems: number;
+  documents: number;
+  addendums: number;
+  workLogs: number;
+  total: number;
+};
+
+/**
+ * Что лежит внутри сделки. Считается ДО удаления — нужно и для гарда,
+ * и для честного предупреждения в диалоге.
+ */
+async function getDealContents(dealId: string): Promise<DealContents> {
+  const [price, docs, addendums, workLogs] = await Promise.all([
+    db.select({ n: count() }).from(dealPriceItems).where(eq(dealPriceItems.dealId, dealId)),
+    db.select({ n: count() }).from(documents).where(eq(documents.dealId, dealId)),
+    db.select({ n: count() }).from(dealAddendums).where(eq(dealAddendums.dealId, dealId)),
+    db.select({ n: count() }).from(dealWorkLogs).where(eq(dealWorkLogs.dealId, dealId)),
+  ]);
+  const contents = {
+    priceItems: price[0]?.n ?? 0,
+    documents: docs[0]?.n ?? 0,
+    addendums: addendums[0]?.n ?? 0,
+    workLogs: workLogs[0]?.n ?? 0,
+  };
+  return {
+    ...contents,
+    total:
+      contents.priceItems + contents.documents + contents.addendums + contents.workLogs,
+  };
+}
+
+/**
+ * Что будет уничтожено вместе со сделкой — для диалога подтверждения.
+ * Отдаёт номер договора: диалог требует впечатать его руками.
+ */
+export async function getDealDeletionPreview(
+  id: string,
+): Promise<Result<{ contractNumber: string; contents: DealContents }>> {
+  const actor = await getActor();
+  if (!actor) return { ok: false, error: 'Нет доступа' };
+
+  const [deal] = await db
+    .select({ contractNumber: deals.contractNumber })
+    .from(deals)
+    .where(eq(deals.id, id))
+    .limit(1);
+  if (!deal) return { ok: false, error: 'Сделка не найдена' };
+
+  return {
+    ok: true,
+    data: { contractNumber: deal.contractNumber, contents: await getDealContents(id) },
+  };
+}
+
 /**
  * Полное удаление сделки manager или admin (Sprint 9: Регина = прямые права).
+ *
+ * ⚠️ 2026-07-24: удаление ужесточено после ЧП — договор ИП Гончарова
+ * (31 позиция прайса + 3 документа) был снесён одним промахом мыши мимо
+ * «Сменить статус», защита была нативным confirm(). Теперь два барьера:
+ *   1. НЕПУСТУЮ сделку (есть прайс/документы/ДС/выезды) удаляет ТОЛЬКО admin.
+ *      Менеджеру остаётся уборка пустого мусора — она ему реально нужна.
+ *   2. На ЛЮБОЕ удаление надо впечатать номер договора руками (`confirmation`),
+ *      машинальный «ОК» больше не проходит. Проверка серверная: обойти,
+ *      дёрнув action напрямую, нельзя.
  *
  * Порядок важен: документы привязаны к сделке через FK onDelete='set null',
  * поэтому их надо удалить ЯВНО (файлы из storage + запись) до удаления сделки,
@@ -511,7 +577,7 @@ export async function assignMaster(
  *   deal_checklist_items → cascade транзитивно через work_logs,
  *   client_objects.deal_id → set null (объекты остаются у клиента).
  */
-export async function deleteDeal(id: string): Promise<Result> {
+export async function deleteDeal(id: string, confirmation?: string): Promise<Result> {
   const actor = await getActor();
   if (!actor) return { ok: false, error: 'Нет доступа' };
 
@@ -525,6 +591,40 @@ export async function deleteDeal(id: string): Promise<Result> {
     .where(eq(deals.id, id))
     .limit(1);
   if (!deal) return { ok: false, error: 'Сделка не найдена' };
+
+  // Барьер 1 — номер договора руками.
+  // Пустой номер (форма реквизитов его допускает) обнулил бы всю проверку:
+  // пустой ввод совпал бы с пустым эталоном. Такую сделку не удаляем вовсе.
+  const expected = deal.contractNumber.trim();
+  if (expected.length === 0) {
+    return {
+      ok: false,
+      error:
+        'У сделки пустой номер договора — подтвердить удаление нечем. Впишите номер в «Реквизиты», потом удаляйте.',
+    };
+  }
+  if ((confirmation ?? '').trim() !== expected) {
+    return {
+      ok: false,
+      error: `Для удаления впечатайте номер договора «${expected}» точно как в карточке`,
+      field: 'confirmation',
+    };
+  }
+
+  // Барьер 2 — непустую сделку сносит только admin.
+  const contents = await getDealContents(id);
+  if (contents.total > 0 && actor.role !== 'admin') {
+    const parts = [
+      contents.priceItems && `прайс: ${contents.priceItems}`,
+      contents.documents && `документы: ${contents.documents}`,
+      contents.addendums && `ДС: ${contents.addendums}`,
+      contents.workLogs && `выезды: ${contents.workLogs}`,
+    ].filter(Boolean);
+    return {
+      ok: false,
+      error: `В сделке есть данные (${parts.join(', ')}). Такую сделку удаляет только администратор — обратитесь к нему.`,
+    };
+  }
 
   // Документы сделки — удаляем файлы + записи (FK set null их бы осиротил).
   const docs = await db
@@ -544,6 +644,9 @@ export async function deleteDeal(id: string): Promise<Result> {
     contractNumber: deal.contractNumber,
     clientId: deal.clientId,
     deletedDocuments: docs.length,
+    // снимок содержимого — чтобы в следующий раз было видно, ЧТО именно унесло
+    contents,
+    actorRole: actor.role,
   });
 
   revalidatePath('/manager/deals');

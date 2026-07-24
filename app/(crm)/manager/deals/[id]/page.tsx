@@ -48,7 +48,7 @@ export default async function DealDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: TabKey }>;
 }) {
-  await requireRole('manager');
+  const currentUser = await requireRole('manager');
   const { id } = await params;
   const sp = await searchParams;
   const tab: TabKey = TABS.some((t) => t.key === sp.tab) ? (sp.tab as TabKey) : 'requisites';
@@ -368,9 +368,16 @@ export default async function DealDetailPage({
           <DealStatusBadge status={deal.status} />
         </div>
 
+        {/* Удаление отодвинуто от «Сменить статус» и отделено чертой:
+            2026-07-24 договор снесли промахом мыши по соседней кнопке. */}
         <div className="flex items-center gap-2 flex-wrap">
           <DealStatusControl dealId={deal.id} status={deal.status} />
-          <DeleteDealButton dealId={deal.id} contractNumber={deal.contractNumber} />
+          <span className="mx-2 hidden h-6 w-px bg-gray-300 sm:block" aria-hidden />
+          <DeleteDealButton
+            dealId={deal.id}
+            contractNumber={deal.contractNumber}
+            isAdmin={currentUser.role === 'admin'}
+          />
         </div>
       </div>
 
