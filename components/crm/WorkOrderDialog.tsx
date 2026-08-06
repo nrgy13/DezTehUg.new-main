@@ -339,7 +339,9 @@ export function WorkOrderDialog({
     patchRow(i, { serviceId: value, customName: '', method: svc?.defaultMethod ?? '' });
   }
 
-  function submit() {
+  // allowSameDay — второй заход после переспроса «на объект в этот день уже есть наряд».
+  // Пустой по умолчанию: сама форма флаг не ставит, только пользователь через подтверждение.
+  function submit(allowSameDay = false) {
     if (!dealId || !objectId) {
       toast.error('Выбери договор и объект');
       return;
@@ -389,12 +391,19 @@ export function WorkOrderDialog({
         preparations: preparations.trim() || null,
         services,
         checklist: checklistPayload,
+        allowSameDay,
       });
       if (res.ok) {
         toast.success('Заказ-наряд создан — выезд появился в календаре');
         onCreated?.();
         router.refresh();
         onClose();
+      } else if (res.needsConfirm) {
+        // Не ошибка, а вопрос: на объект в этот день уже стоит наряд. Разные услуги
+        // на одном объекте — законный сценарий, поэтому даём создать второй.
+        if (window.confirm(`${res.error}\n\nСоздать ещё один наряд на этот день?`)) {
+          submit(true);
+        }
       } else {
         toast.error(res.error);
       }
@@ -744,8 +753,11 @@ export function WorkOrderDialog({
           >
             Отмена
           </button>
+          {/* Именно () => submit(): передать submit напрямую нельзя — в первый
+              аргумент прилетит MouseEvent, и allowSameDay стал бы «истиной»,
+              молча отключив переспрос о втором наряде на тот же день. */}
           {hasClients && (
-            <CyberpunkButton variant="primary" onClick={submit} disabled={isPending}>
+            <CyberpunkButton variant="primary" onClick={() => submit()} disabled={isPending}>
               {isPending ? 'Создаю…' : 'Создать наряд'}
             </CyberpunkButton>
           )}

@@ -37,9 +37,11 @@ import re
 import sys
 from docx import Document
 from docx.shared import Pt
+from docx.text.paragraph import Paragraph
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 
 ROOT = __import__('os').path.abspath(__import__('os').path.join(__import__('os').path.dirname(__file__), '..'))
 
@@ -331,6 +333,69 @@ def build_ao():
     print("OK ao ->", out)
 
 
+def two_columns_to_table(doc):
+    """Двухколоночную continuous-секцию → таблица 2×1 без рамок.
+
+    Зачем: LibreOffice (он делает PDF клиенту) на таких секциях ломает разбивку —
+    появляются лишние страницы с полем пустоты посередине документа (жалоба
+    Регины 06.08.2026 по АВР). Визуально результат неотличим, а разбивка чинится.
+
+    sectPr НЕ удаляем — в нём ссылки на колонтитулы с логотипом; только снимаем
+    с него признак «две колонки».
+    """
+    ps = doc.paragraphs
+
+    def sect_of(p):
+        ppr = p._p.find(qn("w:pPr"))
+        return None if ppr is None else ppr.find(qn("w:sectPr"))
+
+    def has_col_break(p):
+        return any(br.get(qn("w:type")) == "column" for br in p._p.iter(qn("w:br")))
+
+    sect_idx = [i for i, p in enumerate(ps) if sect_of(p) is not None]
+    if len(sect_idx) < 2:
+        return False
+    start, end = sect_idx[0] + 1, sect_idx[1]
+    split = next((i for i in range(start, end + 1) if has_col_break(ps[i])), None)
+    if split is None:
+        return False
+    left, right = ps[start:split], ps[split:end + 1]
+
+    cols = sect_of(ps[sect_idx[1]]).find(qn("w:cols"))
+    if cols is not None:
+        for a in list(cols.attrib):
+            if a.endswith("}num") or a.endswith("}equalWidth"):
+                del cols.attrib[a]
+        for child in list(cols):
+            cols.remove(child)
+
+    table = doc.add_table(rows=1, cols=2)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tbl = table._tbl
+    ps[end]._p.addnext(tbl)
+    borders = tbl.tblPr.makeelement(qn("w:tblBorders"), {})
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        borders.append(borders.makeelement(qn("w:" + edge), {qn("w:val"): "none", qn("w:sz"): "0"}))
+    tbl.tblPr.append(borders)
+
+    for cell, group in ((table.rows[0].cells[0], left), (table.rows[0].cells[1], right)):
+        placeholder = cell.paragraphs[0]._p
+        for p in group:
+            s = sect_of(p)
+            if s is not None:
+                # sectPr не может жить внутри ячейки — переносим на пустой абзац после таблицы
+                p._p.find(qn("w:pPr")).remove(s)
+                tail = doc.add_paragraph()
+                tbl.addnext(tail._p)
+                tail._p.get_or_add_pPr().append(s)
+            for br in list(p._p.iter(qn("w:br"))):
+                if br.get(qn("w:type")) == "column":
+                    br.getparent().remove(br)
+            cell._tc.append(p._p)
+        placeholder.getparent().remove(placeholder)
+    return True
+
+
 # ─────────────────────────────── АВР (act_work) ✅ ГОТОВ ───────────────────────────────
 def build_avr():
     """Источник: DTUdocs/Акт по проведению работ ИП Белавина О.В. Столовая СОК Анапа.docx
@@ -369,8 +434,10 @@ def build_avr():
     replace_run(p_di, "Д.И.", "", whole=True)
 
     # Ссылка на договор — собираем заново (не задвоить год/«г.»); № и дата жирные (как в оригинале)
+    # ⚠️ Без ведущего «2. »: абзац лежит в АВТОНУМЕРОВАННОМ списке, и Word печатал
+    # «3. 2. Настоящий АКТ…» (видно в PDF-рендере 06.08.2026). Номер даёт список.
     set_paragraph_parts(find("является неотъемлемой частью Договора"), [
-        ("2. Настоящий АКТ является неотъемлемой частью Договора ", False),
+        ("Настоящий АКТ является неотъемлемой частью Договора ", False),
         ("№", True),
         ("{contract.number} ", False),
         ("от {contract.date}", True),
@@ -386,6 +453,50 @@ def build_avr():
 
     # Таблица объектов/услуг → цикл {#objectServices} (как в АО)
     table_to_object_cycle(doc.tables[0], header_rows=1)
+
+    # ─── Вёрстка: жалоба Регины 06.08.2026 «документ печатается с разрывом страниц» ───
+    # Мерил не на глаз, а рендером в PDF (LibreOffice на проде) + замером pymupdf.
+    # Принудительных разрывов в шаблоне НЕТ ВООБЩЕ (w:br type=page = 0,
+    # pageBreakBefore = 0, все 3 sectPr — continuous) — значит это переполнение.
+    #
+    # КОРЕНЬ ПРОБЛЕМЫ: блок ЗАКАЗЧИК/ИСПОЛНИТЕЛЬ был свёрстан ДВУХКОЛОНОЧНОЙ
+    # continuous-секцией (<w:cols w:num="2">). LibreOffice (а именно он делает
+    # клиентские PDF) на таких секциях ломает разбивку: на реальном акте с ОДНОЙ
+    # услугой получалось 3 страницы, причём вторая — два пункта и 228 мм пустоты.
+    # Лечение: секцию делаем одноколоночной, а две колонки рисуем ТАБЛИЦЕЙ 2×1
+    # без рамок. Замер после правки: 3 стр → 2 стр, текст идёт подряд.
+    #
+    # ⛔ ЧТО НЕ СРАБОТАЛО (замерено, НЕ ПОВТОРЯТЬ): уменьшение нижнего поля
+    #    29,6 → 15 мм даёт 3 страницы. И вынос заголовка САМ ПО СЕБЕ, без
+    #    переделки колонок, тоже давал 3 страницы — работает только в связке.
+    two_columns_to_table(doc)
+
+    # Заголовок «ОБЩИЕ УСЛОВИЯ» — отдельным абзацем с «не отрывать от следующего»,
+    # иначе висел один внизу листа, а список уезжал на следующий (скрин Регины).
+    p_hdr = find("ОБЩИЕ УСЛОВИЯ")
+    if p_hdr is not None:
+        new_p = OxmlElement("w:p")
+        p_hdr._p.addnext(new_p)
+        np = Paragraph(new_p, p_hdr._parent)
+        for r in list(p_hdr.runs):
+            if "ОБЩИЕ УСЛОВИЯ" in r.text:
+                new_p.append(r._r)  # переносим сам элемент — формат сохраняется
+        for r in list(p_hdr.runs):  # хвостовые пробелы/<w:br/> больше не нужны
+            if r.text.strip():
+                continue
+            if r._r.findall(qn("w:drawing")) or r._r.findall(qn("w:pict")):
+                continue  # картиночные run'ы НЕ трогаем никогда
+            r._r.getparent().remove(r._r)
+        np.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        np.paragraph_format.keep_with_next = True
+
+    ps = doc.paragraphs
+    i_from = next((i for i, p in enumerate(ps) if "Уполномоченное лицо" in full_text(p)), None)
+    i_to = next((i for i, p in enumerate(ps) if "Подписи сторон" in full_text(p)), None)
+    if i_from is not None and i_to is not None:
+        for p in ps[i_from + 1:i_to]:
+            if not full_text(p).strip():
+                p._p.getparent().remove(p._p)
 
     doc.save(out)
     print("OK avr ->", out)

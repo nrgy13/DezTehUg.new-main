@@ -23,6 +23,15 @@ import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
 type Result = { ok: true } | { ok: false; error: string };
 
+/**
+ * Результат создания наряда. needsConfirm=true — не отказ по существу, а вопрос:
+ * на объект в этот день уже есть активный наряд. Форма переспрашивает и повторяет
+ * вызов с allowSameDay=true (см. createWorkOrderAction).
+ */
+type CreateWorkOrderResult =
+  | { ok: true }
+  | { ok: false; error: string; needsConfirm?: boolean };
+
 async function getManager() {
   const session = await auth();
   if (!session?.user?.id) return null;
@@ -270,7 +279,13 @@ export async function createWorkOrderAction(input: {
    * мимо формы → там срабатывает автокопия из шаблонов услуг (обратная совместимость).
    */
   checklist?: WorkOrderChecklistInput[];
-}): Promise<Result> {
+  /**
+   * true — менеджер подтвердил, что второй наряд на этот объект в этот день нужен
+   * осознанно (разные услуги / разная площадь). Форма ставит флаг только после
+   * ответа на переспрос, сама по себе его не шлёт.
+   */
+  allowSameDay?: boolean;
+}): Promise<CreateWorkOrderResult> {
   const actor = await getManager();
   if (!actor) return { ok: false, error: 'Нет доступа' };
 
@@ -313,9 +328,14 @@ export async function createWorkOrderAction(input: {
     return { ok: false, error: 'Объект и договор принадлежат разным клиентам' };
   }
 
-  // Защита от дубля: не плодим второй активный наряд на тот же объект и день
-  // (двойной клик «Оформить» из панели напоминаний, два открытых таба и т.п.).
-  if (plannedAtIso) {
+  // Второй наряд на тот же объект и день — НЕ запрещаем, а переспрашиваем.
+  // Изначально стоял жёсткий отказ (защита от двойного клика «Оформить» и двух
+  // открытых табов), но он ломал живой сценарий: на одном объекте бывают разные
+  // услуги с разной площадью, и на каждую нужен отдельный наряд в тот же день
+  // (жалоба Регины 06.08.2026 — «сделай, чтобы он давал делать эти наряды»).
+  // Компромисс: случайный дубль по-прежнему требует подтверждения, осознанный
+  // второй наряд проходит с allowSameDay=true.
+  if (plannedAtIso && !input.allowSameDay) {
     const day = plannedAtIso.slice(0, 10);
     const [dup] = await db
       .select({ id: dealWorkLogs.id })
@@ -329,7 +349,28 @@ export async function createWorkOrderAction(input: {
       )
       .limit(1);
     if (dup) {
-      return { ok: false, error: 'На этот объект уже есть активный наряд на выбранную дату' };
+      // Показываем, ЧТО именно уже стоит на этот день — иначе непонятно,
+      // случайный это дубль или тот самый второй наряд по другой услуге.
+      const dupSvc = await db
+        .select({
+          customName: dealWorkLogServices.customName,
+          serviceName: services.name,
+        })
+        .from(dealWorkLogServices)
+        .leftJoin(services, eq(dealWorkLogServices.serviceId, services.id))
+        .where(eq(dealWorkLogServices.workLogId, dup.id))
+        .orderBy(asc(dealWorkLogServices.sortOrder));
+      const list = dupSvc
+        .map((s) => s.customName ?? s.serviceName ?? '')
+        .filter(Boolean)
+        .join(', ');
+      return {
+        ok: false,
+        needsConfirm: true,
+        error: list
+          ? `На этот объект в выбранный день уже есть наряд: ${list}.`
+          : 'На этот объект в выбранный день уже есть активный наряд.',
+      };
     }
   }
 
