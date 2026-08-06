@@ -680,7 +680,7 @@ export async function addPriceItem(
     .limit(1);
   if (dealExists.length === 0) return { ok: false, error: 'Сделка не найдена' };
 
-  const priceWithVat = round2(data.priceNoVat * (1 + data.vatRate / 100));
+  const priceWithVat = resolvePriceWithVat(data.priceNoVat, data.vatRate, data.priceWithVat);
 
   const [created] = await db
     .insert(dealPriceItems)
@@ -730,7 +730,7 @@ export async function updatePriceItem(
     .limit(1);
   if (existing.length === 0) return { ok: false, error: 'Позиция не найдена' };
 
-  const priceWithVat = round2(data.priceNoVat * (1 + data.vatRate / 100));
+  const priceWithVat = resolvePriceWithVat(data.priceNoVat, data.vatRate, data.priceWithVat);
 
   await db
     .update(dealPriceItems)
@@ -781,6 +781,27 @@ export async function deletePriceItem(id: string): Promise<Result> {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Цена С НДС, которую кладём в БД.
+ *
+ * Хранить всегда пересчитанное значение нельзя: когда менеджер вводит именно
+ * ГРОСС, обратный путь gross→net→gross теряет копейку —
+ * 5500 ÷ 1,05 = 5238,0952… → округляем net до 5238,10 → ×1,05 = 5500,005 → 5500,01.
+ * Ровно это Регина и ловила 23.07.2026 (5 500,01 и 250,01 вместо ровных сумм),
+ * причём часть строк вставала верно (3500 ÷ 1,05 → 3333,33 → 3499,9965 → 3500,00),
+ * поэтому баг выглядел «плавающим».
+ *
+ * Решение: если форма прислала введённую вручную сумму с НДС и она сходится с
+ * расчётной в пределах копейки — сохраняем ИМЕННО ВВЕДЁННУЮ. Расхождение больше
+ * копейки = клиент прислал несогласованные числа → доверяем расчёту, не вводу.
+ */
+function resolvePriceWithVat(priceNoVat: number, vatRate: number, entered?: number): number {
+  const computed = round2(priceNoVat * (1 + vatRate / 100));
+  if (entered == null) return computed;
+  const rounded = round2(entered);
+  return Math.abs(rounded - computed) <= 0.02 ? rounded : computed;
 }
 
 // =============================================================

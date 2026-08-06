@@ -77,6 +77,9 @@ export function ClientForm({ mode, initial }: Props) {
   });
 
   const type = watch('type');
+  // ИП отличается от организации длиной ИНН (12 против 10). КПП у ИП не существует —
+  // прячем звёздочку и подсказываем оставить пустым, иначе Регина вбивает 000000000.
+  const isSoleTrader = String(watch('inn') ?? '').replace(/\D/g, '').length === 12;
 
   const onSubmit = (values: ClientFormValues) => {
     startTransition(async () => {
@@ -173,7 +176,7 @@ export function ClientForm({ mode, initial }: Props) {
             <Field
               label="ИНН *"
               error={errors.inn?.message}
-              hint="10 цифр, проверка ФНС"
+              hint="10 цифр у организации, 12 у ИП — проверка ФНС"
               extra={
                 duplicateId && (
                   <Link
@@ -190,13 +193,17 @@ export function ClientForm({ mode, initial }: Props) {
                 {...register('inn')}
                 placeholder="2308175123"
                 inputMode="numeric"
-                maxLength={10}
+                maxLength={12}
               />
             </Field>
-            <Field label="КПП *" error={(errors as Record<string, { message?: string }>).kpp?.message} hint="9 символов">
+            <Field
+              label={isSoleTrader ? 'КПП' : 'КПП *'}
+              error={(errors as Record<string, { message?: string }>).kpp?.message}
+              hint={isSoleTrader ? 'у ИП КПП не бывает — оставь пустым' : '9 символов'}
+            >
               <NeonInput
                 {...register('kpp' as never)}
-                placeholder="230801001"
+                placeholder={isSoleTrader ? '—' : '230801001'}
                 maxLength={9}
               />
             </Field>

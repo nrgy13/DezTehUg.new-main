@@ -45,7 +45,11 @@ const baseFields = {
     .or(z.literal('').transform(() => undefined)),
 };
 
-// === Юрлицо ===
+// === Юрлицо (организация ИЛИ ИП) ===
+// В CRM под «юрлицом» живут и ООО/АО, и ИП — у обоих есть договорные реквизиты.
+// Различает их ДЛИНА ИНН: организация — 10 цифр, ИП — 12 (алгоритм ФНС в validateInn
+// поддерживает обе). КПП существует ТОЛЬКО у организаций: ИП его не присваивают,
+// поэтому у 12-значного ИНН поле необязательно (иначе приходится вбивать 000000000).
 export const legalClientSchema = z.object({
   type: z.literal('legal'),
   ...baseFields,
@@ -53,13 +57,19 @@ export const legalClientSchema = z.object({
     .string()
     .trim()
     .min(1, 'ИНН обязателен для юрлица')
-    .refine((v) => /^\d{10}$/.test(v), 'ИНН юрлица — 10 цифр')
+    .refine(
+      (v) => /^\d{10}$/.test(v) || /^\d{12}$/.test(v),
+      'ИНН — 10 цифр у организации, 12 у ИП'
+    )
     .refine((v) => validateInn(v), 'ИНН не прошёл проверку контрольной суммы'),
-  kpp: z
-    .string()
-    .trim()
-    .min(1, 'КПП обязателен')
-    .refine((v) => validateKpp(v), 'КПП должен быть 9 символов в формате XXXX[XX]XXX'),
+  // Пусто → null (а не undefined), чтобы очистка КПП реально доезжала до БД:
+  // drizzle пропускает undefined-поля в UPDATE и оставил бы старое значение.
+  kpp: optionalTrimmed
+    .refine(
+      (v) => v === undefined || validateKpp(v),
+      'КПП должен быть 9 символов в формате XXXX[XX]XXX'
+    )
+    .transform((v) => v ?? null),
   ogrn: optionalTrimmed.refine(
     (v) => v === undefined || validateOgrnAny(v),
     'ОГРН/ОГРНИП не прошёл проверку контрольной суммы'
@@ -91,10 +101,20 @@ export const individualClientSchema = z.object({
 });
 
 // === Дискриминированный union ===
-export const clientFormSchema = z.discriminatedUnion('type', [
-  legalClientSchema,
-  individualClientSchema,
-]);
+// superRefine вешаем НА UNION, а не на legalClientSchema: discriminatedUnion
+// принимает только ZodObject, а .superRefine() превратил бы ветку в ZodEffects.
+export const clientFormSchema = z
+  .discriminatedUnion('type', [legalClientSchema, individualClientSchema])
+  .superRefine((val, ctx) => {
+    // КПП обязателен только у организации (ИНН 10 цифр). У ИП (12 цифр) КПП не существует.
+    if (val.type === 'legal' && val.inn.length === 10 && !val.kpp) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['kpp'],
+        message: 'КПП обязателен для организации (ИНН 10 цифр)',
+      });
+    }
+  });
 
 // === Дополнительные действия по клиенту ===
 export const updateClientStatusSchema = z.object({

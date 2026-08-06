@@ -313,13 +313,11 @@ def build_ao():
                 nt = nt + " {report.date}"
             set_merge(p, nt)
             break
-    # 2) Строка контакта перед «Санитарное состояние» (после таблицы) — пожелание Сани
-    for p in doc.paragraphs:
-        if "Санитарное состояние" in full_text(p):
-            newp = p.insert_paragraph_before("Контактное лицо на объекте: {contact.fio}, тел. {contact.phone}")
-            for r in newp.runs:
-                r.font.name = "Times New Roman"; r.font.size = Pt(12)
-            break
+    # 2) Строка контакта УДАЛЕНА 06.08.2026 по просьбе Регины («убрать контактное лицо
+    #    из акта-обследования у всех клиентов»). Раньше сюда вставлялся абзац
+    #    «Контактное лицо на объекте: {contact.fio}, тел. {contact.phone}» (добавляли в 7623df2).
+    #    НЕ возвращать без явной просьбы. Сам контакт объекта никуда не делся — он
+    #    остаётся в АВР ({act.responsibleName/Phone}) и в карточке выезда у мастера.
     # 3) Таблица объектов (header + 4 пустых) → один цикл-ряд
     t = doc.tables[0]
     vals = ["{#objectServices}{index}", "{objectName}", "{objectAddress}", "{areaLabel}", "{serviceName}{/objectServices}"]

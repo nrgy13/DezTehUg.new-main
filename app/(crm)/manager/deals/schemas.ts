@@ -73,7 +73,20 @@ export const priceItemFormSchema = z
     method: z.string().max(128).optional().or(z.literal('')),
     frequency: z.string().max(64).optional().or(z.literal('')),
 
-    priceNoVat: z.coerce.number().min(0).max(1_000_000_000),
+    // Запятую из ru-ввода нормализуем в точку — иначе «1500,50» уходит в NaN
+    // и форма молча не сохраняется (та же грабля, что была у площади).
+    priceNoVat: z.preprocess(
+      (v) => (typeof v === 'string' ? v.replace(',', '.') : v),
+      z.coerce.number().min(0).max(1_000_000_000),
+    ),
+    // Цена С НДС, как её ВВЁЛ пользователь. Нужна, потому что обратный пересчёт
+    // gross→net→gross теряет копейку (5500 → 5238,10 → 5500,01 — жалоба Регины
+    // 23.07.2026). Если пришла и сходится с расчётной в пределах копейки —
+    // сервер сохранит именно её. Необязательна: старые вызовы шлют только priceNoVat.
+    priceWithVat: z.preprocess(
+      (v) => (v === '' || v === null || v === undefined ? undefined : typeof v === 'string' ? v.replace(',', '.') : v),
+      z.coerce.number().min(0).max(1_000_000_000).optional(),
+    ),
     vatRate: z.coerce.number().min(0).max(100).default(5),
 
     sortOrder: z.coerce.number().int().min(0).max(9999).default(0),

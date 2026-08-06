@@ -293,7 +293,10 @@ function PriceItemDialog({
       unit,
       method,
       frequency: frequencyValue,
-      priceNoVat: Number(priceNoVat) || 0,
+      priceNoVat: Number(String(priceNoVat).replace(',', '.')) || 0,
+      // Шлём и цену С НДС, как её видит менеджер: сервер сохранит именно её,
+      // иначе обратный пересчёт net→gross возвращает ±1 копейку (5500 → 5500,01).
+      priceWithVat: Number(String(priceWithVat).replace(',', '.')) || 0,
       vatRate: Number(vatRate) || 0,
       sortOrder: Number(sortOrder) || 0,
     };

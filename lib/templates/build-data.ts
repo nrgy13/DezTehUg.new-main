@@ -282,7 +282,10 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         index: i + 1,
         objectName: targetObject?.name ?? '',
         objectAddress: targetObject?.address ?? '',
-        serviceName: r.customName ?? r.serviceShort ?? r.serviceFull ?? '',
+        // ПОЛНОЕ название услуги, а не shortName: в каталоге под одним коротким
+        // именем живут 13 разных «Дезинсекций» (тараканы / мухи / комары подвал…),
+        // и акт печатал две РАЗНЫЕ услуги объекта одинаково — жалоба Регины 04.08.2026.
+        serviceName: r.customName ?? r.serviceFull ?? r.serviceShort ?? '',
         method: r.method ?? '',
         quantity: formatQuantity(qtyRaw),
         unit: r.unit,
