@@ -342,7 +342,7 @@ export function ClientForm({ mode, initial }: Props) {
             <Field
               label="Корсчёт"
               error={(errors as Record<string, { message?: string }>).bankCorrAccount?.message}
-              hint="20 цифр, начинается на 301"
+              hint="20 цифр: 301… у банка, 40102… у казначейства"
             >
               <NeonInput
                 {...register('bankCorrAccount' as never)}

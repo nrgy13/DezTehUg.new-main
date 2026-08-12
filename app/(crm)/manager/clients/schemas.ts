@@ -82,10 +82,15 @@ export const legalClientSchema = z.object({
     (v) => v === undefined || validateBik(v),
     'БИК — 9 цифр'
   ),
-  bankAccount: optionalTrimmed,
+  // Формат — здесь; сверка контрольной суммы с БИК — в superRefine на union
+  // (это межполевая проверка, внутри ветки БИК ещё не виден).
+  bankAccount: optionalTrimmed.refine(
+    (v) => v === undefined || /^\d{20}$/.test(v),
+    'Расчётный счёт — 20 цифр'
+  ),
   bankCorrAccount: optionalTrimmed.refine(
     (v) => v === undefined || validateCorrAccount(v),
-    'Корсчёт должен начинаться на 301 и быть длиной 20 цифр'
+    'Корсчёт — 20 цифр, начинается на 301 (банк) или 40102 (казначейский)'
   ),
 });
 
@@ -113,6 +118,33 @@ export const clientFormSchema = z
         path: ['kpp'],
         message: 'КПП обязателен для организации (ИНН 10 цифр)',
       });
+    }
+
+    // Счёт и корсчёт несут контрольную сумму, завязанную на БИК — она ловит опечатку
+    // в номере (100% однозначных опечаток на реальных данных прода). Без этой сверки
+    // битый счёт молча уезжал в договор клиенту.
+    // Проверяем только когда есть ОБА значения и БИК сам по себе корректен, иначе
+    // ошибка «счёт не сходится» лезла бы поверх настоящей причины — кривого БИК.
+    if (val.type === 'legal' && val.bankBik && validateBik(val.bankBik)) {
+      if (val.bankAccount && /^\d{20}$/.test(val.bankAccount)) {
+        if (!validateBankAccount(val.bankAccount, val.bankBik)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['bankAccount'],
+            message:
+              'Счёт не сходится с БИК — в номере опечатка. Сверь по платёжке или счёту на оплату',
+          });
+        }
+      }
+      if (val.bankCorrAccount && validateCorrAccount(val.bankCorrAccount)) {
+        if (!validateCorrAccount(val.bankCorrAccount, val.bankBik)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['bankCorrAccount'],
+            message: 'Корсчёт не сходится с БИК — проверь оба поля, одно из них с опечаткой',
+          });
+        }
+      }
     }
   });
 
