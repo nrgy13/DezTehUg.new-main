@@ -142,6 +142,72 @@ export function DocumentsTab({
     });
   }
 
+  // Кнопки документа — ОДИН набор на две вёрстки (таблица + мобильные карточки),
+  // чтобы действия не разъехались при будущих правках.
+  function renderActions(d: DocumentRow) {
+    return (
+      <>
+        {d.docxS3Key && (
+          <a
+            href={`/api/documents/${d.id}/download?format=docx`}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-neon-orange/40 text-neon-orange rounded hover:bg-neon-orange/10"
+          >
+            <FileDown className="w-3 h-3" />
+            DOCX
+          </a>
+        )}
+        {d.pdfS3Key && (
+          <a
+            href={`/api/documents/${d.id}/download?format=pdf`}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-poison-green/40 text-poison-green rounded hover:bg-poison-green/10"
+          >
+            <FileDown className="w-3 h-3" />
+            PDF
+          </a>
+        )}
+        {d.status !== 'archived' && (d.docxS3Key || d.pdfS3Key) && (
+          <button
+            onClick={() => setSendingDoc(d)}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs text-cyber-blue hover:text-cyber-blue/80"
+            title="Отправить клиенту"
+          >
+            <Send className="w-3 h-3" />
+          </button>
+        )}
+        {d.status !== 'archived' &&
+          (d.docxS3Key || d.pdfS3Key) &&
+          ACCOUNTANT_TYPES.includes(d.type) && (
+            <button
+              onClick={() => handleSendToAccountant(d)}
+              disabled={isPending}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded disabled:opacity-50"
+              title="Отправить бухгалтеру"
+            >
+              <Send className="w-3 h-3" />
+              БУХ
+            </button>
+          )}
+        {d.status !== 'archived' && (
+          <button
+            onClick={() => openGenerate(d.type)}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs text-content-muted hover:text-content-primary"
+            title="Перегенерировать"
+          >
+            <RefreshCw className="w-3 h-3" />
+          </button>
+        )}
+        <button
+          onClick={() => handleDelete(d)}
+          disabled={isPending}
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+          title="Удалить документ безвозвратно"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -175,7 +241,8 @@ export function DocumentsTab({
         </CyberpunkCard>
       ) : (
         <CyberpunkCard variant="default" hoverEffect={false} className="p-0 overflow-hidden">
-          <table className="w-full text-sm">
+          {/* Desktop: таблица */}
+          <table className="hidden md:table w-full text-sm">
             <thead className="bg-bg-secondary border-b border-gray-200">
               <tr className="text-xs uppercase font-orbitron tracking-wider text-content-muted">
                 <th className="text-left px-4 py-3">Тип / Номер</th>
@@ -201,69 +268,39 @@ export function DocumentsTab({
                       {STATUS_LABEL[d.status]?.label ?? d.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    {d.docxS3Key && (
-                      <a
-                        href={`/api/documents/${d.id}/download?format=docx`}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-neon-orange/40 text-neon-orange rounded hover:bg-neon-orange/10"
-                      >
-                        <FileDown className="w-3 h-3" />
-                        DOCX
-                      </a>
-                    )}
-                    {d.pdfS3Key && (
-                      <a
-                        href={`/api/documents/${d.id}/download?format=pdf`}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-poison-green/40 text-poison-green rounded hover:bg-poison-green/10"
-                      >
-                        <FileDown className="w-3 h-3" />
-                        PDF
-                      </a>
-                    )}
-                    {d.status !== 'archived' && (d.docxS3Key || d.pdfS3Key) && (
-                      <button
-                        onClick={() => setSendingDoc(d)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-cyber-blue hover:text-cyber-blue/80"
-                        title="Отправить клиенту"
-                      >
-                        <Send className="w-3 h-3" />
-                      </button>
-                    )}
-                    {d.status !== 'archived' &&
-                      (d.docxS3Key || d.pdfS3Key) &&
-                      ACCOUNTANT_TYPES.includes(d.type) && (
-                        <button
-                          onClick={() => handleSendToAccountant(d)}
-                          disabled={isPending}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded disabled:opacity-50"
-                          title="Отправить бухгалтеру"
-                        >
-                          <Send className="w-3 h-3" />
-                          БУХ
-                        </button>
-                      )}
-                    {d.status !== 'archived' && (
-                      <button
-                        onClick={() => openGenerate(d.type)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-content-muted hover:text-content-primary"
-                        title="Перегенерировать"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleDelete(d)}
-                      disabled={isPending}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
-                      title="Удалить документ безвозвратно"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </td>
+                  <td className="px-4 py-3 text-right space-x-2">{renderActions(d)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+
+          {/* Mobile: карточки. Таблица на телефоне не влезала (4 колонки, жёсткие
+              ширины) и обрезалась обёрткой overflow-hidden — колонка с кнопками
+              уезжала за край экрана без возможности доскроллить пальцем, поэтому
+              документ нельзя было ни скачать, ни отправить с телефона. */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {documents.map((d) => (
+              <div
+                key={d.id}
+                className={`p-4 ${d.status === 'archived' ? 'opacity-50' : ''}`}
+              >
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <span className="font-medium text-content-primary">
+                    {DOC_TYPE_LABEL[d.type]}
+                  </span>
+                  <span className={`text-xs shrink-0 ${STATUS_LABEL[d.status]?.color ?? ''}`}>
+                    {STATUS_LABEL[d.status]?.label ?? d.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-content-muted mb-3">
+                  <span className="font-mono">{d.number}</span>
+                  <span>·</span>
+                  <span>{d.date ? d.date.split('-').reverse().join('.') : '—'}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">{renderActions(d)}</div>
+              </div>
+            ))}
+          </div>
         </CyberpunkCard>
       )}
 

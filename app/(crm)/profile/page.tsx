@@ -48,6 +48,48 @@ export default async function ProfilePage() {
     }
   }
 
+  // Пока пароль не сменён, authorized-колбэк (lib/auth/config.ts) разворачивает юзера
+  // сюда с ЛЮБОЙ страницы. Раньше он попадал на обычный профиль, где смена пароля была
+  // ТРЕТЬЕЙ карточкой — ниже Telegram и Push, на телефоне это 2-3 экрана прокрутки.
+  // Мастер Денисов так и не долистал: заходил, не находил своих выездов и уходил
+  // (жалоба Регины 13.08 и 17.08.2026 — «Юра не видит свои заказы»).
+  // Поэтому в этом состоянии показываем ТОЛЬКО смену пароля и объясняем, что происходит.
+  if (sessionUser.passwordMustChange) {
+    return (
+      <div className="max-w-xl space-y-6">
+        <div>
+          <PageTitle className="mb-1">Смените пароль</PageTitle>
+          <p className="text-sm text-content-muted">
+            {sessionUser.name} · {ROLE_LABELS[sessionUser.role]} · {sessionUser.email}
+          </p>
+        </div>
+
+        <CyberpunkCard variant="default" hoverEffect={false} className="p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-orbitron font-semibold text-content-primary mb-2 uppercase tracking-wider">
+              Остался один шаг
+            </h2>
+            <p className="text-sm text-content-secondary">
+              Вы вошли по временному паролю. Пока он не заменён на свой, остальные
+              разделы закрыты — поэтому вы и не видите свои задачи.
+            </p>
+            <p className="text-sm text-content-secondary mt-2">
+              Придумайте новый пароль (минимум 8 символов) и нажмите «Сменить пароль».
+              {sessionUser.role === 'master'
+                ? ' Сразу после этого откроются ваши выезды.'
+                : ' Сразу после этого откроется рабочий раздел.'}
+            </p>
+            <p className="text-xs text-content-muted mt-3">
+              В поле «Текущий пароль» введите тот временный пароль, которым только что вошли.
+              Если он не сохранился — попросите администратора выдать новый.
+            </p>
+          </div>
+          <PasswordForm userRole={sessionUser.role} mustChange />
+        </CyberpunkCard>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-xl space-y-6">
       <div>

@@ -8,10 +8,18 @@ import {
   validateCorrAccount,
 } from '@/lib/validation/inn';
 
-// Помощник: trim + если пусто — undefined (для optional полей)
+// Помощник: trim + если пусто — undefined (для optional полей).
+//
+// ⚠️ .nullish(), а НЕ .optional() — схема ОБЯЗАНА переваривать собственный результат.
+// Форма (zodResolver) валидирует ввод и отдаёт в server action уже OUTPUT схемы, а
+// createClient/updateClient парсят ТОЙ ЖЕ схемой второй раз. Поле kpp на выходе даёт
+// null (см. ниже, чтобы очистка доезжала до БД) — и с .optional() этот null влетал
+// обратно на вход и падал сырым «Expected string, received null».
+// Ловилось только у ИП: у организации КПП заполнен строкой, а у ИП он пустой всегда.
+// Проверяется тестом tools/test-client-bank-schema.ts (двойной парс).
 const optionalTrimmed = z
   .string()
-  .optional()
+  .nullish()
   .transform((v) => {
     const trimmed = v?.trim();
     return trimmed && trimmed.length > 0 ? trimmed : undefined;

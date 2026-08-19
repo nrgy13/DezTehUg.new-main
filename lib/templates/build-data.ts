@@ -140,12 +140,18 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       ? priceItemsByObject.filter((p) => ctx.priceItemIds!.includes(p.id))
       : priceItemsByObject;
 
-  // Имена услуг (для priceItems из каталога)
+  // Имена услуг (для priceItems из каталога).
+  // ПОЛНОЕ название, а не shortName — та же причина, что и у objectServices ниже:
+  // в каталоге под одним коротким именем живут РАЗНЫЕ услуги (на проде 13 позиций
+  // с shortName «Дезинсекция», 4 — «Дезинфекция»), и в прайсе договора клиент видел
+  // три строки «Дезинсекция» с разными ценами вместо «уничтожение комаров, подвал /
+  // 1 этаж / тараканы, профилактика». В актах полное имя печаталось уже давно —
+  // договор противоречил акту.
   const serviceIds = priceItemsRaw.map((p) => p.serviceId).filter((x): x is string => !!x);
   const svcMap = new Map<string, string>();
   if (serviceIds.length > 0) {
     const svcs = await db.select().from(services);
-    for (const s of svcs) svcMap.set(s.id, s.shortName ?? s.name);
+    for (const s of svcs) svcMap.set(s.id, s.name ?? s.shortName);
   }
 
   const objMap = new Map(objects.map((o) => [o.id, o]));
