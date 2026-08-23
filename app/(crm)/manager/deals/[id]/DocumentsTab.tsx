@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/label';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { NeonInput } from '@/components/cyberpunk/NeonInput';
+import { ShareDocumentButton } from '@/components/crm/ShareDocumentButton';
 import { sendDocumentToClient, sendDocumentToAccountant } from './send-document-action';
 import { deleteDocument } from '../actions';
 import type { DocumentType, DocumentStatus, DeletionStatus } from '@/lib/db/schema/documents';
@@ -165,6 +166,16 @@ export function DocumentsTab({
             PDF
           </a>
         )}
+        {/* Системное «Поделиться». На iPhone ссылки выше открывают файл во
+            встроенном просмотрщике без панели Safari — оттуда документ никуда
+            не отправить. Кнопка сама решает, показываться ли: если браузер не
+            умеет делиться файлами, она не рендерится. */}
+        <ShareDocumentButton
+          documentId={d.id}
+          label={`${DOC_TYPE_LABEL[d.type]} ${d.number ?? ''}`.trim()}
+          hasPdf={Boolean(d.pdfS3Key)}
+          hasDocx={Boolean(d.docxS3Key)}
+        />
         {d.status !== 'archived' && (d.docxS3Key || d.pdfS3Key) && (
           <button
             onClick={() => setSendingDoc(d)}

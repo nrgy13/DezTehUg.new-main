@@ -8,6 +8,7 @@ import { clients } from '@/lib/db/schema/clients';
 import { deals } from '@/lib/db/schema/deals';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { PageTitle } from '@/components/crm/PageTitle';
+import { ShareDocumentButton } from '@/components/crm/ShareDocumentButton';
 import { DeleteDocumentButton } from './DeleteDocumentButton';
 
 export const metadata = { title: 'Документы — ДезТехЮг CRM' };
@@ -74,6 +75,7 @@ export default async function DocumentsListPage({
       status: documents.status,
       createdAt: documents.createdAt,
       docxKey: documents.docxS3Key,
+      pdfKey: documents.pdfS3Key,
       clientId: clients.id,
       clientName: clients.shortName,
       dealNumber: deals.contractNumber,
@@ -106,6 +108,46 @@ export default async function DocumentsListPage({
     if (nextPeriod && nextPeriod !== '90') params.set('period', String(nextPeriod));
     const qs = params.toString();
     return qs ? `/manager/documents?${qs}` : '/manager/documents';
+  }
+
+  type DocRow = (typeof rows)[number];
+
+  // Действия над документом — ОДИН набор на обе вёрстки (таблица + мобильные
+  // карточки), чтобы они не разъехались при будущих правках. Ровно по этой
+  // причине список и отстал от карточки сделки: там кнопки чинили, здесь нет.
+  function renderActions(r: DocRow) {
+    const label = `${typeLabel(r.type)} ${r.number ?? ''}`.trim();
+    return (
+      <>
+        {r.docxKey && (
+          <a
+            href={`/api/documents/${r.id}/download?format=docx`}
+            className="inline-flex items-center gap-1 text-xs text-poison-green hover:underline"
+            title="Скачать DOCX"
+          >
+            <Download className="w-3.5 h-3.5" />
+            DOCX
+          </a>
+        )}
+        {r.pdfKey && (
+          <a
+            href={`/api/documents/${r.id}/download?format=pdf`}
+            className="inline-flex items-center gap-1 text-xs text-cyber-blue hover:underline"
+            title="Скачать PDF"
+          >
+            <Download className="w-3.5 h-3.5" />
+            PDF
+          </a>
+        )}
+        <ShareDocumentButton
+          documentId={r.id}
+          label={label}
+          hasPdf={Boolean(r.pdfKey)}
+          hasDocx={Boolean(r.docxKey)}
+        />
+        <DeleteDocumentButton id={r.id} label={label} />
+      </>
+    );
   }
 
   return (
@@ -164,7 +206,10 @@ export default async function DocumentsListPage({
             Документов по выбранным фильтрам не найдено.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Desktop: таблица. На телефоне она 7 колонок с кнопками в последней —
+              до них надо было долго мотать вправо, поэтому ниже отдельные карточки. */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-[10px] font-orbitron tracking-wider uppercase text-content-muted">
                 <tr>
@@ -223,20 +268,7 @@ export default async function DocumentsListPage({
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex items-center justify-end gap-3">
-                          {r.docxKey && (
-                            <a
-                              href={`/api/documents/${r.id}/download`}
-                              className="inline-flex items-center gap-1 text-xs text-poison-green hover:underline"
-                              title="Скачать DOCX"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              DOCX
-                            </a>
-                          )}
-                          <DeleteDocumentButton
-                            id={r.id}
-                            label={`${typeLabel(r.type)} ${r.number ?? ''}`.trim()}
-                          />
+                          {renderActions(r)}
                         </div>
                       </td>
                     </tr>
@@ -245,6 +277,58 @@ export default async function DocumentsListPage({
               </tbody>
             </table>
           </div>
+
+          {/* Mobile: карточки — тот же паттерн, что во вкладке документов сделки. */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {rows.map((r) => {
+              const si = statusInfo(r.status);
+              return (
+                <div key={r.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-content-primary">
+                      <FileText className="w-3.5 h-3.5 text-content-muted shrink-0" />
+                      {typeLabel(r.type)}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[11px] font-medium shrink-0 ${si.badge}`}
+                    >
+                      {si.label}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-content-muted mb-1">
+                    <span className="font-mono">{r.number ?? '—'}</span>
+                    <span>·</span>
+                    <span>{formatRu(r.createdAt)}</span>
+                  </div>
+                  <div className="text-xs mb-3">
+                    {r.clientId ? (
+                      <Link
+                        href={`/manager/clients/${r.clientId}`}
+                        className="text-poison-green hover:underline"
+                      >
+                        {r.clientName ?? '—'}
+                      </Link>
+                    ) : (
+                      <span className="text-content-muted">—</span>
+                    )}
+                    {r.dealId && (
+                      <>
+                        <span className="text-content-muted"> · </span>
+                        <Link
+                          href={`/manager/deals/${r.dealId}`}
+                          className="text-poison-green hover:underline"
+                        >
+                          {r.dealNumber ?? r.dealId.slice(0, 8)}
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">{renderActions(r)}</div>
+                </div>
+              );
+            })}
+          </div>
+          </>
         )}
       </CyberpunkCard>
     </div>
