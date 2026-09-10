@@ -93,9 +93,11 @@ export default async function MasterDashboard() {
   const allServices = await db.select().from(services);
   const svcMap = new Map(allServices.map((s) => [s.id, s.shortName ?? s.name]));
 
-  // Заказ-наряды (priceItemId=null): заголовок из snapshot услуг выезда.
+  // Заказ-наряды (priceItemId=null): заголовок из snapshot услуг выезда + объекты услуг
+  // (мульти-объектный наряд — один выезд на несколько объектов → «Отель 4* +5»).
   const woIds = rows.filter((r) => !r.priceItemId && r.objectId).map((r) => r.id);
   const svcByWl = new Map<string, string[]>();
+  const objectIdsByWl = new Map<string, Set<string>>();
   if (woIds.length > 0) {
     const woSvc = await db
       .select({
@@ -103,6 +105,7 @@ export default async function MasterDashboard() {
         customName: dealWorkLogServices.customName,
         serviceName: services.name,
         serviceShortName: services.shortName,
+        objectId: dealWorkLogServices.objectId,
       })
       .from(dealWorkLogServices)
       .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
@@ -113,27 +116,41 @@ export default async function MasterDashboard() {
       const arr = svcByWl.get(s.workLogId) ?? [];
       arr.push(label);
       svcByWl.set(s.workLogId, arr);
+      if (s.objectId) {
+        const set = objectIdsByWl.get(s.workLogId) ?? new Set<string>();
+        set.add(s.objectId);
+        objectIdsByWl.set(s.workLogId, set);
+      }
     }
   }
 
-  const visits: VisitRow[] = rows.map((r) => ({
-    id: r.id,
-    status: r.status as 'planned' | 'in_progress' | 'completed',
-    plannedAt: r.plannedAt,
-    startedAt: r.startedAt,
-    finalizedAt: r.finalizedAt,
-    performedAt: r.performedAt,
-    contractNumber: r.contractNumber ?? '—',
-    clientShortName: r.clientShortName,
-    service:
-      svcByWl.get(r.id)?.join(', ') ||
-      r.customName ||
-      (r.serviceId ? svcMap.get(r.serviceId) ?? 'Без услуги' : 'Без услуги'),
-    objectName: r.objectName ?? r.woObjectName,
-    areaM2: r.areaM2,
-    unit: r.unit,
-    dealId: r.dealId,
-  }));
+  const visits: VisitRow[] = rows.map((r) => {
+    const primaryName = r.objectName ?? r.woObjectName;
+    // Другие объекты наряда (кроме основного) — считаем по id, имена могут совпадать.
+    const others = Array.from(objectIdsByWl.get(r.id) ?? []).filter((id) => id !== r.objectId);
+    return {
+      id: r.id,
+      status: r.status as 'planned' | 'in_progress' | 'completed',
+      plannedAt: r.plannedAt,
+      startedAt: r.startedAt,
+      finalizedAt: r.finalizedAt,
+      performedAt: r.performedAt,
+      contractNumber: r.contractNumber ?? '—',
+      clientShortName: r.clientShortName,
+      service:
+        svcByWl.get(r.id)?.join(', ') ||
+        r.customName ||
+        (r.serviceId ? svcMap.get(r.serviceId) ?? 'Без услуги' : 'Без услуги'),
+      objectName: primaryName
+        ? others.length > 0
+          ? `${primaryName} +${others.length}`
+          : primaryName
+        : null,
+      areaM2: r.areaM2,
+      unit: r.unit,
+      dealId: r.dealId,
+    };
+  });
 
   const inProgress = visits.filter((v) => v.status === 'in_progress');
   const planned = visits.filter((v) => v.status === 'planned');

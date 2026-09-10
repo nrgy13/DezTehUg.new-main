@@ -24,6 +24,11 @@ export type WorkOrderServiceInput = {
   unit?: PriceItemUnit;
   /** Дробное количество в unit. Строка/число/null. */
   quantity?: string | number | null;
+  /**
+   * Объект этой услуги (мульти-объектный наряд: один выезд на несколько объектов клиента).
+   * null/undefined → основной объект наряда.
+   */
+  objectId?: string | null;
 };
 
 /**
@@ -39,8 +44,10 @@ export type WorkOrderChecklistInput = {
 };
 
 /**
- * Создаёт заказ-наряд = один выезд (work_log) на ОБЪЕКТ в рамках договора, с
- * несколькими услугами (snapshot), препаратами и назначенным мастером.
+ * Создаёт заказ-наряд = один выезд (work_log) на ОБЪЕКТ (или НЕСКОЛЬКО объектов клиента —
+ * мульти-объектный наряд, 09.2026) в рамках договора, с несколькими услугами (snapshot),
+ * препаратами и назначенным мастером. У каждой услуги — свой объект наряда: в АВР/АО
+ * строка = объект + его площадь + услуга.
  * Чеклист: если передан явный `checklist` (Регина собрала в форме) — вставляем его;
  * иначе (обратная совместимость) — автокопия из шаблонов по service_id услуг.
  *
@@ -48,7 +55,13 @@ export type WorkOrderChecklistInput = {
  */
 export async function createWorkOrder(params: {
   dealId: string;
+  /** Основной объект наряда (первый блок формы). При objectIds — равен objectIds[0]. */
   objectId: string;
+  /**
+   * Все объекты наряда в порядке блоков формы. Не задан / пустой → наряд на один
+   * объект `objectId` (старое поведение).
+   */
+  objectIds?: string[];
   masterId: string;
   plannedAt: Date | null;
   preparations?: string | null;
@@ -56,18 +69,25 @@ export async function createWorkOrder(params: {
   /** Явный чеклист от формы. undefined → автокопия из шаблонов услуг (старое поведение). */
   checklist?: WorkOrderChecklistInput[];
 }): Promise<{ workLogId: string; itemsCount: number }> {
-  const { dealId, objectId, masterId, plannedAt, preparations, services: svcList, checklist } = params;
+  const { dealId, masterId, plannedAt, preparations, services: svcList, checklist } = params;
+
+  // Объекты наряда: основной — первым; дедуп сохраняет порядок блоков формы.
+  const objectIds = Array.from(
+    new Set([params.objectId, ...(params.objectIds ?? [])].filter((x): x is string => !!x)),
+  );
+  const primaryObjectId = objectIds[0];
+  const objectIdSet = new Set(objectIds);
 
   // Всё одной транзакцией: иначе при падении на услугах/чеклисте остаётся «битый»
   // work_log без услуг/чеклиста, а напоминание серии уже гасится по факту наличия выезда.
   return await db.transaction(async (tx) => {
-    // 1) Сам выезд (planned).
+    // 1) Сам выезд (planned). object_id = основной объект (совместимость с календарём/списками).
     const [created] = await tx
       .insert(dealWorkLogs)
       .values({
         dealId,
         masterId,
-        objectId,
+        objectId: primaryObjectId,
         priceItemId: null,
         status: 'planned',
         plannedAt: plannedAt ?? null,
@@ -75,20 +95,21 @@ export async function createWorkOrder(params: {
       })
       .returning({ id: dealWorkLogs.id });
 
-    // 1b) Автопривязка объекта к договору, если ещё не привязан. Нужно для актов
+    // 1b) Автопривязка объектов к договору, если ещё не привязаны. Нужно для актов
     // АО/АВР (они формируются по позициям договора, относящимся к объекту).
     await tx
       .update(clientObjects)
       .set({ dealId })
-      .where(and(eq(clientObjects.id, objectId), isNull(clientObjects.dealId)));
+      .where(and(inArray(clientObjects.id, objectIds), isNull(clientObjects.dealId)));
 
-    // 2) Snapshot услуг наряда.
+    // 2) Snapshot услуг наряда — у каждой услуги СВОЙ объект наряда (чужой/пустой → основной).
     const cleaned = svcList.filter((s) => s.serviceId || s.customName?.trim());
     if (cleaned.length > 0) {
       await tx.insert(dealWorkLogServices).values(
         cleaned.map((s, i) => ({
           workLogId: created.id,
           serviceId: s.serviceId ?? null,
+          objectId: s.objectId && objectIdSet.has(s.objectId) ? s.objectId : primaryObjectId,
           customName: s.customName?.trim() ? s.customName.trim() : null,
           method: s.method?.trim() ? s.method.trim() : null,
           unit: (s.unit ?? 'm2') as PriceItemUnit,

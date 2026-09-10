@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -14,7 +14,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
-import { UNIT_OPTIONS } from '@/lib/constants/units';
+import { UNIT_OPTIONS, formatQuantity } from '@/lib/constants/units';
 import { TREATMENT_METHODS } from '@/lib/constants/treatment';
 import { mskLocalToUtcISO } from '@/lib/datetime/msk';
 import {
@@ -27,6 +27,7 @@ import {
   type WorkOrderDefaultService,
   type WorkOrderDuplicateService,
   type WorkOrderDuplicatePrefill,
+  type WorkOrderObject,
 } from '@/app/(crm)/manager/calendar/work-order-actions';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
@@ -39,6 +40,20 @@ type SvcRow = {
   method: string;
   unit: PriceItemUnit;
   quantity: string;
+};
+
+/**
+ * Блок наряда = один объект + его услуги. Наряд состоит из 1..N блоков (мульти-объектный
+ * наряд, запрос Регины 03.09.2026): один выезд на несколько объектов клиента (АРУМ: Отель 4*,
+ * ТКО 4*, Отель 5*…), в АВР/АО каждая услуга идёт строкой со СВОИМ объектом и площадью.
+ * Первый блок — основной объект наряда (календарь/списки показывают его + «+N»).
+ */
+type ObjectBlock = {
+  /** Локальный стабильный ключ (React key, адресация при async-подгрузке). */
+  key: string;
+  objectId: string;
+  rows: SvcRow[];
+  loading: boolean;
 };
 
 type ChecklistRow = {
@@ -61,6 +76,13 @@ function toChkRows(items: WorkOrderChecklistDefault[]): ChecklistRow[] {
     source: c.source,
     sourceTemplateId: c.sourceTemplateId,
   }));
+}
+
+// Дедуп по заголовку (без регистра) — повторный подтяг не плодит дубли.
+function mergeChecklist(cur: ChecklistRow[], ins: ChecklistRow[]): ChecklistRow[] {
+  const seen = new Set(cur.map((c) => c.title.trim().toLowerCase()));
+  const fresh = ins.filter((c) => !seen.has(c.title.trim().toLowerCase()));
+  return [...cur, ...fresh];
 }
 
 /** Предзаполнение формы: открыть с уже выбранным клиентом/договором/объектом/датой. */
@@ -112,10 +134,58 @@ function dupSvcToRow(s: WorkOrderDuplicateService, catalogIds: Set<string>): Svc
   return svcToRow(s);
 }
 
+function rowFilled(r: SvcRow): boolean {
+  return !!(r.serviceId || r.customName.trim());
+}
+
+function newBlock(objectId = ''): ObjectBlock {
+  return { key: crypto.randomUUID(), objectId, rows: [], loading: false };
+}
+
+// Блоки дубля: услуги исходного наряда разложены по своим объектам (порядок = objectIds,
+// основной первым). Объект без услуг (маловероятно) остаётся пустым блоком.
+function blocksFromDuplicate(
+  prefill: WorkOrderDuplicatePrefill,
+  catalogIds: Set<string>,
+): ObjectBlock[] {
+  const byObject = new Map<string, SvcRow[]>();
+  for (const id of prefill.objectIds) byObject.set(id, []);
+  for (const s of prefill.services) {
+    const arr = byObject.get(s.objectId) ?? [];
+    arr.push(dupSvcToRow(s, catalogIds));
+    byObject.set(s.objectId, arr);
+  }
+  const blocks = Array.from(byObject.entries()).map(([objectId, rows]) => ({
+    key: crypto.randomUUID(),
+    objectId,
+    rows,
+    loading: false,
+  }));
+  return blocks.length > 0 ? blocks : [newBlock()];
+}
+
+// Опция объекта для Combobox. В описании — площадь и услуги объекта, а не только адрес:
+// у Регины объекты заведены «место × услуга» (АРУМ: два «Отель 4*» с одним адресом,
+// 2 067,82 м² дезинсекция и 4 694,40 м² дератизация) — без площади/услуги они неразличимы.
+// Адрес остаётся — для сетей (Хадыжи: 31 магазин с одним именем) различает именно он.
+function objectOption(o: WorkOrderObject): ComboboxOption {
+  const area = o.areaM2 ? `${formatQuantity(o.areaM2)} м²` : '';
+  const svcs = o.services.map((s) => s.label).join(', ');
+  const showType = !!o.objectType && o.objectType.trim() !== o.name.trim();
+  return {
+    value: o.id,
+    label: `${o.name}${showType ? ` — ${o.objectType}` : ''}`,
+    description: [area, svcs, o.address].filter(Boolean).join(' · '),
+    keywords: [o.name, o.objectType, o.address, area, o.areaM2, svcs].filter(
+      (x): x is string => !!x,
+    ),
+  };
+}
+
 /**
  * Форма заказ-наряда. Рендерить только когда открыт (вызывающий: `{open && <... />}`),
  * чтобы preset применялся при каждом открытии. Используется из календаря (кнопка),
- * панели напоминаний и карточки объекта.
+ * панели напоминаний, карточки объекта и таба сделки.
  */
 export function WorkOrderDialog({
   data,
@@ -128,8 +198,8 @@ export function WorkOrderDialog({
   preset?: WorkOrderPreset;
   /**
    * Режим дублирования: форма открывается с данными конкретного наряда (клиент/договор/
-   * объект/мастер/услуги/препараты/чеклист), дата пустая. Поля цели редактируемы — копию
-   * можно перенести на другой объект/договор/клиента (услуги/чеклист не перетираются).
+   * объекты/мастер/услуги/препараты/чеклист), дата пустая. Поля цели редактируемы — копию
+   * можно перенести на другие объекты/договор/клиента (услуги/чеклист не перетираются).
    */
   duplicatePrefill?: WorkOrderDuplicatePrefill;
   onClose: () => void;
@@ -142,7 +212,6 @@ export function WorkOrderDialog({
 
   const [clientId, setClientId] = useState(duplicatePrefill?.clientId ?? preset?.clientId ?? '');
   const [dealId, setDealId] = useState(duplicatePrefill?.dealId ?? preset?.dealId ?? '');
-  const [objectId, setObjectId] = useState(duplicatePrefill?.objectId ?? '');
   // Мастер дубля — только если он ещё мастер (мог сменить роль/уволиться); иначе пусто.
   const [masterId, setMasterId] = useState(
     duplicatePrefill?.masterId && data.masters.some((m) => m.id === duplicatePrefill.masterId)
@@ -151,12 +220,12 @@ export function WorkOrderDialog({
   );
   const [plannedAt, setPlannedAt] = useState(preset?.plannedAtLocal ?? ''); // datetime-local
   const [preparations, setPreparations] = useState(duplicatePrefill?.preparations ?? '');
-  const [rows, setRows] = useState<SvcRow[]>(() => {
-    if (!duplicatePrefill) return [];
+  // Объекты наряда с услугами. Всегда ≥1 блок (пустой блок = «выбери объект»).
+  const [blocks, setBlocks] = useState<ObjectBlock[]>(() => {
+    if (!duplicatePrefill) return [newBlock()];
     const catalogIds = new Set(data.catalog.map((c) => c.id));
-    return duplicatePrefill.services.map((s) => dupSvcToRow(s, catalogIds));
+    return blocksFromDuplicate(duplicatePrefill, catalogIds);
   });
-  const [loadingDefaults, setLoadingDefaults] = useState(false);
   const [checklist, setChecklist] = useState<ChecklistRow[]>(
     duplicatePrefill ? toChkRows(duplicatePrefill.checklist) : [],
   );
@@ -171,54 +240,88 @@ export function WorkOrderDialog({
     [data.clients, clientId],
   );
 
-  // Combobox-опции для клиента и объекта (поиск по подстроке вместо нативного select).
+  // Combobox-опции для клиента и объектов (поиск по подстроке вместо нативного select).
   const clientOptions = useMemo<ComboboxOption[]>(
     () => data.clients.map((c) => ({ value: c.id, label: c.shortName, keywords: [c.shortName] })),
     [data.clients],
   );
-  // Объект подписываем «Имя — Метка · Адрес» (как в прайсе/привязке) — чтобы различать
-  // одноимённые объекты сетей (Гончаров «Хадыжи»: 31 магазин с одним именем). Искать
-  // можно по имени/метке/адресу.
-  const objectOptions = useMemo<ComboboxOption[]>(
-    () =>
-      (client?.objects ?? []).map((o) => ({
-        value: o.id,
-        // Имя + метка на первой строке, адрес — ОТДЕЛЬНОЙ строкой (description): у сетей
-        // (Хадыжи: 31 магазин с одним именем) различает только адрес, в одной строке он резался.
-        label: `${o.name}${o.objectType ? ` — ${o.objectType}` : ''}`,
-        description: o.address ?? undefined,
-        keywords: [o.name, o.objectType, o.address].filter((x): x is string => !!x),
-      })),
+  const allObjectOptions = useMemo<ComboboxOption[]>(
+    () => (client?.objects ?? []).map(objectOption),
     [client],
   );
+  const objectsById = useMemo(
+    () => new Map((client?.objects ?? []).map((o) => [o.id, o])),
+    [client],
+  );
+  // Объект, уже взятый в другой блок, из выпадашки этого блока убираем — один объект = один блок.
+  function optionsFor(blockKey: string): ComboboxOption[] {
+    const taken = new Set(
+      blocks.filter((b) => b.key !== blockKey && b.objectId).map((b) => b.objectId),
+    );
+    return allObjectOptions.filter((o) => !taken.has(o.value));
+  }
 
-  // Подгрузка дефолтов услуг/препаратов/мастера по объекту (последний наряд → услуги объекта).
-  async function loadObject(v: string) {
-    setObjectId(v);
+  function patchBlock(key: string, patch: Partial<ObjectBlock>) {
+    setBlocks((bs) => bs.map((b) => (b.key === key ? { ...b, ...patch } : b)));
+  }
+
+  // Выбор объекта в блоке + подгрузка его дефолтов (последний наряд → услуги объекта).
+  async function pickObject(key: string, objectId: string) {
     setPendingInsert(null);
     // Режим дубля: услуги/препараты/чеклист уже скопированы из исходного наряда —
     // смена объекта (перенос копии) НЕ должна затирать их дефолтами целевого объекта.
-    if (isDuplicate) return;
-    if (!v) {
-      setRows([]);
-      setChecklist([]);
+    if (isDuplicate) {
+      patchBlock(key, { objectId });
       return;
     }
-    setLoadingDefaults(true);
+    if (!objectId) {
+      patchBlock(key, { objectId: '', rows: [], loading: false });
+      return;
+    }
+    // Первый блок задаёт стартовый чеклист/препараты/мастера (как раньше в одиночном
+    // наряде); остальные блоки только ДОПИСЫВАЮТ пункты чеклиста и заполняют пустое.
+    const isFirst = blocks.findIndex((b) => b.key === key) === 0;
+    patchBlock(key, { objectId, loading: true });
     try {
-      const d = await getObjectWorkOrderDefaults(v);
-      setRows(d.services.map(svcToRow));
-      setChecklist(toChkRows(d.checklist));
+      const d = await getObjectWorkOrderDefaults(objectId);
+      // Пока грузили, объект в блоке могли сменить — тогда эти услуги уже не нужны.
+      setBlocks((bs) =>
+        bs.map((b) =>
+          b.key === key && b.objectId === objectId
+            ? { ...b, rows: d.services.map(svcToRow), loading: false }
+            : b,
+        ),
+      );
+      const chk = toChkRows(d.checklist);
+      if (isFirst) setChecklist(chk);
+      else if (chk.length > 0) setChecklist((cur) => mergeChecklist(cur, chk));
       if (d.source === 'last_order') {
-        setPreparations(d.preparations ?? '');
-        if (d.masterId) setMasterId(d.masterId);
+        if (isFirst) setPreparations(d.preparations ?? '');
+        else if (d.preparations) setPreparations((p) => p || d.preparations || '');
+        if (d.masterId) {
+          const mid = d.masterId;
+          if (isFirst) setMasterId(mid);
+          else setMasterId((m) => m || mid);
+        }
       }
+    } catch {
+      toast.error('Не удалось подтянуть услуги объекта — добавь вручную');
     } finally {
-      setLoadingDefaults(false);
+      setBlocks((bs) => bs.map((b) => (b.key === key ? { ...b, loading: false } : b)));
     }
   }
 
-  // Применяем preset при открытии (объект → подгружаем дефолты).
+  function addBlock() {
+    setBlocks((bs) => [...bs, newBlock()]);
+  }
+  function removeBlock(key: string) {
+    setBlocks((bs) => {
+      const next = bs.filter((b) => b.key !== key);
+      return next.length > 0 ? next : [newBlock()];
+    });
+  }
+
+  // Применяем preset при открытии (объект → первый блок + подгрузка дефолтов).
   useEffect(() => {
     // В режиме дубля данные уже подставлены из duplicatePrefill — дефолты по объекту не тянем.
     if (isDuplicate) return;
@@ -230,7 +333,7 @@ export function WorkOrderDialog({
         const owner = data.clients.find((c) => c.objects.some((o) => o.id === preset.objectId));
         if (owner) setClientId(owner.id);
       }
-      loadObject(preset.objectId);
+      pickObject(blocks[0].key, preset.objectId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -238,11 +341,13 @@ export function WorkOrderDialog({
   function onClient(v: string) {
     setClientId(v);
     setDealId('');
-    setObjectId('');
     setPendingInsert(null);
-    // В режиме дубля услуги/чеклист/препараты переносятся на нового клиента — не чистим.
-    if (!isDuplicate) {
-      setRows([]);
+    if (isDuplicate) {
+      // В режиме дубля услуги/чеклист/препараты переносятся на нового клиента — не чистим,
+      // только снимаем объекты (они принадлежали старому клиенту).
+      setBlocks((bs) => bs.map((b) => ({ ...b, objectId: '' })));
+    } else {
+      setBlocks([newBlock()]);
       setChecklist([]);
     }
   }
@@ -284,17 +389,14 @@ export function WorkOrderDialog({
   function confirmInsert(mode: 'append' | 'replace') {
     if (!pendingInsert) return;
     const ins = pendingInsert.items;
-    setChecklist((cur) => {
-      if (mode === 'replace') return ins;
-      // Дедуп по заголовку (без регистра) — повторный клик «Добавить» не плодит дубли.
-      const seen = new Set(cur.map((c) => c.title.trim().toLowerCase()));
-      const fresh = ins.filter((c) => !seen.has(c.title.trim().toLowerCase()));
-      return [...cur, ...fresh];
-    });
+    setChecklist((cur) => (mode === 'replace' ? ins : mergeChecklist(cur, ins)));
     setPendingInsert(null);
   }
   async function loadFromTemplates() {
-    const serviceIds = rows.map((r) => r.serviceId).filter((x): x is string => !!x);
+    // Услуги всех блоков — чеклист один на весь выезд.
+    const serviceIds = blocks
+      .flatMap((b) => b.rows.map((r) => r.serviceId))
+      .filter((x): x is string => !!x);
     if (serviceIds.length === 0) {
       toast.error('Сначала выбери услуги из каталога');
       return;
@@ -308,42 +410,66 @@ export function WorkOrderDialog({
     }
   }
   async function loadFromLastOrder() {
-    if (!objectId) {
+    const first = blocks.find((b) => b.objectId);
+    if (!first) {
       toast.error('Сначала выбери объект');
       return;
     }
     setChkLoading(true);
     try {
-      const items = await getLastOrderChecklist(objectId);
+      const items = await getLastOrderChecklist(first.objectId);
       applyOrAsk(toChkRows(items), 'прошлый наряд');
     } finally {
       setChkLoading(false);
     }
   }
 
-  function addRow() {
-    setRows((r) => [...r, { serviceId: '', customName: '', method: '', unit: 'm2', quantity: '' }]);
+  // ── Услуги блока ──
+  function addRow(blockKey: string) {
+    setBlocks((bs) =>
+      bs.map((b) =>
+        b.key === blockKey
+          ? {
+              ...b,
+              rows: [...b.rows, { serviceId: '', customName: '', method: '', unit: 'm2', quantity: '' }],
+            }
+          : b,
+      ),
+    );
   }
-  function removeRow(i: number) {
-    setRows((r) => r.filter((_, idx) => idx !== i));
+  function removeRow(blockKey: string, i: number) {
+    setBlocks((bs) =>
+      bs.map((b) => (b.key === blockKey ? { ...b, rows: b.rows.filter((_, idx) => idx !== i) } : b)),
+    );
   }
-  function patchRow(i: number, patch: Partial<SvcRow>) {
-    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+  function patchRow(blockKey: string, i: number, patch: Partial<SvcRow>) {
+    setBlocks((bs) =>
+      bs.map((b) =>
+        b.key === blockKey
+          ? { ...b, rows: b.rows.map((row, idx) => (idx === i ? { ...row, ...patch } : row)) }
+          : b,
+      ),
+    );
   }
-  function onPickService(i: number, value: string) {
+  function onPickService(blockKey: string, i: number, value: string) {
     if (value === '__custom__') {
-      patchRow(i, { serviceId: '', customName: '' });
+      patchRow(blockKey, i, { serviceId: '', customName: '' });
       return;
     }
     const svc = data.catalog.find((c) => c.id === value);
-    patchRow(i, { serviceId: value, customName: '', method: svc?.defaultMethod ?? '' });
+    patchRow(blockKey, i, { serviceId: value, customName: '', method: svc?.defaultMethod ?? '' });
   }
 
   // allowSameDay — второй заход после переспроса «на объект в этот день уже есть наряд».
   // Пустой по умолчанию: сама форма флаг не ставит, только пользователь через подтверждение.
   function submit(allowSameDay = false) {
-    if (!dealId || !objectId) {
+    const filled = blocks.filter((b) => b.objectId);
+    if (!dealId || filled.length === 0) {
       toast.error('Выбери договор и объект');
+      return;
+    }
+    if (blocks.some((b) => !b.objectId && b.rows.some(rowFilled))) {
+      toast.error('Есть услуги без объекта — выбери объект в этом блоке или удали его');
       return;
     }
     if (!masterId) {
@@ -356,15 +482,24 @@ export function WorkOrderDialog({
       toast.error('Поставь дату выезда для копии');
       return;
     }
-    const services = rows
-      .filter((r) => r.serviceId || r.customName.trim())
-      .map((r) => ({
+    // Объект без услуг выпал бы из акта (строки идут по услугам) — не даём его сохранить.
+    const empty = filled.find((b) => !b.rows.some(rowFilled));
+    if (empty) {
+      const name = objectsById.get(empty.objectId)?.name ?? 'объект';
+      toast.error(`У объекта «${name}» нет услуг — добавь услугу или убери объект из наряда`);
+      return;
+    }
+    const objectIds = filled.map((b) => b.objectId);
+    const services = filled.flatMap((b) =>
+      b.rows.filter(rowFilled).map((r) => ({
         serviceId: r.serviceId || null,
         customName: r.customName.trim() || null,
         method: r.method.trim() || null,
         unit: r.unit,
         quantity: r.quantity.trim() ? r.quantity.replace(',', '.') : null,
-      }));
+        objectId: b.objectId,
+      })),
+    );
     if (services.length === 0) {
       toast.error('Добавь хотя бы одну услугу');
       return;
@@ -385,7 +520,8 @@ export function WorkOrderDialog({
     startTransition(async () => {
       const res = await createWorkOrderAction({
         dealId,
-        objectId,
+        objectId: objectIds[0],
+        objectIds,
         masterId,
         plannedAtIso,
         preparations: preparations.trim() || null,
@@ -394,7 +530,11 @@ export function WorkOrderDialog({
         allowSameDay,
       });
       if (res.ok) {
-        toast.success('Заказ-наряд создан — выезд появился в календаре');
+        toast.success(
+          objectIds.length > 1
+            ? `Заказ-наряд на ${objectIds.length} объекта(ов) создан — выезд появился в календаре`
+            : 'Заказ-наряд создан — выезд появился в календаре',
+        );
         onCreated?.();
         router.refresh();
         onClose();
@@ -410,6 +550,9 @@ export function WorkOrderDialog({
     });
   }
 
+  const canAddBlock = blocks.every((b) => b.objectId);
+  const multi = blocks.length > 1;
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -421,7 +564,7 @@ export function WorkOrderDialog({
 
         {isDuplicate && hasClients && (
           <p className="text-xs text-content-muted -mt-1">
-            Скопировано из наряда. Поставь новую дату; при необходимости смени объект, договор
+            Скопировано из наряда. Поставь новую дату; при необходимости смени объекты, договор
             или клиента — услуги, препараты и чеклист перенесутся.
           </p>
         )}
@@ -466,21 +609,8 @@ export function WorkOrderDialog({
               </div>
             </div>
 
-            {/* Объект + мастер */}
+            {/* Мастер + дата */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="wo-object">Объект</Label>
-                <Combobox
-                  id="wo-object"
-                  options={objectOptions}
-                  value={objectId}
-                  onChange={loadObject}
-                  placeholder="— объект —"
-                  searchPlaceholder="Поиск по имени или адресу…"
-                  emptyText="Объект не найден"
-                  disabled={!client}
-                />
-              </div>
               <div>
                 <Label htmlFor="wo-master">Мастер</Label>
                 <select
@@ -497,120 +627,177 @@ export function WorkOrderDialog({
                   ))}
                 </select>
               </div>
+              <div>
+                <Label htmlFor="wo-date">Дата и время выезда</Label>
+                <input
+                  id="wo-date"
+                  type="datetime-local"
+                  className={fieldClass}
+                  value={plannedAt}
+                  onChange={(e) => setPlannedAt(e.target.value)}
+                />
+              </div>
             </div>
 
-            {/* Дата + время */}
+            {/* Объекты и услуги: блок на объект, один наряд может охватывать несколько объектов */}
             <div>
-              <Label htmlFor="wo-date">Дата и время выезда</Label>
-              <input
-                id="wo-date"
-                type="datetime-local"
-                className={fieldClass}
-                value={plannedAt}
-                onChange={(e) => setPlannedAt(e.target.value)}
-              />
-            </div>
-
-            {/* Услуги */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <Label>
-                  Услуги{' '}
-                  {isDuplicate
-                    ? '(скопировано — можно править)'
-                    : objectId
-                      ? '(из прошлого наряда — можно править)'
-                      : ''}
-                  {loadingDefaults && (
-                    <Loader2 className="inline w-3 h-3 ml-1.5 animate-spin text-content-muted" />
-                  )}
-                </Label>
+              <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+                <Label>Объекты и услуги</Label>
                 <button
                   type="button"
-                  onClick={addRow}
-                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-neon-orange border border-neon-orange/40 rounded hover:bg-neon-orange/10"
+                  onClick={addBlock}
+                  disabled={!client || !canAddBlock}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-neon-orange border border-neon-orange/40 rounded hover:bg-neon-orange/10 disabled:opacity-50 disabled:pointer-events-none"
+                  title="Добавить ещё один объект в этот же выезд"
                 >
-                  <Plus className="w-3 h-3" /> услуга
+                  <Plus className="w-3 h-3" /> объект
                 </button>
               </div>
-              {rows.length === 0 && !loadingDefaults && (
-                <p className="text-xs text-content-muted">
-                  Выбери объект — услуги подтянутся, либо добавь вручную.
-                </p>
-              )}
-              <div className="space-y-2">
-                {rows.map((row, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-start">
-                    <div className="col-span-12 sm:col-span-4">
-                      <select
-                        className={fieldClass}
-                        value={row.serviceId || '__custom__'}
-                        onChange={(e) => onPickService(i, e.target.value)}
-                      >
-                        <option value="__custom__">— своя услуга —</option>
-                        {data.catalog.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {/* Полное название (с видом в скобках) — у Регины несколько услуг
-                                с одинаковым коротким именем «Дезинсекция», но разным видом
-                                (тараканы/осы/муравьи). Короткое имя их не различало. */}
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                      {!row.serviceId && (
-                        <input
-                          className={fieldClass}
-                          placeholder="Название услуги"
-                          value={row.customName}
-                          onChange={(e) => patchRow(i, { customName: e.target.value })}
+              <p className="text-xs text-content-muted mb-2">
+                Один наряд может охватывать несколько объектов клиента — в акте каждый пойдёт
+                отдельной строкой со своей площадью и услугой.
+              </p>
+
+              <div className="space-y-3">
+                {blocks.map((b, bi) => (
+                  <div
+                    key={b.key}
+                    className="rounded-md border border-gray-200 p-3 space-y-2 bg-bg-secondary/30"
+                  >
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-4 h-4 text-neon-orange flex-shrink-0 mt-3" />
+                      <div className="flex-1 min-w-0">
+                        {multi && (
+                          <div className="text-[10px] uppercase tracking-wider text-content-muted font-orbitron">
+                            Объект {bi + 1}
+                            {bi === 0 ? ' · основной' : ''}
+                          </div>
+                        )}
+                        <Combobox
+                          id={`wo-object-${b.key}`}
+                          options={optionsFor(b.key)}
+                          value={b.objectId}
+                          onChange={(v) => pickObject(b.key, v)}
+                          placeholder="— объект —"
+                          searchPlaceholder="Поиск по имени, адресу, площади…"
+                          emptyText="Объект не найден"
+                          disabled={!client}
+                          className="mt-0"
                         />
+                      </div>
+                      {(multi || b.objectId) && (
+                        <button
+                          type="button"
+                          onClick={() => removeBlock(b.key)}
+                          className="p-2 mt-1 text-content-muted hover:text-red-500"
+                          aria-label="Убрать объект из наряда"
+                          title="Убрать объект из наряда"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       )}
                     </div>
-                    <div className="col-span-6 sm:col-span-3">
-                      <select
-                        className={fieldClass}
-                        value={row.method}
-                        onChange={(e) => patchRow(i, { method: e.target.value })}
-                      >
-                        <option value="">способ…</option>
-                        {methodOptions(row.method).map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-span-3 sm:col-span-2">
-                      <input
-                        className={fieldClass}
-                        inputMode="decimal"
-                        placeholder="кол-во"
-                        value={row.quantity}
-                        onChange={(e) => patchRow(i, { quantity: e.target.value })}
-                      />
-                    </div>
-                    <div className="col-span-6 sm:col-span-2">
-                      <select
-                        className={fieldClass}
-                        value={row.unit}
-                        onChange={(e) => patchRow(i, { unit: e.target.value as PriceItemUnit })}
-                      >
-                        {UNIT_OPTIONS.map((u) => (
-                          <option key={u.value} value={u.value}>
-                            {u.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-span-3 sm:col-span-1 flex items-center justify-end pt-1">
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-content-secondary">
+                        Услуги
+                        {b.rows.length > 0 && !isDuplicate && ' (из прошлого наряда — можно править)'}
+                        {isDuplicate && b.rows.length > 0 && ' (скопировано — можно править)'}
+                        {b.loading && (
+                          <Loader2 className="inline w-3 h-3 ml-1.5 animate-spin text-content-muted" />
+                        )}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => removeRow(i)}
-                        className="p-2 text-content-muted hover:text-red-500"
-                        aria-label="Удалить услугу"
+                        onClick={() => addRow(b.key)}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-neon-orange border border-neon-orange/40 rounded hover:bg-neon-orange/10"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Plus className="w-3 h-3" /> услуга
                       </button>
+                    </div>
+                    {b.rows.length === 0 && !b.loading && (
+                      <p className="text-xs text-content-muted">
+                        Выбери объект — услуги подтянутся, либо добавь вручную.
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      {b.rows.map((row, i) => (
+                        <div key={i} className="grid grid-cols-12 gap-2 items-start">
+                          <div className="col-span-12 sm:col-span-4">
+                            <select
+                              className={fieldClass}
+                              value={row.serviceId || '__custom__'}
+                              onChange={(e) => onPickService(b.key, i, e.target.value)}
+                            >
+                              <option value="__custom__">— своя услуга —</option>
+                              {data.catalog.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {/* Полное название (с видом в скобках) — у Регины несколько услуг
+                                      с одинаковым коротким именем «Дезинсекция», но разным видом
+                                      (тараканы/осы/муравьи). Короткое имя их не различало. */}
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                            {!row.serviceId && (
+                              <input
+                                className={fieldClass}
+                                placeholder="Название услуги"
+                                value={row.customName}
+                                onChange={(e) => patchRow(b.key, i, { customName: e.target.value })}
+                              />
+                            )}
+                          </div>
+                          <div className="col-span-6 sm:col-span-3">
+                            <select
+                              className={fieldClass}
+                              value={row.method}
+                              onChange={(e) => patchRow(b.key, i, { method: e.target.value })}
+                            >
+                              <option value="">способ…</option>
+                              {methodOptions(row.method).map((m) => (
+                                <option key={m} value={m}>
+                                  {m}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-span-3 sm:col-span-2">
+                            <input
+                              className={fieldClass}
+                              inputMode="decimal"
+                              placeholder="кол-во"
+                              value={row.quantity}
+                              onChange={(e) => patchRow(b.key, i, { quantity: e.target.value })}
+                            />
+                          </div>
+                          <div className="col-span-6 sm:col-span-2">
+                            <select
+                              className={fieldClass}
+                              value={row.unit}
+                              onChange={(e) =>
+                                patchRow(b.key, i, { unit: e.target.value as PriceItemUnit })
+                              }
+                            >
+                              {UNIT_OPTIONS.map((u) => (
+                                <option key={u.value} value={u.value}>
+                                  {u.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-span-3 sm:col-span-1 flex items-center justify-end pt-1">
+                            <button
+                              type="button"
+                              onClick={() => removeRow(b.key, i)}
+                              className="p-2 text-content-muted hover:text-red-500"
+                              aria-label="Удалить услугу"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}

@@ -51,6 +51,8 @@ export type VisitView = {
   performedAt: string | null;
   masterName: string | null;
   services: string[];
+  /** Мульти-объектный наряд: имена ДРУГИХ объектов выезда (кроме основного, под которым висит). */
+  extraObjects: string[];
   preparations: string | null;
   items: VisitItemView[];
 };
@@ -319,6 +321,14 @@ function VisitListItem({
                 </span>
               )}
             </div>
+            {v.extraObjects.length > 0 && (
+              <div className="text-xs text-content-muted mt-1 inline-flex items-start gap-1">
+                <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0 text-neon-orange" />
+                <span>
+                  Выезд на {v.extraObjects.length + 1} объекта(ов): ещё {v.extraObjects.join(', ')}
+                </span>
+              </div>
+            )}
             {v.services.length > 0 && (
               <div className="text-xs text-content-secondary mt-1">{v.services.join(', ')}</div>
             )}

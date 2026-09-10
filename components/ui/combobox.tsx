@@ -131,7 +131,11 @@ export function Combobox({
                 <span className="flex flex-col min-w-0">
                   <span className="truncate">{opt.label}</span>
                   {opt.description && (
-                    <span className="truncate text-xs text-content-muted">{opt.description}</span>
+                    // Без truncate: описание объекта = площадь · услуги · адрес — длинное,
+                    // а различитель одноимённых объектов может быть в любой его части.
+                    <span className="text-xs text-content-muted whitespace-normal break-words">
+                      {opt.description}
+                    </span>
                   )}
                 </span>
               </CommandItem>

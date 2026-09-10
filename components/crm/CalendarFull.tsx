@@ -37,8 +37,10 @@ export type SerializedDealEvent = {
   managerName: string | null;
   /** Название услуги (короткое). */
   serviceTitle: string;
-  /** Объект работ (адрес). */
+  /** Объект работ: основной объект наряда, для мульти-объектного — «Отель 4* +5». */
   objectName: string | null;
+  /** Все объекты наряда (мульти-объектный наряд) — для поиска. Опционально: старые payload'ы без него. */
+  objectNames?: string[];
   health: 'past' | 'today' | 'soon' | 'future' | 'no-date';
 };
 
@@ -216,7 +218,7 @@ export function CalendarFull({
       if (search.trim()) {
         const q = search.trim().toLowerCase();
         const haystack =
-          `${e.contractNumber} ${e.clientShortName ?? ''} ${e.clientPhone ?? ''} ${e.masterName ?? ''} ${e.serviceTitle} ${e.objectName ?? ''}`.toLowerCase();
+          `${e.contractNumber} ${e.clientShortName ?? ''} ${e.clientPhone ?? ''} ${e.masterName ?? ''} ${e.serviceTitle} ${e.objectName ?? ''} ${(e.objectNames ?? []).join(' ')}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       if (statusFilter.size > 0 && !statusFilter.has(e.status)) return false;

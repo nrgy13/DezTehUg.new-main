@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
-import { eq, asc, and, desc, inArray, sql } from 'drizzle-orm';
+import { eq, asc, and, or, desc, inArray, exists, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -105,11 +105,16 @@ export type WorkOrderDefaults = {
 /** Услуга-снимок дубля + имя из каталога (для fallback, если услуга деактивирована). */
 export type WorkOrderDuplicateService = WorkOrderDefaultService & {
   serviceName: string | null;
+  /** Объект услуги в исходном наряде (мульти-объектный наряд); legacy NULL → основной объект. */
+  objectId: string;
 };
 export type WorkOrderDuplicatePrefill = {
   clientId: string;
   dealId: string;
+  /** Основной объект исходного наряда (= objectIds[0]). */
   objectId: string;
+  /** Все объекты исходного наряда в порядке появления: основной первым, затем объекты услуг. */
+  objectIds: string[];
   masterId: string | null;
   preparations: string | null;
   services: WorkOrderDuplicateService[];
@@ -263,15 +268,29 @@ const woServiceSchema = z.array(
         (q) => q == null || q === '' || (Number.isFinite(Number(q)) && Number(q) >= 0),
         'количество — неотрицательное число',
       ),
+    // Мульти-объектный наряд: объект услуги (один из объектов наряда; null → основной).
+    objectId: z.string().uuid().nullable().optional(),
   }),
 );
 
+/** Потолок объектов в одном наряде — защита от случайного «выбрать всё» у сетей (Хадыжи: 31 магазин). */
+const MAX_WORK_ORDER_OBJECTS = 30;
+
 export async function createWorkOrderAction(input: {
   dealId: string;
+  /** Основной объект наряда (первый блок формы). При objectIds — равен objectIds[0]. */
   objectId: string;
+  /**
+   * Мульти-объектный наряд (запрос Регины 03.09.2026): ВСЕ объекты наряда в порядке блоков
+   * формы. Один выезд может охватывать несколько объектов клиента (АРУМ: Отель 4*, ТКО 4*,
+   * Отель 5*…), в АВР/АО каждый идёт отдельной строкой со своей площадью и услугой.
+   * Не задан → наряд на один объект `objectId` (старые вызовы).
+   */
+  objectIds?: string[];
   masterId: string;
   plannedAtIso: string | null;
   preparations: string | null;
+  /** Услуги наряда; у каждой objectId — один из объектов наряда (null → основной). */
   services: WorkOrderServiceInput[];
   /**
    * Чеклист для мастера из формы: массив (м.б. пустой = осознанно без пунктов).
@@ -289,16 +308,31 @@ export async function createWorkOrderAction(input: {
   const actor = await getManager();
   if (!actor) return { ok: false, error: 'Нет доступа' };
 
-  const { dealId, objectId, masterId, plannedAtIso, preparations } = input;
+  const { dealId, masterId, plannedAtIso, preparations } = input;
   if (!dealId) return { ok: false, error: 'Не выбран договор' };
-  if (!objectId) return { ok: false, error: 'Не выбран объект' };
+  // Объекты наряда: основной первым, дальше остальные блоки формы; дедуп сохраняет порядок.
+  const objectIds = Array.from(
+    new Set([input.objectId, ...(input.objectIds ?? [])].filter((x): x is string => !!x)),
+  );
+  if (objectIds.length === 0) return { ok: false, error: 'Не выбран объект' };
+  if (objectIds.length > MAX_WORK_ORDER_OBJECTS) {
+    return {
+      ok: false,
+      error: `Слишком много объектов в одном наряде (максимум ${MAX_WORK_ORDER_OBJECTS})`,
+    };
+  }
   if (!masterId) return { ok: false, error: 'Не выбран мастер' };
+  const primaryObjectId = objectIds[0];
 
   const svc = (input.services ?? []).filter((s) => s.serviceId || s.customName?.trim());
   if (svc.length === 0) return { ok: false, error: 'Добавь хотя бы одну услугу' };
   const svcParsed = woServiceSchema.safeParse(svc);
   if (!svcParsed.success) {
     return { ok: false, error: `Услуги: ${svcParsed.error.errors[0].message}` };
+  }
+  // Услуга обязана относиться к объекту ЭТОГО наряда — иначе строка акта уехала бы на чужой объект.
+  if (svc.some((s) => s.objectId && !objectIds.includes(s.objectId))) {
+    return { ok: false, error: 'Услуга привязана к объекту, которого нет в наряде' };
   }
 
   // Чеклист (если форма прислала массив — даже пустой): фильтруем пустые, валидируем.
@@ -312,20 +346,32 @@ export async function createWorkOrderAction(input: {
     checklist = parsed.data;
   }
 
-  // Объект и договор должны принадлежать одному клиенту.
-  const [obj] = await db
-    .select({ clientId: clientObjects.clientId })
-    .from(clientObjects)
-    .where(eq(clientObjects.id, objectId))
-    .limit(1);
-  const [deal] = await db
-    .select({ clientId: deals.clientId })
-    .from(deals)
-    .where(eq(deals.id, dealId))
-    .limit(1);
-  if (!obj || !deal) return { ok: false, error: 'Объект или договор не найден' };
-  if (obj.clientId !== deal.clientId) {
+  // Все объекты должны существовать и принадлежать клиенту договора.
+  const [objRows, dealRows] = await Promise.all([
+    db
+      .select({ id: clientObjects.id, clientId: clientObjects.clientId, name: clientObjects.name })
+      .from(clientObjects)
+      .where(inArray(clientObjects.id, objectIds)),
+    db.select({ clientId: deals.clientId }).from(deals).where(eq(deals.id, dealId)).limit(1),
+  ]);
+  const deal = dealRows[0];
+  if (!deal || objRows.length !== objectIds.length) {
+    return { ok: false, error: 'Объект или договор не найден' };
+  }
+  if (objRows.some((o) => o.clientId !== deal.clientId)) {
     return { ok: false, error: 'Объект и договор принадлежат разным клиентам' };
+  }
+  const objName = new Map(objRows.map((o) => [o.id, o.name]));
+
+  // У каждого объекта наряда — хотя бы одна услуга: строки акта и список объектов выезда
+  // строятся по услугам, объект без услуг молча выпал бы из документа.
+  const servedObjects = new Set(svc.map((s) => s.objectId ?? primaryObjectId));
+  const unserved = objectIds.find((id) => !servedObjects.has(id));
+  if (unserved) {
+    return {
+      ok: false,
+      error: `У объекта «${objName.get(unserved) ?? '?'}» нет ни одной услуги — добавь услугу или убери объект из наряда`,
+    };
   }
 
   // Второй наряд на тот же объект и день — НЕ запрещаем, а переспрашиваем.
@@ -335,16 +381,31 @@ export async function createWorkOrderAction(input: {
   // (жалоба Регины 06.08.2026 — «сделай, чтобы он давал делать эти наряды»).
   // Компромисс: случайный дубль по-прежнему требует подтверждения, осознанный
   // второй наряд проходит с allowSameDay=true.
+  // Мульти-наряд: проверяем КАЖДЫЙ объект наряда — и как основной объект чужого
+  // наряда, и как объект его услуг.
   if (plannedAtIso && !input.allowSameDay) {
     const day = plannedAtIso.slice(0, 10);
     const [dup] = await db
-      .select({ id: dealWorkLogs.id })
+      .select({ id: dealWorkLogs.id, objectId: dealWorkLogs.objectId })
       .from(dealWorkLogs)
       .where(
         and(
-          eq(dealWorkLogs.objectId, objectId),
           inArray(dealWorkLogs.status, ['planned', 'in_progress']),
           sql`${dealWorkLogs.plannedAt}::date = ${day}::date`,
+          or(
+            inArray(dealWorkLogs.objectId, objectIds),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(dealWorkLogServices)
+                .where(
+                  and(
+                    eq(dealWorkLogServices.workLogId, dealWorkLogs.id),
+                    inArray(dealWorkLogServices.objectId, objectIds),
+                  ),
+                ),
+            ),
+          ),
         ),
       )
       .limit(1);
@@ -355,11 +416,18 @@ export async function createWorkOrderAction(input: {
         .select({
           customName: dealWorkLogServices.customName,
           serviceName: services.name,
+          objectId: dealWorkLogServices.objectId,
         })
         .from(dealWorkLogServices)
         .leftJoin(services, eq(dealWorkLogServices.serviceId, services.id))
         .where(eq(dealWorkLogServices.workLogId, dup.id))
         .orderBy(asc(dealWorkLogServices.sortOrder));
+      // Какой именно объект пересёкся — назвать его в переспросе.
+      const hitId =
+        (dup.objectId && objectIds.includes(dup.objectId) ? dup.objectId : null) ??
+        dupSvc.find((s) => s.objectId && objectIds.includes(s.objectId))?.objectId ??
+        null;
+      const hitName = hitId ? objName.get(hitId) : null;
       const list = dupSvc
         .map((s) => s.customName ?? s.serviceName ?? '')
         .filter(Boolean)
@@ -367,9 +435,9 @@ export async function createWorkOrderAction(input: {
       return {
         ok: false,
         needsConfirm: true,
-        error: list
-          ? `На этот объект в выбранный день уже есть наряд: ${list}.`
-          : 'На этот объект в выбранный день уже есть активный наряд.',
+        error: `На объект${hitName ? ` «${hitName}»` : ''} в выбранный день уже есть ${
+          list ? `наряд: ${list}` : 'активный наряд'
+        }.`,
       };
     }
   }
@@ -378,7 +446,8 @@ export async function createWorkOrderAction(input: {
   try {
     const created = await createWorkOrder({
       dealId,
-      objectId,
+      objectId: primaryObjectId,
+      objectIds,
       masterId,
       plannedAt: plannedAtIso ? new Date(plannedAtIso) : null,
       preparations,
@@ -396,9 +465,8 @@ export async function createWorkOrderAction(input: {
   try {
     const { sendPushToUser } = await import('@/lib/push/server');
     const [info] = await db
-      .select({ contractNumber: deals.contractNumber, objectName: clientObjects.name })
+      .select({ contractNumber: deals.contractNumber })
       .from(deals)
-      .leftJoin(clientObjects, eq(clientObjects.id, objectId))
       .where(eq(deals.id, dealId))
       .limit(1);
     const datePart = plannedAtIso
@@ -408,9 +476,11 @@ export async function createWorkOrderAction(input: {
           month: '2-digit',
         })}`
       : '';
+    // Мульти-наряд: «Отель 4* +5 об.» — мастер сразу видит, что точек несколько.
+    const extra = objectIds.length > 1 ? ` +${objectIds.length - 1} об.` : '';
     await sendPushToUser(masterId, {
       title: 'Новый заказ-наряд',
-      body: `${info?.objectName ?? info?.contractNumber ?? 'Выезд'}${datePart}`,
+      body: `${objName.get(primaryObjectId) ?? info?.contractNumber ?? 'Выезд'}${extra}${datePart}`,
       url: `/master/visits/${workLogId}`,
       tag: `wo-assigned-${workLogId}`,
     });
@@ -506,25 +576,48 @@ export async function deleteWorkOrder(workLogId: string): Promise<Result> {
  *   ПОСЛЕДНЕГО наряда (Саня: «форма предзаполнена данными с прошлого наряда»);
  * - иначе — услуги объекта из client_object_services (как при ручном вводе).
  */
+/**
+ * Условие «наряд содержит объект»: объект — основной (deal_work_logs.object_id) ИЛИ по нему
+ * есть услуга в снимке наряда (мульти-объектный наряд).
+ */
+function workLogHasObject(objectId: string) {
+  return or(
+    eq(dealWorkLogs.objectId, objectId),
+    exists(
+      db
+        .select({ one: sql`1` })
+        .from(dealWorkLogServices)
+        .where(
+          and(
+            eq(dealWorkLogServices.workLogId, dealWorkLogs.id),
+            eq(dealWorkLogServices.objectId, objectId),
+          ),
+        ),
+    ),
+  );
+}
+
 export async function getObjectWorkOrderDefaults(objectId: string): Promise<WorkOrderDefaults> {
   const actor = await getManager();
   if (!actor)
     return { source: 'object', services: [], preparations: null, masterId: null, checklist: [] };
 
-  // 1) Последний наряд объекта.
+  // 1) Последний наряд с этим объектом — объект в нём основной ИЛИ один из объектов услуг
+  //    (мульти-объектный наряд). Берём из него услуги ИМЕННО этого объекта.
   const [last] = await db
     .select({
       id: dealWorkLogs.id,
+      objectId: dealWorkLogs.objectId,
       preparations: dealWorkLogs.preparations,
       masterId: dealWorkLogs.masterId,
     })
     .from(dealWorkLogs)
-    .where(eq(dealWorkLogs.objectId, objectId))
+    .where(workLogHasObject(objectId))
     .orderBy(desc(dealWorkLogs.createdAt))
     .limit(1);
 
   if (last) {
-    const [svc, chk] = await Promise.all([
+    const [svcAll, chk] = await Promise.all([
       db
         .select({
           serviceId: dealWorkLogServices.serviceId,
@@ -532,6 +625,7 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
           method: dealWorkLogServices.method,
           unit: dealWorkLogServices.unit,
           quantity: dealWorkLogServices.quantity,
+          objectId: dealWorkLogServices.objectId,
         })
         .from(dealWorkLogServices)
         .where(eq(dealWorkLogServices.workLogId, last.id))
@@ -552,6 +646,11 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
         )
         .orderBy(asc(dealChecklistItems.position)),
     ]);
+    // Услуги этого объекта; object_id = NULL (legacy до миграции 0021) = услуги основного объекта.
+    const own = svcAll.filter(
+      (s) => s.objectId === objectId || (s.objectId == null && last.objectId === objectId),
+    );
+    const svc = own.length > 0 ? own : svcAll;
     return {
       source: 'last_order',
       services: svc.map((s) => ({
@@ -700,7 +799,7 @@ export async function getLastOrderChecklist(
   const [last] = await db
     .select({ id: dealWorkLogs.id })
     .from(dealWorkLogs)
-    .where(eq(dealWorkLogs.objectId, objectId))
+    .where(workLogHasObject(objectId))
     .orderBy(desc(dealWorkLogs.createdAt))
     .limit(1);
   if (!last) return [];
@@ -770,6 +869,7 @@ export async function getWorkOrderDuplicateData(
         method: dealWorkLogServices.method,
         unit: dealWorkLogServices.unit,
         quantity: dealWorkLogServices.quantity,
+        objectId: dealWorkLogServices.objectId,
       })
       .from(dealWorkLogServices)
       .leftJoin(services, eq(dealWorkLogServices.serviceId, services.id))
@@ -792,13 +892,21 @@ export async function getWorkOrderDuplicateData(
       .orderBy(asc(dealChecklistItems.position)),
   ]);
 
+  // Объекты копии: основной первым, затем объекты услуг в порядке появления (мульти-наряд).
+  // Legacy-услуги без object_id (до миграции 0021) относятся к основному объекту.
+  const primaryObjectId = wl.objectId;
+  const objectIds = Array.from(
+    new Set([primaryObjectId, ...svc.map((s) => s.objectId ?? primaryObjectId)]),
+  );
+
   return {
     ok: true,
     formData,
     prefill: {
       clientId: wl.clientId,
       dealId: wl.dealId,
-      objectId: wl.objectId,
+      objectId: primaryObjectId,
+      objectIds,
       masterId: wl.masterId,
       preparations: wl.preparations,
       services: svc.map((s) => ({
@@ -808,6 +916,7 @@ export async function getWorkOrderDuplicateData(
         method: s.method,
         unit: s.unit,
         quantity: s.quantity,
+        objectId: s.objectId ?? primaryObjectId,
       })),
       // Скопированные пункты переходят во владение менеджеру (как в getLastOrderChecklist).
       checklist: chk.map((c) => ({

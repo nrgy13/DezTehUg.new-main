@@ -1,4 +1,4 @@
-import { eq, asc } from 'drizzle-orm';
+import { eq, and, asc, isNotNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { clients, type Client } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
@@ -9,6 +9,7 @@ import {
   dealWorkLogs,
   dealWorkLogServices,
   type Deal,
+  type PriceItemUnit,
 } from '@/lib/db/schema/deals';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
@@ -90,6 +91,24 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
     // Выезд мог быть удалён (гонка: открыли список → наряд удалили → нажали «АО»).
     // Без явной ошибки сгенерился бы пустой акт с присвоенным номером — лучше упасть.
     if (!visit) throw new Error(`Выезд ${ctx.workLogId} не найден`);
+    // Мульти-объектный наряд: ОСНОВНОЙ объект могли удалить (FK SET NULL занулил
+    // work_log.object_id, а услуги других объектов целы). Без fallback акт «по выезду»
+    // молча выродился бы в пустую таблицу (isObjectAct=false) — берём первый живой
+    // объект из строк услуг наряда (находка ревью 2026-09-10).
+    if (!visit.objectId) {
+      const [svcObj] = await db
+        .select({ objectId: dealWorkLogServices.objectId })
+        .from(dealWorkLogServices)
+        .where(
+          and(
+            eq(dealWorkLogServices.workLogId, visit.id),
+            isNotNull(dealWorkLogServices.objectId),
+          ),
+        )
+        .orderBy(asc(dealWorkLogServices.sortOrder))
+        .limit(1);
+      if (svcObj?.objectId) visit.objectId = svcObj.objectId;
+    }
   }
 
   // Объект акта: явный ctx.objectId, иначе — объект выезда. Сужает прайс/объекты/услуги.
@@ -155,9 +174,6 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
   }
 
   const objMap = new Map(objects.map((o) => [o.id, o]));
-
-  // Sprint 9: для акта по объекту список объектов в шаблоне сужаем до него одного.
-  const templateObjects = objectId ? objects.filter((o) => o.id === objectId) : objects;
 
   const priceItems = priceItemsRaw.map((p, idx) => {
     const obj = p.objectId ? objMap.get(p.objectId) : null;
@@ -249,45 +265,72 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
     areaLabel: string;
   }> = [];
   let servicesLine = '';
+  // Объекты акта: по объекту — он один; по выезду — основной объект наряда + объекты его
+  // услуг (мульти-объектный наряд: Отель 4*, ТКО 4*, Отель 5*… одним выездом, в акте
+  // строка на каждый). Порядок — как в наряде.
+  const actObjectIds: string[] = objectId ? [objectId] : [];
   if (isObjectAct) {
     // Источник услуг таблицы акта: СНИМОК выезда (если генерим по наряду — те услуги,
     // что реально в этом наряде) ИЛИ услуги объекта (генерация из карточки объекта).
-    const svcRows = visit
-      ? await db
-          .select({
-            customName: dealWorkLogServices.customName,
-            method: dealWorkLogServices.method,
-            unit: dealWorkLogServices.unit,
-            quantity: dealWorkLogServices.quantity,
-            serviceShort: services.shortName,
-            serviceFull: services.name,
-          })
-          .from(dealWorkLogServices)
-          .leftJoin(services, eq(dealWorkLogServices.serviceId, services.id))
-          .where(eq(dealWorkLogServices.workLogId, visit.id))
-          .orderBy(asc(dealWorkLogServices.sortOrder))
-      : await db
-          .select({
-            customName: clientObjectServices.customName,
-            method: clientObjectServices.method,
-            unit: clientObjectServices.unit,
-            quantity: clientObjectServices.quantity,
-            serviceShort: services.shortName,
-            serviceFull: services.name,
-          })
-          .from(clientObjectServices)
-          .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
-          .where(eq(clientObjectServices.objectId, objectId!))
-          .orderBy(asc(clientObjectServices.sortOrder));
+    type ActServiceRow = {
+      customName: string | null;
+      method: string | null;
+      unit: PriceItemUnit;
+      quantity: string | null;
+      serviceShort: string | null;
+      serviceFull: string | null;
+      /** Объект строки: у услуги наряда — свой (мульти-наряд), у услуги объекта — сам объект. */
+      objectId: string | null;
+    };
+    let svcRows: ActServiceRow[];
+    if (visit) {
+      svcRows = await db
+        .select({
+          customName: dealWorkLogServices.customName,
+          method: dealWorkLogServices.method,
+          unit: dealWorkLogServices.unit,
+          quantity: dealWorkLogServices.quantity,
+          serviceShort: services.shortName,
+          serviceFull: services.name,
+          objectId: dealWorkLogServices.objectId,
+        })
+        .from(dealWorkLogServices)
+        .leftJoin(services, eq(dealWorkLogServices.serviceId, services.id))
+        .where(eq(dealWorkLogServices.workLogId, visit.id))
+        .orderBy(asc(dealWorkLogServices.sortOrder));
+    } else {
+      svcRows = await db
+        .select({
+          customName: clientObjectServices.customName,
+          method: clientObjectServices.method,
+          unit: clientObjectServices.unit,
+          quantity: clientObjectServices.quantity,
+          serviceShort: services.shortName,
+          serviceFull: services.name,
+          objectId: clientObjectServices.objectId,
+        })
+        .from(clientObjectServices)
+        .leftJoin(services, eq(clientObjectServices.serviceId, services.id))
+        .where(eq(clientObjectServices.objectId, objectId!))
+        .orderBy(asc(clientObjectServices.sortOrder));
+    }
+    for (const r of svcRows) {
+      if (r.objectId && objMap.has(r.objectId) && !actObjectIds.includes(r.objectId)) {
+        actObjectIds.push(r.objectId);
+      }
+    }
 
     objectServices = svcRows.map((r, i) => {
-      // Кол-во услуги; если не задано — берём площадь объекта (как в бумажных АВР).
-      const qtyRaw = r.quantity ?? targetObject?.areaM2 ?? null;
+      // Объект строки: свой объект услуги (мульти-наряд), иначе объект акта. Legacy-услуги
+      // без object_id (до миграции 0021) и удалённые объекты → объект наряда.
+      const rowObject = (r.objectId ? objMap.get(r.objectId) : null) ?? targetObject;
+      // Кол-во услуги; если не задано — берём площадь ЭТОГО объекта (как в бумажных АВР).
+      const qtyRaw = r.quantity ?? rowObject?.areaM2 ?? null;
       const lbl = unitLabel(r.unit);
       return {
         index: i + 1,
-        objectName: targetObject?.name ?? '',
-        objectAddress: targetObject?.address ?? '',
+        objectName: rowObject?.name ?? '',
+        objectAddress: rowObject?.address ?? '',
         // ПОЛНОЕ название услуги, а не shortName: в каталоге под одним коротким
         // именем живут 13 разных «Дезинсекций» (тараканы / мухи / комары подвал…),
         // и акт печатал две РАЗНЫЕ услуги объекта одинаково — жалоба Регины 04.08.2026.
@@ -316,6 +359,15 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       .limit(1);
     masterName = m?.fullName ?? '';
   }
+
+  // Sprint 9: для акта по объекту список объектов в шаблоне сужаем до него одного;
+  // для акта по мульти-объектному выезду — до объектов этого выезда (в порядке наряда).
+  const templateObjects =
+    actObjectIds.length > 0
+      ? actObjectIds
+          .map((id) => objMap.get(id))
+          .filter((o): o is (typeof objects)[number] => !!o)
+      : objects;
 
   // Базовые данные, общие для всех типов
   const data: Record<string, unknown> = {

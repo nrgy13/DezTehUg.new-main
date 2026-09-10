@@ -275,22 +275,34 @@ export default async function DealDetailPage({
             workLogId: dealWorkLogServices.workLogId,
             customName: dealWorkLogServices.customName,
             serviceName: services.name,
+            objectId: dealWorkLogServices.objectId,
           })
           .from(dealWorkLogServices)
           .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
           .where(inArray(dealWorkLogServices.workLogId, wlIds))
           .orderBy(asc(dealWorkLogServices.sortOrder))
       : [];
-  const svcByWl = new Map<string, string[]>();
+  const svcByWl = new Map<string, { label: string; objectId: string | null }[]>();
   for (const s of woSvcRows) {
     const arr = svcByWl.get(s.workLogId) ?? [];
-    arr.push(s.customName ?? s.serviceName ?? 'Услуга');
+    arr.push({ label: s.customName ?? s.serviceName ?? 'Услуга', objectId: s.objectId });
     svcByWl.set(s.workLogId, arr);
   }
 
-  // Релиз B: группировка выездов (заказ-нарядов) по объекту.
+  // Релиз B: группировка выездов (заказ-нарядов) по объекту. Мульти-объектный наряд
+  // висит под своим ОСНОВНЫМ объектом (первый блок формы) с бейджем «+N»; услуги других
+  // объектов подписаны их именем.
   const visitsByObject = new Map<string, VisitView[]>();
   for (const w of workLogRows) {
+    const svcEntries = svcByWl.get(w.id) ?? [];
+    const extraIds = Array.from(
+      new Set(
+        svcEntries
+          .map((s) => s.objectId)
+          .filter((x): x is string => !!x && x !== w.objectId),
+      ),
+    );
+    const multi = extraIds.length > 0;
     const view: VisitView = {
       id: w.id,
       status: w.status as VisitView['status'],
@@ -299,7 +311,10 @@ export default async function DealDetailPage({
       finalizedAt: w.finalizedAt?.toISOString() ?? null,
       performedAt: w.performedAt?.toISOString() ?? null,
       masterName: w.masterName,
-      services: svcByWl.get(w.id) ?? [],
+      services: svcEntries.map((s) =>
+        multi && s.objectId ? `${objMap.get(s.objectId)?.name ?? 'объект'}: ${s.label}` : s.label,
+      ),
+      extraObjects: extraIds.map((oid) => objMap.get(oid)?.name ?? 'объект'),
       preparations: w.preparations,
       items: (itemsByWorkLog.get(w.id) ?? []).map((it) => ({
         id: it.id,

@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { and, eq, isNotNull, inArray } from 'drizzle-orm';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { clients } from '@/lib/db/schema/clients';
-import { deals, dealWorkLogs } from '@/lib/db/schema/deals';
+import { deals, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
 import { services } from '@/lib/db/schema/services';
 
 // SERVER-ONLY: виртуальные напоминания «по графику нужен заказ-наряд».
@@ -119,7 +119,7 @@ export async function getObjectReminders(mode: Mode): Promise<ObjectReminder[]> 
   const clientIds = Array.from(new Set(objectRows.map((o) => o.clientId)));
 
   // 2) Услуги этих объектов (для серии берём только с частотой).
-  const [svcRows, dealRows, clientRows, workLogRows] = await Promise.all([
+  const [svcRows, dealRows, clientRows, workLogRows, svcVisitRows] = await Promise.all([
     db
       .select({
         objectId: clientObjectServices.objectId,
@@ -158,6 +158,19 @@ export async function getObjectReminders(mode: Mode): Promise<ObjectReminder[]> 
       })
       .from(dealWorkLogs)
       .where(inArray(dealWorkLogs.objectId, objectIds)),
+    // Мульти-объектный наряд: выезд гасит флажок и у объектов, которые в нём НЕ основные,
+    // а идут через услуги (deal_work_log_services.object_id).
+    db
+      .select({
+        objectId: dealWorkLogServices.objectId,
+        plannedAt: dealWorkLogs.plannedAt,
+        startedAt: dealWorkLogs.startedAt,
+        performedAt: dealWorkLogs.performedAt,
+        finalizedAt: dealWorkLogs.finalizedAt,
+      })
+      .from(dealWorkLogServices)
+      .innerJoin(dealWorkLogs, eq(dealWorkLogs.id, dealWorkLogServices.workLogId))
+      .where(inArray(dealWorkLogServices.objectId, objectIds)),
   ]);
 
   // Услуги по объекту (только периодические/разовые).
@@ -182,7 +195,7 @@ export async function getObjectReminders(mode: Mode): Promise<ObjectReminder[]> 
 
   // Гашение: дни, на которые по объекту уже есть выезд (Europe/Moscow).
   const visitDays = new Set<string>();
-  for (const w of workLogRows) {
+  for (const w of [...workLogRows, ...svcVisitRows]) {
     if (!w.objectId) continue;
     const dt = w.plannedAt ?? w.performedAt ?? w.startedAt ?? w.finalizedAt;
     if (!dt) continue;

@@ -44,7 +44,10 @@ export type DealEvent = {
   managerName: string | null;
   /** Заголовок: услуга + объект. */
   serviceTitle: string;
+  /** Основной объект наряда; мульти-объектный наряд — «Отель 4* +5». */
   objectName: string | null;
+  /** Все объекты наряда (основной первым) — для поиска по любому из них. */
+  objectNames: string[];
   periodLabel: string;
   health: 'past' | 'today' | 'soon' | 'future' | 'no-date';
 };
@@ -164,19 +167,25 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
     .orderBy(asc(dealWorkLogs.plannedAt));
 
   // Объект-выезды (заказ-наряды): услуги берём из snapshot deal_work_log_services
-  // (несколько услуг на выезд), а не из позиции прайса.
+  // (несколько услуг на выезд), а не из позиции прайса. Заодно объекты услуг —
+  // мульти-объектный наряд показываем как «Отель 4* +5» и ищем по всем его объектам.
   const woIds = rows.filter((r) => r.workLogObjectId).map((r) => r.workLogId);
   const svcByWl = new Map<string, string[]>();
+  const svcObjByWl = new Map<string, Map<string, string>>();
   if (woIds.length > 0) {
+    const svcObjects = alias(clientObjects, 'svc_object');
     const woSvc = await db
       .select({
         workLogId: dealWorkLogServices.workLogId,
         customName: dealWorkLogServices.customName,
         serviceName: services.name,
         serviceShortName: services.shortName,
+        svcObjectId: dealWorkLogServices.objectId,
+        svcObjectName: svcObjects.name,
       })
       .from(dealWorkLogServices)
       .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
+      .leftJoin(svcObjects, eq(svcObjects.id, dealWorkLogServices.objectId))
       .where(inArray(dealWorkLogServices.workLogId, woIds))
       .orderBy(asc(dealWorkLogServices.sortOrder));
     for (const s of woSvc) {
@@ -184,6 +193,12 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
       const arr = svcByWl.get(s.workLogId) ?? [];
       arr.push(label);
       svcByWl.set(s.workLogId, arr);
+      // Дедуп по id, не по имени: у Регины объекты-тёзки («Отель 4*» ×2) — разные объекты.
+      if (s.svcObjectId && s.svcObjectName) {
+        const m = svcObjByWl.get(s.workLogId) ?? new Map<string, string>();
+        if (!m.has(s.svcObjectId)) m.set(s.svcObjectId, s.svcObjectName);
+        svcObjByWl.set(s.workLogId, m);
+      }
     }
   }
 
@@ -214,6 +229,17 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
     const serviceTitle =
       woServiceTitle || r.customName || r.serviceShortName || r.serviceName || 'Без услуги';
 
+    // Мульти-объектный наряд: основной объект + « +N» по ДРУГИМ объектам услуг (legacy-строки
+    // без object_id относятся к основному и в счёт не идут).
+    const primaryName = r.woObjectName ?? r.objectName;
+    const extraNames: string[] = [];
+    svcObjByWl.get(r.workLogId)?.forEach((name, oid) => {
+      if (oid !== r.workLogObjectId) extraNames.push(name);
+    });
+    const objectName =
+      primaryName && extraNames.length > 0 ? `${primaryName} +${extraNames.length}` : primaryName;
+    const objectNames = primaryName ? [primaryName, ...extraNames] : extraNames;
+
     return {
       id: r.workLogId,
       dealId: r.dealId ?? '',
@@ -231,7 +257,8 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
       masterName: r.masterFullName,
       managerName: r.managerFullName,
       serviceTitle,
-      objectName: r.woObjectName ?? r.objectName,
+      objectName,
+      objectNames,
       periodLabel: formatPeriod(start, end),
       health: computeHealth(start, end),
     };
@@ -256,6 +283,7 @@ export function serializeForClient(events: DealEvent[]) {
     managerName: e.managerName,
     serviceTitle: e.serviceTitle,
     objectName: e.objectName,
+    objectNames: e.objectNames,
     health: e.health,
   }));
 }
@@ -323,7 +351,10 @@ export type VisitHistoryItem = {
   clientShortName: string | null;
   /** Мастер, выполнивший выезд (work_log.masterId, не назначенный по сделке). */
   masterName: string | null;
+  /** Основной объект наряда; мульти-объектный наряд — «Отель 4* +5». */
   objectName: string | null;
+  /** Все объекты наряда (основной первым) — для поиска по любому из них. */
+  objectNames: string[];
   /** Дата выполнения (performedAt ?? finalizedAt ?? startedAt ?? plannedAt). */
   completedAt: Date | null;
   services: string[];
@@ -381,19 +412,25 @@ export async function getVisitHistory(mode: Mode): Promise<VisitHistoryItem[]> {
 
   const wlIds = rows.map((r) => r.workLogId);
 
-  // Услуги заказ-нарядов берём из snapshot (несколько услуг на выезд).
+  // Услуги заказ-нарядов берём из snapshot (несколько услуг на выезд) + объекты услуг
+  // (мульти-объектный наряд: «Отель 4* +5», поиск по всем объектам выезда).
   const svcByWl = new Map<string, string[]>();
+  const svcObjByWl = new Map<string, Map<string, string>>();
   const woIds = rows.filter((r) => r.workLogObjectId).map((r) => r.workLogId);
   if (woIds.length > 0) {
+    const svcObjects = alias(clientObjects, 'svc_object');
     const woSvc = await db
       .select({
         workLogId: dealWorkLogServices.workLogId,
         customName: dealWorkLogServices.customName,
         serviceName: services.name,
         serviceShortName: services.shortName,
+        svcObjectId: dealWorkLogServices.objectId,
+        svcObjectName: svcObjects.name,
       })
       .from(dealWorkLogServices)
       .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
+      .leftJoin(svcObjects, eq(svcObjects.id, dealWorkLogServices.objectId))
       .where(inArray(dealWorkLogServices.workLogId, woIds))
       .orderBy(asc(dealWorkLogServices.sortOrder));
     for (const s of woSvc) {
@@ -401,6 +438,12 @@ export async function getVisitHistory(mode: Mode): Promise<VisitHistoryItem[]> {
       const arr = svcByWl.get(s.workLogId) ?? [];
       arr.push(label);
       svcByWl.set(s.workLogId, arr);
+      // Дедуп по id, не по имени: объекты-тёзки («Отель 4*» ×2) — разные объекты.
+      if (s.svcObjectId && s.svcObjectName) {
+        const m = svcObjByWl.get(s.workLogId) ?? new Map<string, string>();
+        if (!m.has(s.svcObjectId)) m.set(s.svcObjectId, s.svcObjectName);
+        svcObjByWl.set(s.workLogId, m);
+      }
     }
   }
 
@@ -427,13 +470,23 @@ export async function getVisitHistory(mode: Mode): Promise<VisitHistoryItem[]> {
       woServices && woServices.length > 0
         ? woServices
         : [r.customName || r.serviceShortName || r.serviceName || 'Без услуги'];
+    // Мульти-объектный наряд: основной + « +N» по другим объектам услуг (legacy без object_id → основной).
+    const primaryName = r.woObjectName ?? r.objectName;
+    const extraNames: string[] = [];
+    svcObjByWl.get(r.workLogId)?.forEach((name, oid) => {
+      if (oid !== r.workLogObjectId) extraNames.push(name);
+    });
     return {
       id: r.workLogId,
       dealId: r.dealId ?? '',
       contractNumber: r.contractNumber ?? '—',
       clientShortName: r.clientShortName,
       masterName: r.masterFullName,
-      objectName: r.woObjectName ?? r.objectName,
+      objectName:
+        primaryName && extraNames.length > 0
+          ? `${primaryName} +${extraNames.length}`
+          : primaryName,
+      objectNames: primaryName ? [primaryName, ...extraNames] : extraNames,
       completedAt,
       services: visitServices,
       preparations: r.preparations,

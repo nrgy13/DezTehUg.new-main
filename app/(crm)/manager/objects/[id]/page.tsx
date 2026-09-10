@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { eq, asc, desc, inArray } from 'drizzle-orm';
+import { eq, or, asc, desc, inArray } from 'drizzle-orm';
 import {
   ChevronLeft,
   Pencil,
@@ -104,11 +104,24 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
       performedAt: dealWorkLogs.performedAt,
       preparations: dealWorkLogs.preparations,
       dealId: dealWorkLogs.dealId,
+      objectId: dealWorkLogs.objectId,
       masterName: users.fullName,
     })
     .from(dealWorkLogs)
     .leftJoin(users, eq(users.id, dealWorkLogs.masterId))
-    .where(eq(dealWorkLogs.objectId, id))
+    // Объект — основной в наряде ИЛИ один из объектов его услуг (мульти-объектный наряд).
+    .where(
+      or(
+        eq(dealWorkLogs.objectId, id),
+        inArray(
+          dealWorkLogs.id,
+          db
+            .select({ id: dealWorkLogServices.workLogId })
+            .from(dealWorkLogServices)
+            .where(eq(dealWorkLogServices.objectId, id)),
+        ),
+      ),
+    )
     .orderBy(desc(dealWorkLogs.createdAt));
 
   const visitIds = visitRows.map((v) => v.id);
@@ -119,6 +132,7 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
             workLogId: dealWorkLogServices.workLogId,
             customName: dealWorkLogServices.customName,
             serviceName: services.name,
+            objectId: dealWorkLogServices.objectId,
           })
           .from(dealWorkLogServices)
           .leftJoin(services, eq(services.id, dealWorkLogServices.serviceId))
@@ -133,10 +147,38 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
       : Promise.resolve([]),
   ]);
 
+  // Мульти-объектный наряд: показываем услуги ЭТОГО объекта (остальные — под именами других
+  // объектов) и список других объектов того же выезда («в одном выезде с …»).
+  const otherIdsByWl = new Map<string, string[]>();
+  const allOtherIds = new Set<string>();
+  const addOther = (wlId: string, oid: string | null) => {
+    if (!oid || oid === id) return;
+    const arr = otherIdsByWl.get(wlId) ?? [];
+    if (!arr.includes(oid)) arr.push(oid);
+    otherIdsByWl.set(wlId, arr);
+    allOtherIds.add(oid);
+  };
+  for (const v of visitRows) addOther(v.id, v.objectId);
+  for (const s of svcRows) addOther(s.workLogId, s.objectId);
+  const otherNames = new Map<string, string>();
+  if (allOtherIds.size > 0) {
+    const rows = await db
+      .select({ id: clientObjects.id, name: clientObjects.name })
+      .from(clientObjects)
+      .where(inArray(clientObjects.id, Array.from(allOtherIds)));
+    for (const r of rows) otherNames.set(r.id, r.name);
+  }
+
   const svcByWl = new Map<string, string[]>();
   for (const s of svcRows) {
     const arr = svcByWl.get(s.workLogId) ?? [];
-    arr.push(s.customName ?? s.serviceName ?? 'Услуга');
+    const label = s.customName ?? s.serviceName ?? 'Услуга';
+    const multi = (otherIdsByWl.get(s.workLogId) ?? []).length > 0;
+    arr.push(
+      multi && s.objectId && s.objectId !== id
+        ? `${otherNames.get(s.objectId) ?? 'объект'}: ${label}`
+        : label,
+    );
     svcByWl.set(s.workLogId, arr);
   }
   const chkByWl = new Map<string, { done: number; total: number }>();
@@ -166,6 +208,7 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
       dateLabel,
       masterName: v.masterName,
       services: svcByWl.get(v.id) ?? [],
+      otherObjects: (otherIdsByWl.get(v.id) ?? []).map((oid) => otherNames.get(oid) ?? 'объект'),
       preparations: v.preparations,
       checklistDone: chk.done,
       checklistTotal: chk.total,

@@ -228,6 +228,12 @@ export const dealWorkLogServices = pgTable(
       .notNull()
       .references(() => dealWorkLogs.id, { onDelete: 'cascade' }),
     serviceId: uuid('service_id').references(() => services.id, { onDelete: 'set null' }),
+    // Мульти-объектный наряд (09.2026, запрос Регины): объект, к которому относится ЭТА
+    // услуга. Один выезд может охватывать несколько объектов клиента (АРУМ: Отель 4*, ТКО 4*,
+    // Отель 5*…), и в АВР/АО каждая строка идёт со СВОИМ объектом и площадью.
+    // deal_work_logs.object_id остаётся ОСНОВНЫМ (первым) объектом наряда. NULL здесь —
+    // legacy до миграции 0021 (бэкфилл проставил объект наряда) → трактовать как основной.
+    objectId: uuid('object_id').references(() => clientObjects.id, { onDelete: 'set null' }),
     customName: varchar('custom_name', { length: 255 }),
     method: varchar('method', { length: 128 }),
     unit: priceItemUnitEnum('unit').notNull().default('m2'),
@@ -237,6 +243,7 @@ export const dealWorkLogServices = pgTable(
   },
   (t) => ({
     workLogIdx: index('deal_work_log_services_work_log_idx').on(t.workLogId),
+    objectIdx: index('deal_work_log_services_object_idx').on(t.objectId),
   }),
 );
 

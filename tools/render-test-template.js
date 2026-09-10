@@ -30,9 +30,12 @@ const data = {
   object: { name: 'Столовая', address: 'г. Тест, ул. Тестовая, 1', area: '100' },
   contact: { fio: 'Сидорова Ольга Андреевна', phone: '+7 (988) 123-45-67' },
   master: { fio: 'Денисов Ю.Л.' },
+  // Три строки с РАЗНЫМИ объектами/площадями — мульти-объектный наряд (АВР/АО по выезду
+  // печатают строку на каждый объект со своей площадью; запрос Регины 03.09.2026).
   objectServices: [
     { index: 1, objectName: 'Общежитие №2', objectAddress: 'г. Тест, ул. Тестовая, 1', areaLabel: '715,5 м²', serviceName: 'Дезинсекция', method: 'Туман', quantity: '715,5' },
     { index: 2, objectName: 'Столовая', objectAddress: 'г. Тест, ул. Тестовая, 1', areaLabel: '368,3 м²', serviceName: 'Дератизация', method: 'Точечно', quantity: '368,3' },
+    { index: 3, objectName: 'Цех №3', objectAddress: 'г. Тест, пр. Заводской, 12', areaLabel: '16,9 м²', serviceName: 'Дезинсекция (уничтожение пауков,клопов,блох)', method: 'Орошение', quantity: '16,9' },
   ],
   priceItems: [
     { index: 1, objectName: 'Столовая', objectAddress: 'г. Тест, ул. Тестовая, 1', serviceName: 'Дезинсекция', area: '100', areaUnitLabel: 'м²', method: '', frequency: 'Ежемесячно', priceNet: '4 761,90', priceGross: '5 000,00', vatLine: '238,10', vatRate: 5, amount: '5 000,00' },

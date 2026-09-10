@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, inArray } from 'drizzle-orm';
 import { ArrowLeft, MapPin, Phone, Wrench, FlaskConical } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { db } from '@/lib/db';
@@ -89,6 +89,8 @@ export default async function MasterVisitPage({
     method: string | null;
     unit: typeof dealWorkLogServices.$inferSelect.unit;
     quantity: string | null;
+    /** Объект услуги (мульти-объектный наряд); legacy NULL → основной объект наряда. */
+    objectId: string | null;
   }> = [];
   if (!wl.priceItemId) {
     const woRows = await db
@@ -97,6 +99,7 @@ export default async function MasterVisitPage({
         method: dealWorkLogServices.method,
         unit: dealWorkLogServices.unit,
         quantity: dealWorkLogServices.quantity,
+        objectId: dealWorkLogServices.objectId,
         serviceName: services.name,
         serviceShortName: services.shortName,
       })
@@ -109,8 +112,29 @@ export default async function MasterVisitPage({
       method: r.method,
       unit: r.unit,
       quantity: r.quantity,
+      objectId: r.objectId ?? wl.objectId,
     }));
   }
+
+  // Объекты выезда: основной (wl.objectId) + объекты услуг (мульти-объектный наряд), в порядке
+  // появления. Мастеру нужны адреса и контакты ВСЕХ точек выезда, а не только первой.
+  let visitObjects: Array<typeof clientObjects.$inferSelect> = [];
+  if (!wl.priceItemId) {
+    const ids = Array.from(
+      new Set(
+        [wl.objectId, ...woServices.map((s) => s.objectId)].filter((x): x is string => !!x),
+      ),
+    );
+    if (ids.length > 1) {
+      const objRows = await db.select().from(clientObjects).where(inArray(clientObjects.id, ids));
+      const byId = new Map(objRows.map((o) => [o.id, o]));
+      visitObjects = ids
+        .map((oid) => byId.get(oid))
+        .filter((o): o is typeof clientObjects.$inferSelect => !!o);
+    }
+  }
+  const multiObjects = visitObjects.length > 1;
+  const objectNameById = new Map(visitObjects.map((o) => [o.id, o.name]));
 
   // Пункты чеклиста
   const itemRows = await db
@@ -180,8 +204,63 @@ export default async function MasterVisitPage({
         </p>
       </div>
 
-      {/* Объект и контакты */}
-      {(object || client?.phone) && (
+      {/* Мульти-объектный наряд: все точки выезда с адресами и контактами */}
+      {multiObjects && (
+        <CyberpunkCard variant="default" hoverEffect={false} className="p-4">
+          <div className="flex items-center gap-1.5 text-xs font-orbitron tracking-wider text-content-muted uppercase mb-2">
+            <MapPin className="w-3.5 h-3.5" /> Объекты выезда ({visitObjects.length})
+          </div>
+          <ol className="space-y-2.5 text-sm">
+            {visitObjects.map((o, i) => (
+              <li key={o.id} className="border-l-2 border-neon-orange/40 pl-2.5">
+                <div className="font-medium text-content-primary">
+                  {i + 1}. {o.name}
+                  {o.areaM2 && (
+                    <span className="text-content-muted font-normal">
+                      {' · '}
+                      {formatQuantity(o.areaM2)} м²
+                    </span>
+                  )}
+                </div>
+                <a
+                  href={`https://yandex.ru/maps/?text=${encodeURIComponent(o.address)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-neon-orange"
+                >
+                  <MapPin className="w-3 h-3" />
+                  {o.address}
+                </a>
+                {o.contactPerson && (
+                  <div className="text-xs text-content-muted">
+                    На месте: {o.contactPerson}
+                    {o.contactPhone && (
+                      <a
+                        href={`tel:${o.contactPhone.replace(/\D/g, '')}`}
+                        className="ml-2 text-neon-orange font-mono"
+                      >
+                        {o.contactPhone}
+                      </a>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+          {client?.phone && !visitObjects.some((o) => o.contactPhone) && (
+            <a
+              href={`tel:${client.phone.replace(/\D/g, '')}`}
+              className="mt-2 inline-flex items-center gap-1 text-neon-orange font-mono text-sm"
+            >
+              <Phone className="w-3.5 h-3.5" />
+              {client.phone}
+            </a>
+          )}
+        </CyberpunkCard>
+      )}
+
+      {/* Объект и контакты (одиночный наряд / прайс-выезд) */}
+      {!multiObjects && (object || client?.phone) && (
         <CyberpunkCard variant="default" hoverEffect={false} className="p-4">
           <div className="space-y-2 text-sm">
             {object && (
@@ -247,6 +326,10 @@ export default async function MasterVisitPage({
                 <ul className="space-y-1">
                   {woServices.map((s, i) => (
                     <li key={i} className="text-content-primary">
+                      {/* Мульти-объектный наряд: к какой точке относится услуга */}
+                      {multiObjects && s.objectId && objectNameById.has(s.objectId) && (
+                        <span className="text-neon-orange">{objectNameById.get(s.objectId)} · </span>
+                      )}
                       {s.label}
                       {s.method && <span className="text-content-muted"> · {s.method}</span>}
                       {s.quantity != null && (

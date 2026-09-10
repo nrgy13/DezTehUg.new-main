@@ -31,6 +31,8 @@ export type ObjectVisitView = {
   dateLabel: string;
   masterName: string | null;
   services: string[];
+  /** Мульти-объектный наряд: другие объекты того же выезда (кроме этого). */
+  otherObjects: string[];
   preparations: string | null;
   checklistDone: number;
   checklistTotal: number;
@@ -185,6 +187,12 @@ export function ObjectVisitsSection({
                 </div>
               </div>
 
+              {v.otherObjects.length > 0 && (
+                <div className="mt-1.5 text-xs text-content-muted">
+                  Выезд на {v.otherObjects.length + 1} объекта(ов) — вместе с:{' '}
+                  {v.otherObjects.join(', ')}
+                </div>
+              )}
               {v.services.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {v.services.map((s, i) => (

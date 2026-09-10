@@ -2,13 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { eq, and, ne, or, inArray, sql } from 'drizzle-orm';
+import { eq, and, ne, or, inArray, isNull, isNotNull, asc, sql } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { clients, type Client } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { activityLog } from '@/lib/db/schema/activity';
-import { dealPriceItems, deals, dealWorkLogs } from '@/lib/db/schema/deals';
+import { dealPriceItems, deals, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
 import { documents } from '@/lib/db/schema/documents';
 import { executeDocumentDeletion } from '@/lib/documents/deletion';
 import { auth } from '@/lib/auth';
@@ -530,10 +530,22 @@ export async function removeObject(
         .select({ count: sql<number>`count(*)::int` })
         .from(dealPriceItems)
         .where(eq(dealPriceItems.objectId, objectId)),
+      // Выезды, где объект основной ИЛИ один из объектов услуг (мульти-объектный наряд).
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(dealWorkLogs)
-        .where(eq(dealWorkLogs.objectId, objectId)),
+        .where(
+          or(
+            eq(dealWorkLogs.objectId, objectId),
+            inArray(
+              dealWorkLogs.id,
+              db
+                .select({ id: dealWorkLogServices.workLogId })
+                .from(dealWorkLogServices)
+                .where(eq(dealWorkLogServices.objectId, objectId)),
+            ),
+          ),
+        ),
     ]);
     const priceCount = price?.count ?? 0;
     const visitCount = visits?.count ?? 0;
@@ -548,7 +560,7 @@ export async function removeObject(
         visitCount,
         message: `Объект «${existing.name}» используется в ${parts.join(
           ' и ',
-        )}. При удалении запланированные наряды будут удалены, остальные связи (прайс, завершённые выезды) обнулятся — акты АО/АВР по объекту больше не сформировать. Всё равно удалить?`,
+        )}. При удалении запланированные наряды этого объекта будут удалены (мульти-объектный наряд сохранится по остальным объектам), прочие связи (прайс, завершённые выезды) обнулятся — акты АО/АВР по объекту больше не сформировать. Всё равно удалить?`,
       };
     }
   }
@@ -556,6 +568,54 @@ export async function removeObject(
   // Planned-наряды этого объекта без него бессмысленны → удаляем в транзакции (каскад снимет
   // их услуги+чеклист). In_progress/completed оставляем как историю (object_id занулится FK SET NULL).
   await db.transaction(async (tx) => {
+    // Мульти-объектный наряд: в ЗАПЛАНИРОВАННЫХ нарядах, где объект не основной, снимаем строки
+    // услуг этого объекта — иначе FK SET NULL молча приписал бы их основному объекту наряда
+    // (и они попали бы в акт под чужим именем). Завершённые — история, не трогаем.
+    await tx
+      .delete(dealWorkLogServices)
+      .where(
+        and(
+          eq(dealWorkLogServices.objectId, objectId),
+          inArray(
+            dealWorkLogServices.workLogId,
+            tx
+              .select({ id: dealWorkLogs.id })
+              .from(dealWorkLogs)
+              .where(eq(dealWorkLogs.status, 'planned')),
+          ),
+        ),
+      );
+    // Мульти-объектный наряд: если удаляемый объект — ОСНОВНОЙ у planned-наряда, а в наряде
+    // остались услуги ДРУГИХ объектов, наряд НЕ сносим (каскад унёс бы чужие объекты выезда —
+    // находка ревью 2026-09-10), а переназначаем основной объект на первый оставшийся.
+    const primaryPlanned = await tx
+      .select({ id: dealWorkLogs.id })
+      .from(dealWorkLogs)
+      .where(and(eq(dealWorkLogs.objectId, objectId), eq(dealWorkLogs.status, 'planned')));
+    for (const wl of primaryPlanned) {
+      // Legacy-строки услуг без object_id принадлежат основному (= удаляемому) → тоже снимаем,
+      // иначе после переназначения они «переехали бы» к новому основному под чужим именем.
+      await tx
+        .delete(dealWorkLogServices)
+        .where(
+          and(eq(dealWorkLogServices.workLogId, wl.id), isNull(dealWorkLogServices.objectId)),
+        );
+      const [next] = await tx
+        .select({ objectId: dealWorkLogServices.objectId })
+        .from(dealWorkLogServices)
+        .where(
+          and(eq(dealWorkLogServices.workLogId, wl.id), isNotNull(dealWorkLogServices.objectId)),
+        )
+        .orderBy(asc(dealWorkLogServices.sortOrder))
+        .limit(1);
+      if (next?.objectId) {
+        await tx
+          .update(dealWorkLogs)
+          .set({ objectId: next.objectId })
+          .where(eq(dealWorkLogs.id, wl.id));
+      }
+    }
+    // Наряды, где удаляемый объект так и остался основным (других объектов не было) — удаляем.
     await tx
       .delete(dealWorkLogs)
       .where(and(eq(dealWorkLogs.objectId, objectId), eq(dealWorkLogs.status, 'planned')));

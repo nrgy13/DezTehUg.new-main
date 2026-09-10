@@ -75,7 +75,7 @@ export function VisitHistoryList({
     const q = search.trim().toLowerCase();
     return items.filter((it) => {
       const haystack =
-        `${it.contractNumber} ${it.clientShortName ?? ''} ${it.masterName ?? ''} ${it.services.join(' ')} ${it.objectName ?? ''} ${it.preparations ?? ''}`.toLowerCase();
+        `${it.contractNumber} ${it.clientShortName ?? ''} ${it.masterName ?? ''} ${it.services.join(' ')} ${it.objectName ?? ''} ${(it.objectNames ?? []).join(' ')} ${it.preparations ?? ''}`.toLowerCase();
       return haystack.includes(q);
     });
   }, [items, search]);
