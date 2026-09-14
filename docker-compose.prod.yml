@@ -154,3 +154,12 @@ services:
       - "traefik.http.middlewares.crm-security.headers.browserXssFilter=true"
       - "traefik.http.middlewares.crm-security.headers.referrerPolicy=strict-origin-when-cross-origin"
       - "traefik.http.routers.crm.middlewares=crm-security"
+      # HTTPS-роутер публичного сайта на дезтехюг.рф (апекс + www, punycode —
+      # браузеры шлют SNI/Host только в punycode). Отдельный роутер, чтобы не
+      # трогать CRM; сервис тот же (app:3000), публичку отдаёт host-aware middleware.
+      - "traefik.http.routers.site.rule=Host(`xn--c1abdaj0ewa6e.xn--p1ai`) || Host(`www.xn--c1abdaj0ewa6e.xn--p1ai`)"
+      - "traefik.http.routers.site.entrypoints=websecure"
+      - "traefik.http.routers.site.tls=true"
+      - "traefik.http.routers.site.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.site.service=crm"
+      - "traefik.http.routers.site.middlewares=crm-security"
