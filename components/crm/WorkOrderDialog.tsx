@@ -578,7 +578,10 @@ export function WorkOrderDialog({
           <div className="space-y-3">
             {/* Клиент + договор */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
+              {/* min-w-0 на ячейках грида: иначе селект с длинным option (полное имя услуги,
+                  номер договора) держит intrinsic-ширину, ряд распирает диалог и появляется
+                  горизонтальный скролл (жалоба Регины 11.09) */}
+              <div className="min-w-0">
                 <Label htmlFor="wo-client">Клиент</Label>
                 <Combobox
                   id="wo-client"
@@ -590,7 +593,7 @@ export function WorkOrderDialog({
                   emptyText="Клиент не найден"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label htmlFor="wo-deal">Договор</Label>
                 <select
                   id="wo-deal"
@@ -611,7 +614,7 @@ export function WorkOrderDialog({
 
             {/* Мастер + дата */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
+              <div className="min-w-0">
                 <Label htmlFor="wo-master">Мастер</Label>
                 <select
                   id="wo-master"
@@ -627,7 +630,7 @@ export function WorkOrderDialog({
                   ))}
                 </select>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label htmlFor="wo-date">Дата и время выезда</Label>
                 <input
                   id="wo-date"
@@ -723,7 +726,7 @@ export function WorkOrderDialog({
                     <div className="space-y-2">
                       {b.rows.map((row, i) => (
                         <div key={i} className="grid grid-cols-12 gap-2 items-start">
-                          <div className="col-span-12 sm:col-span-4">
+                          <div className="col-span-12 sm:col-span-4 min-w-0">
                             <select
                               className={fieldClass}
                               value={row.serviceId || '__custom__'}
@@ -748,7 +751,7 @@ export function WorkOrderDialog({
                               />
                             )}
                           </div>
-                          <div className="col-span-6 sm:col-span-3">
+                          <div className="col-span-6 sm:col-span-3 min-w-0">
                             <select
                               className={fieldClass}
                               value={row.method}
@@ -762,7 +765,7 @@ export function WorkOrderDialog({
                               ))}
                             </select>
                           </div>
-                          <div className="col-span-3 sm:col-span-2">
+                          <div className="col-span-3 sm:col-span-2 min-w-0">
                             <input
                               className={fieldClass}
                               inputMode="decimal"
@@ -771,7 +774,7 @@ export function WorkOrderDialog({
                               onChange={(e) => patchRow(b.key, i, { quantity: e.target.value })}
                             />
                           </div>
-                          <div className="col-span-6 sm:col-span-2">
+                          <div className="col-span-6 sm:col-span-2 min-w-0">
                             <select
                               className={fieldClass}
                               value={row.unit}
@@ -879,7 +882,7 @@ export function WorkOrderDialog({
               <div className="space-y-2">
                 {checklist.map((row, i) => (
                   <div key={row.id} className="grid grid-cols-12 gap-2 items-start">
-                    <div className="col-span-12 sm:col-span-8 space-y-1">
+                    <div className="col-span-12 sm:col-span-8 space-y-1 min-w-0">
                       <input
                         className={fieldClass}
                         placeholder="Что проверить / сделать"
