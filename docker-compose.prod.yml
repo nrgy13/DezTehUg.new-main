@@ -130,6 +130,8 @@ services:
       SMTP_FROM: ${SMTP_FROM}
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Чат владельца для заявок с публичной формы (/api/booking → sendToTelegram)
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
       # n8n integration
       N8N_INBOUND_SECRET: ${N8N_INBOUND_SECRET}
     volumes:
