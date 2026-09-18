@@ -420,6 +420,11 @@ function WhyChooseUsIconDynamic({ iconPath, className = 'h-12 w-12', accentColor
     return Shield; // Default fallback
   };
 
+  // Данные некоторых услуг (дератизация/дезинфекция/анализ воды) хранят голое имя
+  // иконки («check-circle») вместо пути — резолвим в стандартный каталог, иначе
+  // <Image> бьёт 404 по /services/<имя> и рисует запасную иконку не по смыслу.
+  const src = iconPath.startsWith('/') ? iconPath : `/icons/why-choose-us/${iconPath}.svg`;
+
   if (error) {
     const FallbackIcon = getFallbackIconFromPath(iconPath);
     return (
@@ -432,8 +437,8 @@ function WhyChooseUsIconDynamic({ iconPath, className = 'h-12 w-12', accentColor
 
   return (
     <Image
-      src={iconPath}
-      alt={iconPath.split('/').pop()?.replace('.svg', '') || 'icon'}
+      src={src}
+      alt={src.split('/').pop()?.replace('.svg', '') || 'icon'}
       width={48}
       height={48}
       className={className}

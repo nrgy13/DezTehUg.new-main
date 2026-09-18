@@ -56,6 +56,10 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
     const dealRows = await db.select().from(deals).where(eq(deals.id, ctx.dealId)).limit(1);
     if (dealRows.length === 0) throw new Error(`Сделка ${ctx.dealId} не найдена`);
     deal = dealRows[0];
+    // Номер договора Регина иногда вписывает вместе со знаком «№», а во всех
+    // шаблонах «№» уже стоит статикой — в документах выходило «№№ДТЮ-…».
+    // Срезаем ведущий знак здесь, чтобы покрыть все типы документов разом.
+    if (deal.contractNumber) deal.contractNumber = deal.contractNumber.replace(/^\s*№\s*/, '');
     const cRows = await db.select().from(clients).where(eq(clients.id, deal.clientId)).limit(1);
     client = cRows[0] ?? null;
   } else if (ctx.clientId) {

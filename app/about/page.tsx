@@ -136,7 +136,9 @@ export default function AboutPage() {
             >
               {/* Enhanced Title */}
               <div className="space-y-4">
-                <h2 className="text-4xl md:text-5xl lg:text-6xl font-orbitron font-bold text-content-primary leading-tight whitespace-nowrap">
+                {/* whitespace-nowrap растягивал мобилу до ~676px (заголовок шире экрана
+                    при любом брейкпоинте — колонка грида уже текста) — жалоба 18.09.2026 */}
+                <h2 className="text-4xl md:text-5xl lg:text-6xl font-orbitron font-bold text-content-primary leading-tight">
                   <span className="relative inline-block">
                     <span className="text-poison-green">Эксперт по санитарной</span>
                     <span className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-poison-green via-neon-orange to-poison-green opacity-50 rounded-full" />
