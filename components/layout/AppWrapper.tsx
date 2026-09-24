@@ -8,19 +8,35 @@ import { Footer } from './Footer';
 import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
-// Компонент для установки масштаба страницы
+// Роуты CRM и страница логина — рендерятся БЕЗ публичного Header/Footer
+const isCrmPath = (pathname: string) =>
+  pathname.startsWith('/admin') ||
+  pathname.startsWith('/manager') ||
+  pathname.startsWith('/master') ||
+  pathname.startsWith('/profile') ||
+  pathname.startsWith('/manual') ||
+  pathname.startsWith('/login');
+
+// Масштаб 0.9 на мобиле — только для CRM (под него выверена мобильная вёрстка панели).
+// Публичному сайту оставляем initial-scale=1 из app/layout.tsx: подмена на 0.9 раскладывала
+// страницу шире экрана (телефон 390px → 433px), и Яндекс.Вебмастер помечал сайт
+// «не оптимизирован для мобильных устройств». Уменьшение публички даёт body zoom в globals.css.
 const ViewportScale = () => {
+  const pathname = usePathname();
+
   useEffect(() => {
+    const scale = isCrmPath(pathname) ? '0.9' : '1';
+    const content = `width=device-width, initial-scale=${scale}, maximum-scale=5, user-scalable=yes`;
     const viewport = document.querySelector('meta[name="viewport"]');
     if (viewport) {
-      viewport.setAttribute('content', 'width=device-width, initial-scale=0.9, maximum-scale=5, user-scalable=yes');
+      viewport.setAttribute('content', content);
     } else {
       const meta = document.createElement('meta');
       meta.name = 'viewport';
-      meta.content = 'width=device-width, initial-scale=0.9, maximum-scale=5, user-scalable=yes';
+      meta.content = content;
       document.getElementsByTagName('head')[0].appendChild(meta);
     }
-  }, []);
+  }, [pathname]);
 
   return null;
 };
@@ -54,15 +70,6 @@ const ScrollToTop = () => {
   return null;
 };
 
-// Роуты CRM и страница логина — рендерятся БЕЗ публичного Header/Footer
-const isCrmPath = (pathname: string) =>
-  pathname.startsWith('/admin') ||
-  pathname.startsWith('/manager') ||
-  pathname.startsWith('/master') ||
-  pathname.startsWith('/profile') ||
-  pathname.startsWith('/manual') ||
-  pathname.startsWith('/login');
-
 const MainContent = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const isCrm = isCrmPath(pathname);
@@ -88,8 +95,10 @@ const MainContent = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    // Убираем фон отсюда, чтобы он не перекрывал частицы в дочерних компонентах
-    <div className="min-h-screen flex flex-col">
+    // Убираем фон отсюда, чтобы он не перекрывал частицы в дочерних компонентах.
+    // overflow-x-clip: стартовые сдвиги анимаций (x: ±50) и декор не раздувают ширину страницы
+    // на телефоне (clip, а не hidden — не создаёт скролл-контейнер, sticky/fixed не ломаются).
+    <div className="min-h-screen flex flex-col overflow-x-clip">
       {/* Экран загрузки для главной страницы */}
       <AnimatePresence>
         {isLoading && <LoadingScreen />}

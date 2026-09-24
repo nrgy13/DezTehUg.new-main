@@ -205,7 +205,7 @@ export default function ServicesPage() {
             transition={{ duration: 0.8 }}
             className="text-center space-y-6"
           >
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-orbitron font-bold text-content-primary">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-orbitron font-bold text-content-primary">
               Полный спектр{' '}
               <span className="text-poison-green">профессиональных услуг</span>
             </h1>

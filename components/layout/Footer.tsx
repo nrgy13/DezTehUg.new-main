@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Phone, Mail, MapPin, Clock, Award, Send, MessageCircle } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Award, BadgeCheck, Send, MessageCircle } from 'lucide-react';
 import { MaxIcon } from '@/components/icons/MaxIcon';
 import { BrandLogo } from './BrandLogo';
 import { PrivacyModal } from '@/components/PrivacyModal';
@@ -84,6 +84,23 @@ export function Footer() {
                     </div>
                     <div className="text-xs text-content-muted mt-0.5">
                       от 13.02.2025 г.
+                    </div>
+                  </div>
+                </Link>
+                {/* Trademark */}
+                <Link
+                  href="/license"
+                  className="flex items-center gap-2.5 group cursor-pointer w-full justify-center p-3 rounded-lg bg-gradient-to-r from-neon-orange/5 to-poison-green/5 border border-neon-orange/20 hover:border-poison-green/40 transition-all duration-300 hover:shadow-[0_0_12px_rgba(57,255,20,0.3)]"
+                >
+                  <div className="w-8 h-8 bg-white border-2 border-neon-orange rounded-xl flex items-center justify-center group-hover:bg-neon-orange/10 group-hover:border-poison-green transition-all duration-300 shadow-[0_0_8px_rgba(255,107,53,0.3)] group-hover:shadow-[0_0_15px_rgba(57,255,20,0.5)] flex-shrink-0">
+                    <BadgeCheck className="w-4 h-4 text-neon-orange group-hover:text-poison-green transition-colors" />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-semibold text-content-primary group-hover:text-poison-green transition-colors leading-tight">
+                      Товарный знак № 1232835
+                    </div>
+                    <div className="text-xs text-content-muted mt-0.5">
+                      зарегистрирован Роспатентом
                     </div>
                   </div>
                 </Link>
