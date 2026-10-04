@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Phone, Mail, MapPin, Clock, Award, BadgeCheck, Send, MessageCircle } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Award, BadgeCheck, Send, MessageCircle, Instagram } from 'lucide-react';
 import { MaxIcon } from '@/components/icons/MaxIcon';
 import { BrandLogo } from './BrandLogo';
 import { PrivacyModal } from '@/components/PrivacyModal';
@@ -226,6 +226,9 @@ export function Footer() {
                 </div>
               </div>
             </div>
+            <p className="mt-3 text-center text-[11px] leading-snug text-content-muted">
+              * Instagram принадлежит компании Meta, деятельность которой запрещена в РФ.
+            </p>
           </div>
         </div>
 
@@ -250,16 +253,26 @@ export function Footer() {
                   { 
                     icon: MaxIcon, 
                     href: 'https://max.ru/u/f9LHodD0cOKOoy0i--m4zxHSoKBMhEOCW708G26ksoCIINexFW-vr8F-7go', 
-                    color: 'hover:text-purple-500', 
-                    label: 'MAX'
+                    color: 'hover:text-purple-500',
+                    label: 'MAX',
+                    newTab: true,
+                  },
+                  {
+                    icon: Instagram,
+                    href: 'https://www.instagram.com/deztechugteam/',
+                    color: 'hover:text-pink-500',
+                    label: 'Instagram',
+                    newTab: true,
                   }
                 ].map((social, index) => {
                   return (
                     <a
                       key={index}
                       href={social.href}
-                      target={social.label === 'MAX' ? '_blank' : undefined}
-                      rel={social.label === 'MAX' ? 'noopener noreferrer' : undefined}
+                      target={social.newTab ? '_blank' : undefined}
+                      rel={social.newTab ? 'noopener noreferrer' : undefined}
+                      aria-label={social.label}
+                      title={social.label}
                       className={`w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-content-muted transition-all duration-300 hover:scale-110 hover:bg-white hover:shadow-lg ${social.color}`}
                     >
                       <social.icon className="w-4 h-4" />

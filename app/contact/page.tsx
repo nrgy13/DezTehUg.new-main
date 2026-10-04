@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Phone, Mail, MapPin, Clock, MessageCircle, Send } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, MessageCircle, Send, Instagram } from 'lucide-react';
 import { MaxIcon } from '@/components/icons/MaxIcon';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
@@ -191,6 +191,26 @@ export default function ContactPage() {
                       MAX
                     </h3>
                     <p className="text-content-secondary leading-relaxed">Напишите нам в MAX</p>
+                  </div>
+                </Link>
+              </CyberpunkCard>
+
+              {/* Instagram (сноска про Meta — в футере, под реквизитами) */}
+              <CyberpunkCard className="p-6 group hover:border-pink-500 transition-all">
+                <Link
+                  href="https://www.instagram.com/deztechugteam/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-6"
+                >
+                  <div className="w-12 h-12 bg-pink-500/10 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-pink-500/20 transition-colors">
+                    <Instagram className="w-6 h-6 text-pink-500" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-orbitron font-semibold text-content-primary mb-1">
+                      Instagram*
+                    </h3>
+                    <p className="text-content-secondary leading-relaxed">@deztechugteam</p>
                   </div>
                 </Link>
               </CyberpunkCard>
