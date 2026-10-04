@@ -105,7 +105,8 @@ export default async function ProfilePage() {
             Telegram-уведомления
           </h2>
           <p className="text-sm text-content-muted">
-            Привяжи Telegram-чат — буду слать туда уведомления о зависших лидах вместо email.
+            Привяжи Telegram-чат — сюда будут мгновенно приходить новые заявки с сайта
+            и сводка о зависших лидах.
           </p>
         </div>
         <TelegramSection

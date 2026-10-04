@@ -307,6 +307,56 @@ ${rowsHtml}
   return { text, html };
 }
 
+/**
+ * Внутреннее письмо менеджеру: пришла новая заявка (сайт → n8n → /api/leads/inbound).
+ * Пустые поля в письмо не попадают.
+ */
+export function newLeadAlertBody(args: {
+  contactName: string | null;
+  contactPhone: string;
+  contactEmail: string | null;
+  services: string[] | null;
+  address: string | null;
+  message: string | null;
+  leadId: string;
+}): MailBody {
+  const fields: Array<[string, string]> = (
+    [
+      ['Клиент', args.contactName ?? ''],
+      ['Телефон', args.contactPhone],
+      ['Email', args.contactEmail ?? ''],
+      ['Услуга', args.services?.join(', ') ?? ''],
+      ['Адрес', args.address ?? ''],
+      ['Сообщение', args.message ?? ''],
+    ] as Array<[string, string]>
+  ).filter(([, v]) => v.trim().length > 0);
+
+  const text = `Пришла новая заявка с сайта.
+
+${fields.map(([k, v]) => `${k}: ${v}`).join('\n')}
+
+Открыть в CRM: https://crm.дезтехюг.рф/manager/leads/${args.leadId}`;
+
+  const rowsHtml = fields
+    .map(
+      ([k, v]) => `<tr>
+        <td style="padding:6px 12px;border-bottom:1px solid #eee;color:#666;white-space:nowrap;vertical-align:top">${escapeHtml(k)}</td>
+        <td style="padding:6px 12px;border-bottom:1px solid #eee">${escapeHtml(v)}</td>
+      </tr>`,
+    )
+    .join('');
+
+  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#222;max-width:600px">
+<p><strong>Пришла новая заявка с сайта.</strong></p>
+<table style="width:100%;border-collapse:collapse;margin-top:8px">
+${rowsHtml}
+</table>
+<p style="margin-top:16px"><a href="https://crm.xn--c1abdaj0ewa6e.xn--p1ai/manager/leads/${encodeURIComponent(args.leadId)}" style="color:#0891b2">Открыть заявку в CRM →</a></p>
+</body></html>`;
+
+  return { text, html };
+}
+
 // =============================================================
 // Router: выбор шаблона по типу документа
 // =============================================================

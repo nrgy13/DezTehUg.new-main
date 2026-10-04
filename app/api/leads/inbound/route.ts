@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema/leads';
 import { activityLog } from '@/lib/db/schema/activity';
+import { notifyManagersAboutNewLead } from '@/lib/notifications/new-lead';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -154,6 +155,35 @@ export async function POST(request: Request) {
       ip: request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? null,
       userAgent: request.headers.get('user-agent') ?? null,
     });
+
+    // ─── 6. Уведомить менеджеров (Telegram + письмо + push) ──────
+    // Лид уже в БД: сбой уведомлений не должен превращать ответ n8n в 500.
+    // Ждём не дольше 15с; итог пишем в activity_log, чтобы молчаливый отказ
+    // канала был виден SQL'ем, а не только в логах контейнера.
+    try {
+      const notify = await Promise.race([
+        notifyManagersAboutNewLead({
+          id: created.id,
+          contactName: name ?? null,
+          contactPhone: phone,
+          contactEmail: email ?? null,
+          services: services ?? null,
+          address: address ?? null,
+          message: message ?? null,
+        }),
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 15_000)),
+      ]);
+      console.info('[leads/inbound] notify managers:', created.id, JSON.stringify(notify));
+      await db.insert(activityLog).values({
+        userId: null,
+        action: 'lead.notify_managers',
+        entityType: 'lead',
+        entityId: created.id,
+        changesJson: notify === 'timeout' ? { timeout: true } : notify,
+      });
+    } catch (err) {
+      console.error('[leads/inbound] notify managers failed:', created.id, err);
+    }
 
     return NextResponse.json({ ok: true, leadId: created.id }, { status: 201 });
   } catch (err) {

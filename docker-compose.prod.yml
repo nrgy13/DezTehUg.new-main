@@ -94,6 +94,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* Next.js вшивает в клиентский бандл НА СБОРКЕ — runtime env его не спасёт
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
     image: deztech-crm-app:latest
     container_name: deztech-crm-app
     restart: unless-stopped
@@ -132,6 +135,13 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       # Чат владельца для заявок с публичной формы (/api/booking → sendToTelegram)
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      # Web-push (Sprint 6). Ключи лежали в .env с мая, но сюда не были прописаны →
+      # lib/push/server.ts молча уходил в noop (найдено 06.08, починено 04.10.2026)
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT}
+      # Ежедневный дайджест зависших лидов (scripts/cron-stuck-leads.sh → /api/cron/stuck-leads)
+      CRON_SECRET: ${CRON_SECRET}
       # n8n integration
       N8N_INBOUND_SECRET: ${N8N_INBOUND_SECRET}
     volumes:
