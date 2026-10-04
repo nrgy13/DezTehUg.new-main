@@ -226,9 +226,6 @@ export function Footer() {
                 </div>
               </div>
             </div>
-            <p className="mt-3 text-center text-[11px] leading-snug text-content-muted">
-              * Instagram принадлежит компании Meta, деятельность которой запрещена в РФ.
-            </p>
           </div>
         </div>
 

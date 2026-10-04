@@ -195,7 +195,7 @@ export default function ContactPage() {
                 </Link>
               </CyberpunkCard>
 
-              {/* Instagram (сноска про Meta — в футере, под реквизитами) */}
+              {/* Instagram */}
               <CyberpunkCard className="p-6 group hover:border-pink-500 transition-all">
                 <Link
                   href="https://www.instagram.com/deztechugteam/"
@@ -208,7 +208,7 @@ export default function ContactPage() {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-lg font-orbitron font-semibold text-content-primary mb-1">
-                      Instagram*
+                      Instagram
                     </h3>
                     <p className="text-content-secondary leading-relaxed">@deztechugteam</p>
                   </div>
