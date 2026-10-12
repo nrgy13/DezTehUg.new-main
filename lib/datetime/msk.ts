@@ -21,3 +21,18 @@ export function mskLocalToUtcISO(local: string): string {
   const [, y, mo, d, hh, mm] = m;
   return new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm) - MSK_OFFSET_MS).toISOString();
 }
+
+/**
+ * Обратное к mskLocalToUtcISO: момент (ISO/Date) → МСК-дата и время для полей
+ * <input type="date"> / <input type="time"> ("YYYY-MM-DD", "HH:mm"). Не зависит от TZ браузера.
+ */
+export function utcToMskParts(value: string | Date): { date: string; time: string } | null {
+  const ms = (value instanceof Date ? value : new Date(value)).getTime();
+  if (Number.isNaN(ms)) return null;
+  const d = new Date(ms + MSK_OFFSET_MS);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return {
+    date: `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`,
+    time: `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`,
+  };
+}

@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { updateVisitPlannedAt } from '@/app/(crm)/manager/deals/[id]/visits-actions';
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
 import { WorkOrderCrewButton } from '@/components/crm/WorkOrderCrewButton';
+import { WorkOrderRescheduleButton } from '@/components/crm/WorkOrderRescheduleButton';
 import './calendar.css';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -631,7 +632,8 @@ export function CalendarFull({
 
           {canDragDates && (
             <div className="text-[10px] text-content-muted px-1">
-              💡 Перетаскивай выезды прямо в календаре для быстрого переноса дат
+              💡 Перетаскивай выезды в календаре для быстрого переноса дня. Другое время — кнопка
+              🕒 «Перенести» на карточке выезда в списке
             </div>
           )}
         </div>
@@ -756,6 +758,10 @@ function VisitsList({
                   <VisitActButtons dealId={e.dealId} workLogId={e.id} />
                   {/* Активный календарь = только planned/in_progress → бригаду ещё можно править. */}
                   <WorkOrderCrewButton workLogId={e.id} />
+                  {/* Перенос с ВРЕМЕНЕМ: в месячном виде перетаскивание двигает только день. */}
+                  {e.status === 'planned' && (
+                    <WorkOrderRescheduleButton workLogId={e.id} plannedAtIso={e.startAt} />
+                  )}
                 </div>
               )}
               </div>

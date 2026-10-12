@@ -209,6 +209,7 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
       id: v.id,
       status: v.status as ObjectVisitView['status'],
       dateLabel,
+      plannedAtIso: v.plannedAt?.toISOString() ?? null,
       masterName: crewLabel(v.masterName, partnersByWl.get(v.id)),
       services: svcByWl.get(v.id) ?? [],
       otherObjects: (otherIdsByWl.get(v.id) ?? []).map((oid) => otherNames.get(oid) ?? 'объект'),

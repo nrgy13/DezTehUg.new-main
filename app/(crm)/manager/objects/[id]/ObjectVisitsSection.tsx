@@ -19,6 +19,7 @@ import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { WorkOrderDialog } from '@/components/crm/WorkOrderDialog';
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
 import { WorkOrderCrewButton } from '@/components/crm/WorkOrderCrewButton';
+import { WorkOrderRescheduleButton } from '@/components/crm/WorkOrderRescheduleButton';
 import {
   deleteWorkOrder,
   getWorkOrderDuplicateData,
@@ -30,6 +31,8 @@ export type ObjectVisitView = {
   id: string;
   status: 'planned' | 'in_progress' | 'completed';
   dateLabel: string;
+  /** Плановое время выезда (UTC ISO) — для кнопки «Перенести». */
+  plannedAtIso: string | null;
   masterName: string | null;
   services: string[];
   /** Мульти-объектный наряд: другие объекты того же выезда (кроме этого). */
@@ -161,6 +164,9 @@ export function ObjectVisitsSection({
                   )}
                   {(v.status === 'planned' || v.status === 'in_progress') && (
                     <WorkOrderCrewButton workLogId={v.id} />
+                  )}
+                  {v.status === 'planned' && (
+                    <WorkOrderRescheduleButton workLogId={v.id} plannedAtIso={v.plannedAtIso} />
                   )}
                   <button
                     type="button"
