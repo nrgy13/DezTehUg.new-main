@@ -11,6 +11,7 @@ import {
   date,
   index,
   boolean,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { clients } from './clients';
@@ -244,6 +245,27 @@ export const dealWorkLogServices = pgTable(
   (t) => ({
     workLogIdx: index('deal_work_log_services_work_log_idx').on(t.workLogId),
     objectIdx: index('deal_work_log_services_object_idx').on(t.objectId),
+  }),
+);
+
+// Бригада наряда (10.2026, запрос Сани: «есть объекты, где мастера трудятся вместе»).
+// Здесь только НАПАРНИКИ: основной мастер остаётся в deal_work_logs.master_id, поэтому
+// старые наряды без строк здесь — это наряды на одного. Члены бригады равноправны:
+// каждый видит наряд у себя, отмечает чеклист, грузит фото и может его завершить.
+export const dealWorkLogMasters = pgTable(
+  'deal_work_log_masters',
+  {
+    workLogId: uuid('work_log_id')
+      .notNull()
+      .references(() => dealWorkLogs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.workLogId, t.userId] }),
+    userIdx: index('deal_work_log_masters_user_idx').on(t.userId),
   }),
 );
 

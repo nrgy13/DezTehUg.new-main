@@ -19,6 +19,7 @@ import { deals, dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals'
 import { dealChecklistItems } from '@/lib/db/schema/checklists';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
+import { crewLabel, getPartnersByWorkLogIds } from '@/lib/visits/crew';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { formatQuantity, unitLabel } from '@/lib/constants/units';
@@ -125,6 +126,8 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
     .orderBy(desc(dealWorkLogs.createdAt));
 
   const visitIds = visitRows.map((v) => v.id);
+  // Бригада: напарники нарядов → «Денисов + Нечепоренко» в истории выездов объекта.
+  const partnersByWl = await getPartnersByWorkLogIds(visitIds);
   const [svcRows, chkRows] = await Promise.all([
     visitIds.length
       ? db
@@ -206,7 +209,7 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
       id: v.id,
       status: v.status as ObjectVisitView['status'],
       dateLabel,
-      masterName: v.masterName,
+      masterName: crewLabel(v.masterName, partnersByWl.get(v.id)),
       services: svcByWl.get(v.id) ?? [],
       otherObjects: (otherIdsByWl.get(v.id) ?? []).map((oid) => otherNames.get(oid) ?? 'объект'),
       preparations: v.preparations,

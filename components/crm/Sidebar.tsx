@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
+import { clearIconBadge } from '@/lib/push/app-badge';
 import {
   LayoutDashboard,
   Users,
@@ -190,7 +191,11 @@ export function Sidebar({
           Профиль
         </Link>
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={() => {
+            // Вышел — цифра на иконке больше не про него (на общем телефоне — тем более).
+            clearIconBadge();
+            void signOut({ callbackUrl: '/login' });
+          }}
           className="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm text-content-secondary hover:bg-red-50 hover:text-red-600 transition-all duration-200"
         >
           <LogOut className="w-4 h-4" />

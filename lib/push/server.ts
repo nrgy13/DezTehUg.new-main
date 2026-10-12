@@ -42,6 +42,11 @@ export type PushPayload = {
   url?: string;
   /** Произвольный тег: одинаковый тег схлопывает уведомления того же типа. */
   tag?: string;
+  /**
+   * Цифра на иконке приложения. Сюда НЕ передавать: sendPushToUser сам считает её
+   * для каждого получателя (getBadgeCount) — одно число и в push, и в приложении.
+   */
+  badge?: number;
 };
 
 export type PushSendResult = {
@@ -72,7 +77,16 @@ export async function sendPushToUser(
     return { sent: 0, removed: 0, failed: 0 };
   }
 
-  const json = JSON.stringify(payload);
+  // Цифра на иконке (sw.js → setAppBadge). Считается на КАЖДОГО получателя; сбой подсчёта
+  // не должен ронять push — тогда payload уходит без поля badge, и цифра просто не меняется.
+  let badge: number | undefined;
+  try {
+    const { getBadgeCount } = await import('@/lib/push/badge');
+    badge = await getBadgeCount(userId);
+  } catch (err) {
+    console.warn('[push] badge count failed:', err);
+  }
+  const json = JSON.stringify(badge === undefined ? payload : { ...payload, badge });
   let sent = 0;
   let removed = 0;
   let failed = 0;

@@ -14,6 +14,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
+import { CrewPicker } from '@/components/crm/CrewPicker';
 import { UNIT_OPTIONS, formatQuantity } from '@/lib/constants/units';
 import { TREATMENT_METHODS } from '@/lib/constants/treatment';
 import { mskLocalToUtcISO } from '@/lib/datetime/msk';
@@ -218,6 +219,10 @@ export function WorkOrderDialog({
       ? duplicatePrefill.masterId
       : '',
   );
+  // Напарники (бригада, 10.2026): дубль едет тем же составом — кроме тех, кто уже не мастер.
+  const [partnerIds, setPartnerIds] = useState<string[]>(() =>
+    (duplicatePrefill?.partnerIds ?? []).filter((id) => data.masters.some((m) => m.id === id)),
+  );
   const [plannedAt, setPlannedAt] = useState(preset?.plannedAtLocal ?? ''); // datetime-local
   const [preparations, setPreparations] = useState(duplicatePrefill?.preparations ?? '');
   // Объекты наряда с услугами. Всегда ≥1 блок (пустой блок = «выбери объект»).
@@ -303,6 +308,10 @@ export function WorkOrderDialog({
           if (isFirst) setMasterId(mid);
           else setMasterId((m) => m || mid);
         }
+        // Бригада прошлого наряда объекта — по умолчанию едет тем же составом.
+        const known = d.partnerIds.filter((id) => data.masters.some((m) => m.id === id));
+        if (isFirst) setPartnerIds(known);
+        else if (known.length > 0) setPartnerIds((cur) => (cur.length > 0 ? cur : known));
       }
     } catch {
       toast.error('Не удалось подтянуть услуги объекта — добавь вручную');
@@ -523,6 +532,8 @@ export function WorkOrderDialog({
         objectId: objectIds[0],
         objectIds,
         masterId,
+        // Основного мастера в напарниках быть не может (сменили основного на напарника).
+        partnerIds: partnerIds.filter((id) => id !== masterId),
         plannedAtIso,
         preparations: preparations.trim() || null,
         services,
@@ -641,6 +652,22 @@ export function WorkOrderDialog({
                 />
               </div>
             </div>
+
+            {/* Бригада: напарники основного мастера (объекты, где работают вдвоём и больше) */}
+            {masterId && data.masters.length > 1 && (
+              <div>
+                <Label>Напарники (бригада)</Label>
+                <p className="text-xs text-content-muted mb-2">
+                  Наряд увидит каждый из бригады, отметить чеклист и завершить может любой.
+                </p>
+                <CrewPicker
+                  masters={data.masters}
+                  primaryId={masterId}
+                  value={partnerIds}
+                  onChange={setPartnerIds}
+                />
+              </div>
+            )}
 
             {/* Объекты и услуги: блок на объект, один наряд может охватывать несколько объектов */}
             <div>

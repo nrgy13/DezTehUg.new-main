@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { WorkOrderDialog } from '@/components/crm/WorkOrderDialog';
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
+import { WorkOrderCrewButton } from '@/components/crm/WorkOrderCrewButton';
 import {
   deleteWorkOrder,
   getWorkOrderDuplicateData,
@@ -157,6 +158,9 @@ export function ObjectVisitsSection({
                     >
                       <ExternalLink className="w-3 h-3" />В договоре
                     </Link>
+                  )}
+                  {(v.status === 'planned' || v.status === 'in_progress') && (
+                    <WorkOrderCrewButton workLogId={v.id} />
                   )}
                   <button
                     type="button"

@@ -10,7 +10,7 @@
 import 'server-only';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { dealWorkLogs, dealWorkLogServices } from '@/lib/db/schema/deals';
+import { dealWorkLogs, dealWorkLogServices, dealWorkLogMasters } from '@/lib/db/schema/deals';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { serviceChecklists, dealChecklistItems } from '@/lib/db/schema/checklists';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
@@ -63,6 +63,11 @@ export async function createWorkOrder(params: {
    */
   objectIds?: string[];
   masterId: string;
+  /**
+   * Напарники основного мастера (бригада, 10.2026). Уже нормализованы вызывающим
+   * (resolvePartnerIds: дедуп, без основного, активные мастера). Пусто — наряд на одного.
+   */
+  partnerIds?: string[];
   plannedAt: Date | null;
   preparations?: string | null;
   services: WorkOrderServiceInput[];
@@ -94,6 +99,15 @@ export async function createWorkOrder(params: {
         preparations: preparations?.trim() ? preparations.trim() : null,
       })
       .returning({ id: dealWorkLogs.id });
+
+    // 1a) Бригада: напарники основного мастера — в той же транзакции, что и сам выезд,
+    // иначе напарник мог бы на мгновение не увидеть свой наряд или увидеть «наряд без бригады».
+    const partners = Array.from(new Set(params.partnerIds ?? [])).filter((id) => id !== masterId);
+    if (partners.length > 0) {
+      await tx
+        .insert(dealWorkLogMasters)
+        .values(partners.map((userId) => ({ workLogId: created.id, userId })));
+    }
 
     // 1b) Автопривязка объектов к договору, если ещё не привязаны. Нужно для актов
     // АО/АВР (они формируются по позициям договора, относящимся к объекту).

@@ -9,6 +9,7 @@ import { clients } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
+import { crewLabel, getPartnersByWorkLogIds } from '@/lib/visits/crew';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { DealStatusBadge } from '@/components/crm/DealStatusBadge';
 import { WorkLogForm } from './WorkLogForm';
@@ -87,6 +88,8 @@ export default async function MasterDealPage({
     .leftJoin(users, eq(dealWorkLogs.masterId, users.id))
     .where(eq(dealWorkLogs.dealId, id))
     .orderBy(asc(dealWorkLogs.performedAt));
+  // Бригада: в журнале работ — все мастера выезда.
+  const partnersByWl = await getPartnersByWorkLogIds(workLogs.map((w) => w.id));
 
   return (
     <div className="space-y-6">
@@ -292,7 +295,7 @@ export default async function MasterDealPage({
                             timeStyle: 'short',
                           })
                         : '—'}{' '}
-                      · {w.masterName ?? 'неизвестно'}
+                      · {crewLabel(w.masterName, partnersByWl.get(w.id)) ?? 'неизвестно'}
                     </div>
                     <div className="text-sm text-content-primary mt-1">
                       {w.description ?? ''}

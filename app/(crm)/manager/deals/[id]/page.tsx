@@ -12,6 +12,7 @@ import { clients } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
+import { crewLabel, getPartnersByWorkLogIds } from '@/lib/visits/crew';
 import { activityLog } from '@/lib/db/schema/activity';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { DealStatusBadge } from '@/components/crm/DealStatusBadge';
@@ -246,6 +247,8 @@ export default async function DealDetailPage({
     .orderBy(desc(dealWorkLogs.createdAt));
 
   const wlIds = workLogRows.map((w) => w.id);
+  // Бригада: напарники нарядов → «Денисов + Нечепоренко» в карточке выезда.
+  const partnersByWl = await getPartnersByWorkLogIds(wlIds);
   // Пункты чеклистов всех выездов сразу — фильтруем in-memory по workLogId.
   const allItems =
     wlIds.length > 0
@@ -310,7 +313,7 @@ export default async function DealDetailPage({
       startedAt: w.startedAt?.toISOString() ?? null,
       finalizedAt: w.finalizedAt?.toISOString() ?? null,
       performedAt: w.performedAt?.toISOString() ?? null,
-      masterName: w.masterName,
+      masterName: crewLabel(w.masterName, partnersByWl.get(w.id)),
       services: svcEntries.map((s) =>
         multi && s.objectId ? `${objMap.get(s.objectId)?.name ?? 'объект'}: ${s.label}` : s.label,
       ),

@@ -7,6 +7,8 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { dealWorkLogs } from '@/lib/db/schema/deals';
 import { dealChecklistItems, type ChecklistPhoto } from '@/lib/db/schema/checklists';
+import { activityLog } from '@/lib/db/schema/activity';
+import { getCrewIds, isWorkLogMember } from '@/lib/visits/crew';
 import {
   saveChecklistPhoto,
   deleteChecklistPhoto as deletePhotoFromStorage,
@@ -55,7 +57,8 @@ async function loadEditableWorkLog(
     .where(eq(dealWorkLogs.id, workLogId))
     .limit(1);
   if (!wl) return { ok: false, error: 'Выезд не найден' };
-  if (actorRole !== 'admin' && wl.masterId !== actorId) {
+  // Бригада (10.2026): править наряд может любой его член — основной мастер или напарник.
+  if (actorRole !== 'admin' && !(await isWorkLogMember(wl, actorId))) {
     return { ok: false, error: 'Этот выезд назначен не на тебя' };
   }
   // Блокируем правки и по finalizedAt, и по status='completed' (legacy work_logs из
@@ -64,6 +67,25 @@ async function loadEditableWorkLog(
     return { ok: false, error: 'Выезд уже завершён, изменения недоступны' };
   }
   return { ok: true, wl };
+}
+
+/** Запись в журнал CRM: кто из бригады начал/завершил выезд. Best-effort. */
+async function logVisitAction(
+  userId: string,
+  action: 'work_order.start' | 'work_order.finalize',
+  wl: EditableWorkLog,
+): Promise<void> {
+  try {
+    await db.insert(activityLog).values({
+      userId,
+      action,
+      entityType: 'deal',
+      entityId: wl.dealId,
+      changesJson: { workLogId: wl.id, masterId: wl.masterId },
+    });
+  } catch (err) {
+    console.warn(`[${action}] activity log failed:`, err);
+  }
 }
 
 // ============== startVisit ====================================================
@@ -75,10 +97,13 @@ export async function startVisit(workLogId: string): Promise<Result> {
   if (!r.ok) return { ok: false, error: r.error };
 
   if (r.wl.status === 'planned') {
-    await db
+    const started = await db
       .update(dealWorkLogs)
       .set({ status: 'in_progress', startedAt: new Date() })
-      .where(eq(dealWorkLogs.id, workLogId));
+      .where(and(eq(dealWorkLogs.id, workLogId), eq(dealWorkLogs.status, 'planned')))
+      .returning({ id: dealWorkLogs.id });
+    // Журнал: в бригаде начать может любой — фиксируем, кто нажал.
+    if (started.length > 0) await logVisitAction(actor.id, 'work_order.start', r.wl);
   }
 
   revalidatePath(`/master/visits/${workLogId}`);
@@ -362,6 +387,26 @@ export async function finalizeVisit(workLogId: string): Promise<Result> {
 
   if (finalized.length === 0) {
     return { ok: false, error: 'Выезд уже завершён' };
+  }
+
+  // Журнал: в бригаде завершить может любой — фиксируем, кто нажал.
+  await logVisitAction(actor.id, 'work_order.finalize', guard.wl);
+
+  // Push остальным членам бригады: наряд закрыт напарником — у них он уходит из активных
+  // (и цифра на иконке уменьшается). Наряд на одного — список пуст, ничего не шлём.
+  try {
+    const mates = (await getCrewIds(workLogId, guard.wl.masterId)).filter((id) => id !== actor.id);
+    if (mates.length > 0) {
+      const { sendPushToUsers } = await import('@/lib/push/server');
+      await sendPushToUsers(mates, {
+        title: 'Выезд завершён',
+        body: `${actor.name} закрыл выезд бригады`,
+        url: `/master/visits/${workLogId}`,
+        tag: `visit-finalized-${workLogId}`,
+      });
+    }
+  } catch (err) {
+    console.warn('[finalizeVisit] crew push failed:', err);
   }
 
   // Push менеджеру: выезд завершён. Импорт лениво.

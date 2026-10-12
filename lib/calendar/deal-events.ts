@@ -9,6 +9,7 @@ import { clientObjects } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
 import { dealChecklistItems } from '@/lib/db/schema/checklists';
+import { crewLabel, getPartnersByWorkLogIds, workLogHasMember } from '@/lib/visits/crew';
 
 // SERVER-ONLY: запросы для календарей.
 // Sprint 6: календарь показывает ВЫЕЗДЫ (work_logs), не периоды сделок.
@@ -112,8 +113,9 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
 
   // Мастер видит только свои выезды. Менеджер/админ — ВСЕ выезды (Релиз B:
   // операционный календарь общий, менеджер по факту один, мастера общие).
+  // Бригада (10.2026): «свои» = где мастер основной ИЛИ напарник.
   if (mode.kind === 'master') {
-    conditions.push(eq(dealWorkLogs.masterId, mode.userId));
+    conditions.push(workLogHasMember(mode.userId));
   }
 
   // Активный календарь — только запланированные и в работе.
@@ -161,10 +163,14 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
     .leftJoin(services, eq(services.id, dealPriceItems.serviceId))
     .leftJoin(clientObjects, eq(clientObjects.id, dealPriceItems.objectId))
     .leftJoin(woObjects, eq(woObjects.id, dealWorkLogs.objectId))
-    .leftJoin(masterAlias, eq(masterAlias.id, deals.assignedMasterId))
+    // Мастер ВЫЕЗДА (наряда), а не назначенный по договору: наряд по договору Александра
+    // могли выдать Денисову — календарь обязан показать того, кто реально едет (+ бригаду).
+    .leftJoin(masterAlias, eq(masterAlias.id, dealWorkLogs.masterId))
     .leftJoin(managerAlias, eq(managerAlias.id, deals.assignedManagerId))
     .where(and(...conditions))
     .orderBy(asc(dealWorkLogs.plannedAt));
+
+  const partnersByWl = await getPartnersByWorkLogIds(rows.map((r) => r.workLogId));
 
   // Объект-выезды (заказ-наряды): услуги берём из snapshot deal_work_log_services
   // (несколько услуг на выезд), а не из позиции прайса. Заодно объекты услуг —
@@ -254,7 +260,7 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
       clientId: r.clientId,
       clientShortName: r.clientShortName,
       clientPhone: r.clientPhone,
-      masterName: r.masterFullName,
+      masterName: crewLabel(r.masterFullName, partnersByWl.get(r.workLogId)),
       managerName: r.managerFullName,
       serviceTitle,
       objectName,
@@ -374,7 +380,8 @@ export async function getVisitHistory(mode: Mode): Promise<VisitHistoryItem[]> {
 
   const conditions: SQL[] = [eq(dealWorkLogs.status, 'completed')];
   if (mode.kind === 'master') {
-    conditions.push(eq(dealWorkLogs.masterId, mode.userId));
+    // Бригада: история и у основного мастера, и у напарников.
+    conditions.push(workLogHasMember(mode.userId));
   }
 
   const rows = await db
@@ -411,6 +418,7 @@ export async function getVisitHistory(mode: Mode): Promise<VisitHistoryItem[]> {
     .limit(500);
 
   const wlIds = rows.map((r) => r.workLogId);
+  const historyPartners = await getPartnersByWorkLogIds(wlIds);
 
   // Услуги заказ-нарядов берём из snapshot (несколько услуг на выезд) + объекты услуг
   // (мульти-объектный наряд: «Отель 4* +5», поиск по всем объектам выезда).
@@ -481,7 +489,7 @@ export async function getVisitHistory(mode: Mode): Promise<VisitHistoryItem[]> {
       dealId: r.dealId ?? '',
       contractNumber: r.contractNumber ?? '—',
       clientShortName: r.clientShortName,
-      masterName: r.masterFullName,
+      masterName: crewLabel(r.masterFullName, historyPartners.get(r.workLogId)),
       objectName:
         primaryName && extraNames.length > 0
           ? `${primaryName} +${extraNames.length}`

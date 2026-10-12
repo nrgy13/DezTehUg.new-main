@@ -6,7 +6,13 @@ import { eq, asc, and, or, desc, inArray, exists, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { deals, dealWorkLogs, dealWorkLogServices, dealPriceItems } from '@/lib/db/schema/deals';
+import {
+  deals,
+  dealWorkLogs,
+  dealWorkLogServices,
+  dealWorkLogMasters,
+  dealPriceItems,
+} from '@/lib/db/schema/deals';
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
@@ -19,6 +25,12 @@ import {
   type WorkOrderChecklistInput,
 } from '@/lib/visits/create';
 import { MSK_TZ } from '@/lib/datetime/msk';
+import {
+  getCrewIds,
+  getPartnersByWorkLogIds,
+  isActiveMaster,
+  resolvePartnerIds,
+} from '@/lib/visits/crew';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -92,6 +104,8 @@ export type WorkOrderDefaults = {
   services: WorkOrderDefaultService[];
   preparations: string | null;
   masterId: string | null;
+  /** Напарники из прошлого наряда (бригада ездит тем же составом). */
+  partnerIds: string[];
   /** Стартовый чеклист: из прошлого наряда (source='manager') либо шаблоны услуг (source='template'). */
   checklist: WorkOrderChecklistDefault[];
 };
@@ -116,6 +130,8 @@ export type WorkOrderDuplicatePrefill = {
   /** Все объекты исходного наряда в порядке появления: основной первым, затем объекты услуг. */
   objectIds: string[];
   masterId: string | null;
+  /** Напарники исходного наряда — копия едет тем же составом. */
+  partnerIds: string[];
   preparations: string | null;
   services: WorkOrderDuplicateService[];
   checklist: WorkOrderChecklistDefault[];
@@ -288,6 +304,8 @@ export async function createWorkOrderAction(input: {
    */
   objectIds?: string[];
   masterId: string;
+  /** Напарники основного мастера (бригада, 10.2026). Пусто/нет — наряд на одного. */
+  partnerIds?: string[];
   plannedAtIso: string | null;
   preparations: string | null;
   /** Услуги наряда; у каждой objectId — один из объектов наряда (null → основной). */
@@ -322,6 +340,11 @@ export async function createWorkOrderAction(input: {
     };
   }
   if (!masterId) return { ok: false, error: 'Не выбран мастер' };
+  if (!(await isActiveMaster(masterId))) {
+    return { ok: false, error: 'Мастер не найден или не активен' };
+  }
+  const partners = await resolvePartnerIds(masterId, input.partnerIds);
+  if (!partners.ok) return { ok: false, error: partners.error };
   const primaryObjectId = objectIds[0];
 
   const svc = (input.services ?? []).filter((s) => s.serviceId || s.customName?.trim());
@@ -449,6 +472,7 @@ export async function createWorkOrderAction(input: {
       objectId: primaryObjectId,
       objectIds,
       masterId,
+      partnerIds: partners.ids,
       plannedAt: plannedAtIso ? new Date(plannedAtIso) : null,
       preparations,
       services: svc,
@@ -459,11 +483,12 @@ export async function createWorkOrderAction(input: {
     return { ok: false, error: err instanceof Error ? err.message : 'Не удалось создать заказ-наряд' };
   }
 
-  // Push мастеру: назначен новый заказ-наряд (раньше уведомлял только старый
+  // Push бригаде: назначен новый заказ-наряд (раньше уведомлял только старый
   // assignMaster, а выезды теперь создаются нарядом → мастер не узнавал о выезде).
+  // Бригада (10.2026): уведомляем КАЖДОГО — основного и напарников.
   // Best-effort, ленивый импорт — push не должен ронять создание наряда.
   try {
-    const { sendPushToUser } = await import('@/lib/push/server');
+    const { sendPushToUsers } = await import('@/lib/push/server');
     const [info] = await db
       .select({ contractNumber: deals.contractNumber })
       .from(deals)
@@ -478,8 +503,8 @@ export async function createWorkOrderAction(input: {
       : '';
     // Мульти-наряд: «Отель 4* +5 об.» — мастер сразу видит, что точек несколько.
     const extra = objectIds.length > 1 ? ` +${objectIds.length - 1} об.` : '';
-    await sendPushToUser(masterId, {
-      title: 'Новый заказ-наряд',
+    await sendPushToUsers([masterId, ...partners.ids], {
+      title: partners.ids.length > 0 ? 'Новый заказ-наряд (бригада)' : 'Новый заказ-наряд',
       body: `${objName.get(primaryObjectId) ?? info?.contractNumber ?? 'Выезд'}${extra}${datePart}`,
       url: `/master/visits/${workLogId}`,
       tag: `wo-assigned-${workLogId}`,
@@ -527,6 +552,9 @@ export async function deleteWorkOrder(workLogId: string): Promise<Result> {
     };
   }
 
+  // Бригаду собираем ДО удаления: напарники снимутся каскадом, а уведомить надо всех.
+  const crewIds = await getCrewIds(workLogId, wl.masterId);
+
   await db.delete(dealWorkLogs).where(eq(dealWorkLogs.id, workLogId));
 
   // Аудит: удаление наряда было «молчаливым» — фиксируем кто/что удалил.
@@ -537,7 +565,7 @@ export async function deleteWorkOrder(workLogId: string): Promise<Result> {
       action: 'work_order.delete',
       entityType: 'deal',
       entityId: wl.dealId,
-      changesJson: { workLogId, objectId: wl.objectId, masterId: wl.masterId },
+      changesJson: { workLogId, objectId: wl.objectId, masterId: wl.masterId, crewIds },
       ip: h.get('x-forwarded-for')?.split(',')[0].trim() ?? null,
       userAgent: h.get('user-agent') ?? null,
     });
@@ -545,12 +573,12 @@ export async function deleteWorkOrder(workLogId: string): Promise<Result> {
     console.warn('[deleteWorkOrder] activity log failed:', err);
   }
 
-  // Push мастеру: выезд отменён (best-effort) — иначе у мастера в списке висит
-  // запланированный выезд, которого уже нет.
+  // Push бригаде: выезд отменён (best-effort) — иначе у мастера в списке висит
+  // запланированный выезд, которого уже нет. Заодно push обновит цифру на иконке.
   try {
-    if (wl.masterId) {
-      const { sendPushToUser } = await import('@/lib/push/server');
-      await sendPushToUser(wl.masterId, {
+    if (crewIds.length > 0) {
+      const { sendPushToUsers } = await import('@/lib/push/server');
+      await sendPushToUsers(crewIds, {
         title: 'Выезд отменён',
         body: 'Заказ-наряд удалён менеджером',
         url: '/master',
@@ -564,6 +592,180 @@ export async function deleteWorkOrder(workLogId: string): Promise<Result> {
   revalidatePath('/manager/calendar');
   revalidatePath('/master/calendar');
   revalidatePath('/master');
+  if (wl.dealId) revalidatePath(`/manager/deals/${wl.dealId}`);
+  if (wl.objectId) revalidatePath(`/manager/objects/${wl.objectId}`);
+  return { ok: true };
+}
+
+// ─── Бригада наряда: добавить/убрать напарников (10.2026) ─────
+export type WorkOrderCrewData =
+  | {
+      ok: true;
+      masterId: string;
+      masterName: string | null;
+      partnerIds: string[];
+      /** Активные мастера — кандидаты в напарники (основной в списке есть, форма его скрывает). */
+      masters: { id: string; fullName: string }[];
+      editable: boolean;
+    }
+  | { ok: false; error: string };
+
+/** Состав бригады наряда + список мастеров для диалога «Бригада». */
+export async function getWorkOrderCrew(workLogId: string): Promise<WorkOrderCrewData> {
+  const actor = await getManager();
+  if (!actor) return { ok: false, error: 'Нет доступа' };
+  const [wl] = await db
+    .select({
+      id: dealWorkLogs.id,
+      status: dealWorkLogs.status,
+      masterId: dealWorkLogs.masterId,
+      masterName: users.fullName,
+    })
+    .from(dealWorkLogs)
+    .leftJoin(users, eq(users.id, dealWorkLogs.masterId))
+    .where(eq(dealWorkLogs.id, workLogId))
+    .limit(1);
+  if (!wl) return { ok: false, error: 'Наряд не найден' };
+  const [partners, masters] = await Promise.all([
+    getPartnersByWorkLogIds([wl.id]),
+    db
+      .select({ id: users.id, fullName: users.fullName })
+      .from(users)
+      .where(and(eq(users.role, 'master'), eq(users.isActive, true)))
+      .orderBy(asc(users.fullName)),
+  ]);
+  return {
+    ok: true,
+    masterId: wl.masterId,
+    masterName: wl.masterName,
+    partnerIds: (partners.get(wl.id) ?? []).map((p) => p.id),
+    masters,
+    editable: wl.status === 'planned' || wl.status === 'in_progress',
+  };
+}
+
+/**
+ * Меняет НАПАРНИКОВ уже созданного наряда (основной мастер остаётся). Разрешено, пока
+ * наряд не завершён (planned / in_progress): «забыла добавить второго» — без удаления
+ * и пересоздания наряда. Добавленным и снятым мастерам — push (у них меняется список
+ * и цифра на иконке). Аудит — activity_log `work_order.crew_update`.
+ */
+export async function updateWorkOrderCrew(input: {
+  workLogId: string;
+  partnerIds: string[];
+}): Promise<Result> {
+  const actor = await getManager();
+  if (!actor) return { ok: false, error: 'Нет доступа' };
+
+  const [wl] = await db
+    .select({
+      id: dealWorkLogs.id,
+      status: dealWorkLogs.status,
+      dealId: dealWorkLogs.dealId,
+      objectId: dealWorkLogs.objectId,
+      masterId: dealWorkLogs.masterId,
+      plannedAt: dealWorkLogs.plannedAt,
+      objectName: clientObjects.name,
+    })
+    .from(dealWorkLogs)
+    .leftJoin(clientObjects, eq(clientObjects.id, dealWorkLogs.objectId))
+    .where(eq(dealWorkLogs.id, input.workLogId))
+    .limit(1);
+  if (!wl) return { ok: false, error: 'Наряд не найден' };
+  if (wl.status !== 'planned' && wl.status !== 'in_progress') {
+    return { ok: false, error: 'Наряд уже завершён — бригаду не поменять' };
+  }
+
+  const resolved = await resolvePartnerIds(wl.masterId, input.partnerIds);
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+
+  // Чтение состава, diff и запись — в одной транзакции под блокировкой строки наряда:
+  // две параллельные правки бригады не затрут друг друга, а завершение выезда (UPDATE той же
+  // строки) дождётся нас — бригада не поменяется у уже завершённого наряда.
+  const diff = await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select({ status: dealWorkLogs.status })
+      .from(dealWorkLogs)
+      .where(eq(dealWorkLogs.id, wl.id))
+      .for('update');
+    if (!locked || (locked.status !== 'planned' && locked.status !== 'in_progress')) return null;
+    const currentIds = (
+      await tx
+        .select({ userId: dealWorkLogMasters.userId })
+        .from(dealWorkLogMasters)
+        .where(eq(dealWorkLogMasters.workLogId, wl.id))
+    ).map((r) => r.userId);
+    const added = resolved.ids.filter((id) => !currentIds.includes(id));
+    const removed = currentIds.filter((id) => !resolved.ids.includes(id));
+    if (removed.length > 0) {
+      await tx
+        .delete(dealWorkLogMasters)
+        .where(
+          and(eq(dealWorkLogMasters.workLogId, wl.id), inArray(dealWorkLogMasters.userId, removed)),
+        );
+    }
+    if (added.length > 0) {
+      await tx
+        .insert(dealWorkLogMasters)
+        .values(added.map((userId) => ({ workLogId: wl.id, userId })))
+        .onConflictDoNothing();
+    }
+    return { added, removed };
+  });
+  if (!diff) return { ok: false, error: 'Наряд уже завершён — бригаду не поменять' };
+  const { added, removed } = diff;
+  if (added.length === 0 && removed.length === 0) return { ok: true };
+
+  try {
+    const h = await headers();
+    await db.insert(activityLog).values({
+      userId: actor.id,
+      action: 'work_order.crew_update',
+      entityType: 'deal',
+      entityId: wl.dealId,
+      changesJson: { workLogId: wl.id, masterId: wl.masterId, added, removed },
+      ip: h.get('x-forwarded-for')?.split(',')[0].trim() ?? null,
+      userAgent: h.get('user-agent') ?? null,
+    });
+  } catch (err) {
+    console.warn('[updateWorkOrderCrew] activity log failed:', err);
+  }
+
+  // Push добавленным и снятым (best-effort): у них меняется список нарядов и цифра на иконке.
+  try {
+    const { sendPushToUsers } = await import('@/lib/push/server');
+    const datePart = wl.plannedAt
+      ? ` · ${wl.plannedAt.toLocaleDateString('ru-RU', {
+          timeZone: MSK_TZ,
+          day: '2-digit',
+          month: '2-digit',
+        })}`
+      : '';
+    const what = `${wl.objectName ?? 'Выезд'}${datePart}`;
+    if (added.length > 0) {
+      await sendPushToUsers(added, {
+        title: 'Тебя добавили в бригаду',
+        body: what,
+        url: `/master/visits/${wl.id}`,
+        tag: `wo-crew-${wl.id}`,
+      });
+    }
+    if (removed.length > 0) {
+      await sendPushToUsers(removed, {
+        title: 'Тебя сняли с наряда',
+        body: what,
+        url: '/master',
+        tag: `wo-crew-${wl.id}`,
+      });
+    }
+  } catch (err) {
+    console.warn('[updateWorkOrderCrew] push failed:', err);
+  }
+
+  revalidatePath('/manager/calendar');
+  revalidatePath('/master/calendar');
+  revalidatePath('/master');
+  revalidatePath(`/master/visits/${wl.id}`);
   if (wl.dealId) revalidatePath(`/manager/deals/${wl.dealId}`);
   if (wl.objectId) revalidatePath(`/manager/objects/${wl.objectId}`);
   return { ok: true };
@@ -600,7 +802,14 @@ function workLogHasObject(objectId: string) {
 export async function getObjectWorkOrderDefaults(objectId: string): Promise<WorkOrderDefaults> {
   const actor = await getManager();
   if (!actor)
-    return { source: 'object', services: [], preparations: null, masterId: null, checklist: [] };
+    return {
+      source: 'object',
+      services: [],
+      preparations: null,
+      masterId: null,
+      partnerIds: [],
+      checklist: [],
+    };
 
   // 1) Последний наряд с этим объектом — объект в нём основной ИЛИ один из объектов услуг
   //    (мульти-объектный наряд). Берём из него услуги ИМЕННО этого объекта.
@@ -651,6 +860,7 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
       (s) => s.objectId === objectId || (s.objectId == null && last.objectId === objectId),
     );
     const svc = own.length > 0 ? own : svcAll;
+    const lastPartners = await getPartnersByWorkLogIds([last.id]);
     return {
       source: 'last_order',
       services: svc.map((s) => ({
@@ -662,6 +872,7 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
       })),
       preparations: last.preparations,
       masterId: last.masterId,
+      partnerIds: (lastPartners.get(last.id) ?? []).map((p) => p.id),
       // Чеклист прошлого наряда → Регина дальше владеет им (source='manager').
       checklist: chk.map((c) => ({
         title: c.title,
@@ -752,6 +963,7 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
     })),
     preparations: null,
     masterId: null,
+    partnerIds: [],
     checklist: templates.map((t) => ({
       title: t.title,
       description: t.description,
@@ -898,6 +1110,7 @@ export async function getWorkOrderDuplicateData(
   const objectIds = Array.from(
     new Set([primaryObjectId, ...svc.map((s) => s.objectId ?? primaryObjectId)]),
   );
+  const dupPartners = await getPartnersByWorkLogIds([wl.id]);
 
   return {
     ok: true,
@@ -908,6 +1121,7 @@ export async function getWorkOrderDuplicateData(
       objectId: primaryObjectId,
       objectIds,
       masterId: wl.masterId,
+      partnerIds: (dupPartners.get(wl.id) ?? []).map((p) => p.id),
       preparations: wl.preparations,
       services: svc.map((s) => ({
         serviceId: s.serviceId,

@@ -8,6 +8,7 @@ import {
   dealAddendums,
   dealWorkLogs,
   dealWorkLogServices,
+  dealWorkLogMasters,
   type Deal,
   type PriceItemUnit,
 } from '@/lib/db/schema/deals';
@@ -362,6 +363,16 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       .where(eq(users.id, masterSourceId))
       .limit(1);
     masterName = m?.fullName ?? '';
+    // Бригада (10.2026): акт по выезду бригады — все мастера через запятую, основной первым.
+    if (visit) {
+      const partners = await db
+        .select({ fullName: users.fullName })
+        .from(dealWorkLogMasters)
+        .innerJoin(users, eq(users.id, dealWorkLogMasters.userId))
+        .where(eq(dealWorkLogMasters.workLogId, visit.id))
+        .orderBy(asc(dealWorkLogMasters.createdAt), asc(users.fullName));
+      masterName = [masterName, ...partners.map((p) => p.fullName)].filter(Boolean).join(', ');
+    }
   }
 
   // Sprint 9: для акта по объекту список объектов в шаблоне сужаем до него одного;

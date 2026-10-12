@@ -381,8 +381,15 @@ export async function getMasterLoad(periodDays: number | null): Promise<MasterLo
       to_char(date_trunc('month', wl.performed_at), 'YYYY-MM') AS month,
       COUNT(*)::int                       AS work_logs,
       COALESCE(SUM(wl.area_m2), 0)::int   AS total_area
-    FROM deal_work_logs wl
-    LEFT JOIN users u ON u.id = wl.master_id
+    -- Бригада (10.2026): выезд засчитывается КАЖДОМУ члену — основному и напарникам.
+    FROM (
+      SELECT w.performed_at, w.area_m2, w.master_id AS uid FROM deal_work_logs w
+      UNION ALL
+      SELECT w.performed_at, w.area_m2, m.user_id AS uid
+        FROM deal_work_logs w
+        JOIN deal_work_log_masters m ON m.work_log_id = w.id
+    ) wl
+    LEFT JOIN users u ON u.id = wl.uid
     WHERE ${periodFilter(periodDays, 'wl.performed_at')}
     GROUP BY 1, 2
     ORDER BY master_name, month DESC

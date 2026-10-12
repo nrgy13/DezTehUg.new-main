@@ -14,6 +14,7 @@ import { Search, X, Calendar as CalendarIcon, Phone, Wrench, User as UserIcon, M
 import { toast } from 'sonner';
 import { updateVisitPlannedAt } from '@/app/(crm)/manager/deals/[id]/visits-actions';
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
+import { WorkOrderCrewButton } from '@/components/crm/WorkOrderCrewButton';
 import './calendar.css';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -753,6 +754,8 @@ function VisitsList({
               {canGenerateActs && e.objectName !== null && (
                 <div className="flex items-center gap-1 mt-1 mb-1 pl-3">
                   <VisitActButtons dealId={e.dealId} workLogId={e.id} />
+                  {/* Активный календарь = только planned/in_progress → бригаду ещё можно править. */}
+                  <WorkOrderCrewButton workLogId={e.id} />
                 </div>
               )}
               </div>

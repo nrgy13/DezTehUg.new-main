@@ -23,6 +23,7 @@ import {
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { WorkOrderDialog } from '@/components/crm/WorkOrderDialog';
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
+import { WorkOrderCrewButton } from '@/components/crm/WorkOrderCrewButton';
 import {
   deleteWorkOrder,
   getWorkOrderDuplicateData,
@@ -348,6 +349,9 @@ function VisitListItem({
         </button>
         <div className="flex items-center gap-1 flex-shrink-0">
           {hasObject && <VisitActButtons dealId={dealId} workLogId={v.id} />}
+          {(v.status === 'planned' || v.status === 'in_progress') && (
+            <WorkOrderCrewButton workLogId={v.id} />
+          )}
           <button
             type="button"
             onClick={onDuplicate}

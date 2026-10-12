@@ -6,6 +6,7 @@ import { Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { Sidebar } from './Sidebar';
 import { PwaInstallBanner } from './PwaInstallBanner';
+import { AppBadgeSync } from './AppBadgeSync';
 import type { UserRole } from '@/lib/db/schema/users';
 
 type Props = {
@@ -103,6 +104,8 @@ export function CrmShell({ user, pendingDeletionsCount, inboxCount, children }: 
 
       {/* PWA install banner — только для master, только на мобиле */}
       {user.role === 'master' && <PwaInstallBanner />}
+      {/* Цифра на иконке приложения: мастеру — активные наряды, менеджеру — заявки + «Входящие». */}
+      <AppBadgeSync />
     </div>
   );
 }

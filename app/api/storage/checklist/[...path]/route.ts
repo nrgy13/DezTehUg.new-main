@@ -15,6 +15,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { dealWorkLogs, deals } from '@/lib/db/schema/deals';
 import { getStorage } from '@/lib/storage';
+import { isWorkLogPartner } from '@/lib/visits/crew';
 
 export async function GET(
   req: NextRequest,
@@ -46,9 +47,10 @@ export async function GET(
   }
   const role = session.user.role;
   const uid = session.user.id;
+  // Бригада (10.2026): фото наряда видит любой его член — основной мастер или напарник.
   const allowed =
     role === 'admin' ||
-    (role === 'master' && wl.masterId === uid) ||
+    (role === 'master' && (wl.masterId === uid || (await isWorkLogPartner(workLogId, uid)))) ||
     (role === 'manager' && wl.managerId === uid);
   if (!allowed) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });

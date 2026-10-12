@@ -8,6 +8,8 @@ import { deals, dealPriceItems, dealWorkLogs, dealWorkLogServices } from '@/lib/
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
+import { users } from '@/lib/db/schema/users';
+import { getPartnersByWorkLogIds, workLogHasMember } from '@/lib/visits/crew';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { unitLabel, formatQuantity } from '@/lib/constants/units';
 import { MSK_TZ } from '@/lib/datetime/msk';
@@ -31,12 +33,15 @@ type VisitRow = {
   areaM2: string | null;
   unit: PriceItemUnit | null;
   dealId: string;
+  /** Бригада: с кем ещё едет этот мастер (без него самого). Пусто — наряд на одного. */
+  crewWith: string[];
 };
 
 export default async function MasterDashboard() {
   const user = await requireRole('master');
 
   // Все выезды этого мастера за последние 30 дней + все активные.
+  // Бригада (10.2026): «мои» = где я основной мастер ИЛИ напарник.
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   // Объект заказ-наряда — напрямую по dealWorkLogs.objectId (priceItemId=null).
@@ -62,6 +67,8 @@ export default async function MasterDashboard() {
       customName: dealPriceItems.customName,
       objectName: clientObjects.name,
       woObjectName: woObjects.name,
+      masterId: dealWorkLogs.masterId,
+      masterName: users.fullName,
     })
     .from(dealWorkLogs)
     .leftJoin(deals, eq(deals.id, dealWorkLogs.dealId))
@@ -69,9 +76,10 @@ export default async function MasterDashboard() {
     .leftJoin(dealPriceItems, eq(dealPriceItems.id, dealWorkLogs.priceItemId))
     .leftJoin(clientObjects, eq(clientObjects.id, dealPriceItems.objectId))
     .leftJoin(woObjects, eq(woObjects.id, dealWorkLogs.objectId))
+    .leftJoin(users, eq(users.id, dealWorkLogs.masterId))
     .where(
       and(
-        eq(dealWorkLogs.masterId, user.id),
+        workLogHasMember(user.id),
         or(
           // активные — независимо от давности
           eq(dealWorkLogs.status, 'planned'),
@@ -124,7 +132,14 @@ export default async function MasterDashboard() {
     }
   }
 
+  // Напарники нарядов → «с кем еду» (без меня самого; основной мастер — тоже напарник для меня).
+  const partnersByWl = await getPartnersByWorkLogIds(rows.map((r) => r.id));
+
   const visits: VisitRow[] = rows.map((r) => {
+    const mates = [
+      ...(r.masterId !== user.id && r.masterName ? [r.masterName] : []),
+      ...(partnersByWl.get(r.id) ?? []).filter((p) => p.id !== user.id).map((p) => p.fullName),
+    ];
     const primaryName = r.objectName ?? r.woObjectName;
     // Другие объекты наряда (кроме основного) — считаем по id, имена могут совпадать.
     const others = Array.from(objectIdsByWl.get(r.id) ?? []).filter((id) => id !== r.objectId);
@@ -149,6 +164,7 @@ export default async function MasterDashboard() {
       areaM2: r.areaM2,
       unit: r.unit,
       dealId: r.dealId,
+      crewWith: mates,
     };
   });
 
@@ -263,6 +279,11 @@ function VisitGroup({
                     {v.objectName && (
                       <div className="text-xs text-content-secondary">
                         {v.objectName}
+                      </div>
+                    )}
+                    {v.crewWith.length > 0 && (
+                      <div className="text-xs text-neon-orange mt-0.5">
+                        👥 {v.crewWith.length > 1 ? 'Напарники' : 'Напарник'}: {v.crewWith.join(', ')}
                       </div>
                     )}
                     <div className="text-xs text-content-muted mt-0.5 truncate">

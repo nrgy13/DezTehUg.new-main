@@ -13,6 +13,8 @@ import {
 import { clients } from '@/lib/db/schema/clients';
 import { clientObjects } from '@/lib/db/schema/objects';
 import { services } from '@/lib/db/schema/services';
+import { users } from '@/lib/db/schema/users';
+import { crewLabel, getPartnersByWorkLogIds, isWorkLogMember } from '@/lib/visits/crew';
 import { dealChecklistItems, type ChecklistPhoto } from '@/lib/db/schema/checklists';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { formatQuantity, unitLabel } from '@/lib/constants/units';
@@ -38,9 +40,19 @@ export default async function MasterVisitPage({
     .limit(1);
   if (!wl) notFound();
 
-  if (user.role !== 'admin' && wl.masterId !== user.id) {
+  // Бригада (10.2026): наряд открывают и основной мастер, и напарники.
+  if (user.role !== 'admin' && !(await isWorkLogMember(wl, user.id))) {
     redirect('/master?error=not_yours');
   }
+
+  // Состав бригады — показываем, только если мастеров больше одного.
+  const [primaryMaster] = await db
+    .select({ fullName: users.fullName })
+    .from(users)
+    .where(eq(users.id, wl.masterId))
+    .limit(1);
+  const visitPartners = (await getPartnersByWorkLogIds([wl.id])).get(wl.id) ?? [];
+  const crew = visitPartners.length > 0 ? crewLabel(primaryMaster?.fullName, visitPartners) : null;
 
   // Контекст: сделка, клиент, позиция прайса, объект, услуга
   const [deal] = await db.select().from(deals).where(eq(deals.id, wl.dealId)).limit(1);
@@ -185,12 +197,18 @@ export default async function MasterVisitPage({
         </PageTitle>
         <p className="text-sm text-content-muted mt-1">
           {client?.shortName ?? '—'} · договор{' '}
-          <Link
-            href={`/master/deals/${deal!.id}`}
-            className="text-content-secondary hover:text-neon-orange"
-          >
-            {deal!.contractNumber}
-          </Link>
+          {/* Карточка договора у мастера открывается только назначенному по договору
+              (master/deals/[id]): остальным — номер текстом, а не ссылка в «не твой». */}
+          {user.role === 'admin' || deal!.assignedMasterId === user.id ? (
+            <Link
+              href={`/master/deals/${deal!.id}`}
+              className="text-content-secondary hover:text-neon-orange"
+            >
+              {deal!.contractNumber}
+            </Link>
+          ) : (
+            <span className="text-content-secondary">{deal!.contractNumber}</span>
+          )}
           {wl.plannedAt && (
             <>
               {' · '}
@@ -202,6 +220,9 @@ export default async function MasterVisitPage({
             </>
           )}
         </p>
+        {crew && (
+          <p className="text-sm text-neon-orange mt-1">👥 Бригада: {crew}</p>
+        )}
       </div>
 
       {/* Мульти-объектный наряд: все точки выезда с адресами и контактами */}
