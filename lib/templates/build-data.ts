@@ -16,6 +16,7 @@ import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
 import { CONTRACT_PROVIDER } from '@/lib/contract-provider';
 import { unitLabel, formatQuantity } from '@/lib/constants/units';
+import { spaceAfterCommas, actContact } from './act-format';
 import type { DocumentType } from '@/lib/db/schema/documents';
 
 /**
@@ -334,12 +335,13 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       const lbl = unitLabel(r.unit);
       return {
         index: i + 1,
-        objectName: rowObject?.name ?? '',
-        objectAddress: rowObject?.address ?? '',
+        // Пробел после запятых — иначе «г.Анапа,ст.Анапская,…» рвётся в ячейке посреди слова.
+        objectName: spaceAfterCommas(rowObject?.name ?? ''),
+        objectAddress: spaceAfterCommas(rowObject?.address ?? ''),
         // ПОЛНОЕ название услуги, а не shortName: в каталоге под одним коротким
         // именем живут 13 разных «Дезинсекций» (тараканы / мухи / комары подвал…),
         // и акт печатал две РАЗНЫЕ услуги объекта одинаково — жалоба Регины 04.08.2026.
-        serviceName: r.customName ?? r.serviceFull ?? r.serviceShort ?? '',
+        serviceName: spaceAfterCommas(r.customName ?? r.serviceFull ?? r.serviceShort ?? ''),
         method: r.method ?? '',
         quantity: formatQuantity(qtyRaw),
         unit: r.unit,
@@ -391,6 +393,8 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
       ? {
           shortName: client.shortName ?? '',
           fullName: client.fullName ?? client.shortName ?? '',
+          // АВР: у физлица в «Заказчике» нет названия и ИНН, только контакт и телефон.
+          isIndividual: client.type === 'individual',
           directorName: client.directorName ?? '',
           // Инициалы для подписей: «Дёмин Алексей Анатольевич» → «А.А.Дёмин» (как в бумаге).
           directorShort: initialsName(client.directorName ?? ''),
@@ -473,7 +477,14 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         ...(ctx.overrides ?? {}),
       };
       break;
-    case 'act_work':
+    case 'act_work': {
+      const responsible = actContact({
+        isIndividual: client?.type === 'individual',
+        contactName: targetObject?.contactPerson,
+        contactPhone: targetObject?.contactPhone,
+        clientName: client?.shortName,
+        clientPhone: client?.phone,
+      });
       data.contract = {
         number: deal?.contractNumber ?? '',
         date: formatHumanDate(deal?.contractDate ?? ''),
@@ -492,9 +503,9 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         discrepancy: '',
         // Sprint 10: автозаполнение — дезинфектор (мастер сделки) + контакт объекта.
         disinfector: masterName,
-        responsibleName: targetObject?.contactPerson ?? '',
+        responsibleName: responsible.name,
         responsibleRole: '',
-        responsiblePhone: targetObject?.contactPhone ?? '',
+        responsiblePhone: responsible.phone,
         ...(ctx.overrides ?? {}),
       };
       data.workLogs = workLogs.map((w, i) => ({
@@ -508,6 +519,7 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         notes: w.notes ?? '',
       }));
       break;
+    }
     case 'act_inspection':
       data.report = {
         number: ctx.documentNumber,
