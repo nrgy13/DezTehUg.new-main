@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { db } from '@/lib/db';
-import { leads } from '@/lib/db/schema/leads';
-import { activityLog } from '@/lib/db/schema/activity';
-import { notifyManagersAboutNewLead } from '@/lib/notifications/new-lead';
+import { createSiteLead, findRecentFallbackLead, logDedupedN8nLead } from '@/lib/leads/site-lead';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -126,64 +123,42 @@ export async function POST(request: Request) {
     );
   }
 
-  // ─── 5. Создание lead ─────────────────────────────────────────
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? null;
+
+  // ─── 5. Создание lead + уведомление менеджеров ───────────────
+  // Лид уже в БД: сбой уведомлений не должен превращать ответ n8n в 500.
+  // Ждём уведомления не дольше 15с; итог — в activity_log (lib/leads/site-lead.ts).
   try {
-    const [created] = await db
-      .insert(leads)
-      .values({
-        contactName: name?.slice(0, 255),
-        contactPhone: phone.slice(0, 32),
-        contactEmail: email?.slice(0, 255),
+    // Защита от дубля: форма могла не дождаться ответа n8n и записать лид сама
+    // (страховка в /api/booking), а n8n всё-таки довёз ту же заявку.
+    const fallbackLeadId = await findRecentFallbackLead(phone);
+    if (fallbackLeadId) {
+      console.info('[leads/inbound] дубль заявки, уже записанной страховкой формы:', fallbackLeadId);
+      await logDedupedN8nLead(fallbackLeadId, ip);
+      return NextResponse.json({ ok: true, leadId: fallbackLeadId, deduped: true }, { status: 200 });
+    }
+
+    const created = await createSiteLead(
+      {
+        contactName: name,
+        contactPhone: phone,
+        contactEmail: email,
         serviceTypes: services ?? null,
         requestedAddress: address ?? null,
         areaM2Estimate: area ?? null,
         message: message ?? null,
         source,
-        channel: channel.slice(0, 64),
+        channel,
         rawPayload: root,
-        status: 'new',
-      })
-      .returning({ id: leads.id });
-
-    // Запись в activity_log (без userId — это система)
-    await db.insert(activityLog).values({
-      userId: null,
-      action: 'lead.create_from_n8n',
-      entityType: 'lead',
-      entityId: created.id,
-      changesJson: { phone, name, channel },
-      ip: request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? null,
-      userAgent: request.headers.get('user-agent') ?? null,
-    });
-
-    // ─── 6. Уведомить менеджеров (Telegram + письмо + push) ──────
-    // Лид уже в БД: сбой уведомлений не должен превращать ответ n8n в 500.
-    // Ждём не дольше 15с; итог пишем в activity_log, чтобы молчаливый отказ
-    // канала был виден SQL'ем, а не только в логах контейнера.
-    try {
-      const notify = await Promise.race([
-        notifyManagersAboutNewLead({
-          id: created.id,
-          contactName: name ?? null,
-          contactPhone: phone,
-          contactEmail: email ?? null,
-          services: services ?? null,
-          address: address ?? null,
-          message: message ?? null,
-        }),
-        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 15_000)),
-      ]);
-      console.info('[leads/inbound] notify managers:', created.id, JSON.stringify(notify));
-      await db.insert(activityLog).values({
-        userId: null,
-        action: 'lead.notify_managers',
-        entityType: 'lead',
-        entityId: created.id,
-        changesJson: notify === 'timeout' ? { timeout: true } : notify,
-      });
-    } catch (err) {
-      console.error('[leads/inbound] notify managers failed:', created.id, err);
-    }
+      },
+      {
+        action: 'lead.create_from_n8n',
+        ip,
+        userAgent: request.headers.get('user-agent') ?? null,
+        awaitNotify: true,
+        logTag: 'leads/inbound',
+      },
+    );
 
     return NextResponse.json({ ok: true, leadId: created.id }, { status: 201 });
   } catch (err) {
