@@ -10,3 +10,4 @@ export * from './documents';
 export * from './activity';
 export * from './push';
 export * from './checklists';
+export * from './finance';

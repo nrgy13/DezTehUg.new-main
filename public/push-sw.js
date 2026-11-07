@@ -53,8 +53,8 @@ self.addEventListener('push', (event) => {
         // renotify: при том же tag — всё равно показывать как новое (вибрация и звук).
         renotify: true,
         data: { url },
-        // Android: показать на полный экран если экран выключен.
-        requireInteraction: false,
+        // Срочное (запрос мастера на перенос) висит, пока не нажмут; iOS поле игнорирует.
+        requireInteraction: data.urgent === true,
       }),
       setIconCount(badgeCount(data)),
     ]),

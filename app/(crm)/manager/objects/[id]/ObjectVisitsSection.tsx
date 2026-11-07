@@ -20,6 +20,12 @@ import { WorkOrderDialog } from '@/components/crm/WorkOrderDialog';
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
 import { WorkOrderCrewButton } from '@/components/crm/WorkOrderCrewButton';
 import { WorkOrderRescheduleButton } from '@/components/crm/WorkOrderRescheduleButton';
+import { WorkOrderPricingButton } from '@/components/crm/WorkOrderPricingButton';
+import {
+  WorkOrderCloseButton,
+  WorkOrderEditButton,
+  WorkOrderOpenLink,
+} from '@/components/crm/WorkOrderManageButtons';
 import {
   deleteWorkOrder,
   getWorkOrderDuplicateData,
@@ -152,7 +158,13 @@ export function ObjectVisitsSection({
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+                {/* flex-wrap + max-w-full: на телефоне (320px) ряд кнопок переносится, а не
+                    вылезает за карточку. */}
+                <div className="flex flex-wrap items-center gap-1.5 max-w-full">
+                  {/* Карточка наряда, правка (любой статус) и закрытие менеджером. */}
+                  <WorkOrderOpenLink workLogId={v.id} />
+                  <WorkOrderEditButton workLogId={v.id} />
+                  <WorkOrderCloseButton workLogId={v.id} status={v.status} />
                   {v.dealId && <VisitActButtons dealId={v.dealId} workLogId={v.id} />}
                   {v.dealId && (
                     <Link
@@ -168,6 +180,8 @@ export function ObjectVisitsSection({
                   {v.status === 'planned' && (
                     <WorkOrderRescheduleButton workLogId={v.id} plannedAtIso={v.plannedAtIso} />
                   )}
+                  {/* Цена — в любом статусе, в т.ч. выполненным нарядам задним числом. */}
+                  <WorkOrderPricingButton workLogId={v.id} />
                   <button
                     type="button"
                     onClick={() => handleDuplicate(v.id)}

@@ -15,9 +15,23 @@ import { Label } from '@/components/ui/label';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { CyberpunkButton } from '@/components/cyberpunk/CyberpunkButton';
 import { CrewPicker } from '@/components/crm/CrewPicker';
-import { UNIT_OPTIONS, formatQuantity } from '@/lib/constants/units';
+import {
+  NO_MASTER_PAY_LABEL,
+  PriceSourceTag,
+  isBadPrice,
+  normalizePrice,
+  priceToInput,
+  toPriceSource,
+  type PriceSource,
+} from '@/components/crm/WorkOrderPricingButton';
+import { UNIT_OPTIONS, formatQuantity, unitLabel } from '@/lib/constants/units';
 import { TREATMENT_METHODS } from '@/lib/constants/treatment';
 import { mskLocalToUtcISO } from '@/lib/datetime/msk';
+import { formatRub, toKop } from '@/lib/finance/compute';
+import {
+  getDealPriceHints,
+  type DealPriceHint,
+} from '@/app/(crm)/manager/calendar/work-order-pricing-actions';
 import {
   createWorkOrderAction,
   getObjectWorkOrderDefaults,
@@ -30,6 +44,11 @@ import {
   type WorkOrderDuplicatePrefill,
   type WorkOrderObject,
 } from '@/app/(crm)/manager/calendar/work-order-actions';
+import {
+  updateWorkOrderAction,
+  type WorkOrderEditPrefill,
+  type WorkOrderEditChecklistItem,
+} from '@/app/(crm)/manager/calendar/work-order-edit-actions';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
 
 const fieldClass =
@@ -41,6 +60,20 @@ type SvcRow = {
   method: string;
   unit: PriceItemUnit;
   quantity: string;
+  /** Цена строки, ₽ (ввод как есть, допускает запятую); '' — не указана. */
+  price: string;
+  /**
+   * 'contract' — подставлена из прайса договора (пересчитывается при смене договора/объекта/
+   * услуги), 'manual' — введена руками (не трогаем, в т.ч. осознанно очищенная), null — пусто,
+   * форма может подставить цену из прайса.
+   */
+  priceSource: PriceSource;
+  /**
+   * Строка существующего наряда в режиме правки: цену из прайса НЕ пересчитываем и пустую
+   * не подставляем (иначе правка препаратов молча переоценила бы старый наряд). Снимается,
+   * как только в строке меняют услугу или объект.
+   */
+  frozen?: boolean;
 };
 
 /**
@@ -65,6 +98,37 @@ type ChecklistRow = {
   required: boolean;
   source: 'template' | 'manager';
   sourceTemplateId: string | null;
+  /** Режим правки: id пункта в БД (нет — новый пункт). */
+  dbId?: string;
+  /** Пункт отмечен мастером (статус/заметка/фото) — только просмотр, удалить нельзя. */
+  marked?: boolean;
+  status?: 'pending' | 'done' | 'na';
+  photosCount?: number;
+  /** Пункт добавил сам мастер на выезде. */
+  byMaster?: boolean;
+};
+
+// Пункты существующего наряда (режим правки) → строки формы, с id из БД и отметками мастера.
+function editChkRows(items: WorkOrderEditChecklistItem[]): ChecklistRow[] {
+  return items.map((c) => ({
+    id: crypto.randomUUID(),
+    title: c.title,
+    description: c.description ?? '',
+    required: c.required,
+    source: c.source === 'template' ? 'template' : 'manager',
+    sourceTemplateId: c.sourceTemplateId,
+    dbId: c.id,
+    marked: c.marked,
+    status: c.status,
+    photosCount: c.photosCount,
+    byMaster: c.source === 'master',
+  }));
+}
+
+const CHK_STATUS_LABEL: Record<'pending' | 'done' | 'na', string> = {
+  pending: 'не отмечен',
+  done: 'выполнено',
+  na: 'неприменимо',
 };
 
 // Нормализуем пункты-дефолты (description null → '') в строки формы.
@@ -109,7 +173,8 @@ function trimNum(s: string | null): string {
   return Number.isFinite(n) ? String(n) : s;
 }
 
-// Услуга-дефолт (из последнего наряда / дубля) → строка формы.
+// Услуга-дефолт (из последнего наряда / дубля) → строка формы. Цена прошлого наряда
+// приезжает вместе с источником; пустая — форма подставит из прайса договора.
 function svcToRow(s: WorkOrderDefaultService): SvcRow {
   return {
     serviceId: s.serviceId ?? '',
@@ -117,7 +182,75 @@ function svcToRow(s: WorkOrderDefaultService): SvcRow {
     method: s.method ?? '',
     unit: s.unit,
     quantity: trimNum(s.quantity),
+    price: priceToInput(s.price),
+    priceSource: toPriceSource(s.price, s.priceSource),
   };
+}
+
+function emptyRow(): SvcRow {
+  return {
+    serviceId: '',
+    customName: '',
+    method: '',
+    unit: 'm2',
+    quantity: '',
+    price: '',
+    priceSource: null,
+  };
+}
+
+// Цена «из договора» относится к прежней паре договор/объект/услуга — при их смене её
+// снимаем, эффект подставит заново (если в новом прайсе цена однозначна). Ручную не трогаем.
+function dropContractPrice(r: SvcRow): SvcRow {
+  return r.priceSource === 'contract' ? { ...r, price: '', priceSource: null, frozen: false } : r;
+}
+
+/**
+ * Различные цены прайса договора для (объект, услуга) — то же правило, что
+ * pickContractPrice на сервере: подставляем, только если цена ровно одна.
+ */
+function contractPrices(hints: DealPriceHint[], objectId: string, serviceId: string): string[] {
+  const set = new Set<string>();
+  for (const h of hints) {
+    if (h.serviceId !== serviceId || h.objectId !== objectId) continue;
+    const p = normalizePrice(h.priceWithVat);
+    if (p !== null) set.add(p);
+  }
+  return Array.from(set);
+}
+
+type PriceChoice = { price: string; note: string };
+
+/**
+ * Варианты цены для ручного выбора, когда авто-подстановки нет (в прайсе несколько цен
+ * на услугу или позиция прайса без объекта). Если однозначная цена есть — только она
+ * (кнопка «вернуть цену договора» после ручной правки).
+ */
+function priceChoices(hints: DealPriceHint[], objectId: string, serviceId: string): PriceChoice[] {
+  const strict = contractPrices(hints, objectId, serviceId);
+  const seen = new Map<string, PriceChoice>();
+  for (const h of hints) {
+    if (h.serviceId !== serviceId) continue;
+    if (h.objectId !== objectId && h.objectId !== null) continue;
+    const p = normalizePrice(h.priceWithVat);
+    if (p === null || seen.has(p)) continue;
+    if (strict.length === 1 && p !== strict[0]) continue;
+    const area = Number(h.areaM2) > 0 ? `${formatQuantity(h.areaM2)} ${unitLabel(h.unit)}` : '';
+    const note = [h.label, area, h.frequency ?? '', h.objectId === null ? 'без объекта' : '']
+      .filter(Boolean)
+      .join(' · ');
+    seen.set(p, { price: p, note });
+  }
+  return Array.from(seen.values());
+}
+
+// «2 цены», «5 цен», «21 цена».
+function pricesWord(n: number): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'цена';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'цены';
+  return 'цен';
 }
 
 // Услуга дубля → строка формы. Если услуга деактивирована (нет в активном каталоге) —
@@ -130,6 +263,8 @@ function dupSvcToRow(s: WorkOrderDuplicateService, catalogIds: Set<string>): Svc
       method: s.method ?? '',
       unit: s.unit,
       quantity: trimNum(s.quantity),
+      price: priceToInput(s.price),
+      priceSource: toPriceSource(s.price, s.priceSource),
     };
   }
   return svcToRow(s);
@@ -146,14 +281,17 @@ function newBlock(objectId = ''): ObjectBlock {
 // Блоки дубля: услуги исходного наряда разложены по своим объектам (порядок = objectIds,
 // основной первым). Объект без услуг (маловероятно) остаётся пустым блоком.
 function blocksFromDuplicate(
-  prefill: WorkOrderDuplicatePrefill,
+  prefill: Pick<WorkOrderDuplicatePrefill, 'objectIds' | 'services'>,
   catalogIds: Set<string>,
+  /** Режим правки: цены строк существующего наряда не пересчитываем из прайса. */
+  freeze = false,
 ): ObjectBlock[] {
   const byObject = new Map<string, SvcRow[]>();
   for (const id of prefill.objectIds) byObject.set(id, []);
   for (const s of prefill.services) {
     const arr = byObject.get(s.objectId) ?? [];
-    arr.push(dupSvcToRow(s, catalogIds));
+    const row = dupSvcToRow(s, catalogIds);
+    arr.push(freeze ? { ...row, frozen: true } : row);
     byObject.set(s.objectId, arr);
   }
   const blocks = Array.from(byObject.entries()).map(([objectId, rows]) => ({
@@ -192,6 +330,7 @@ export function WorkOrderDialog({
   data,
   preset,
   duplicatePrefill,
+  editPrefill,
   onClose,
   onCreated,
 }: {
@@ -203,6 +342,11 @@ export function WorkOrderDialog({
    * можно перенести на другие объекты/договор/клиента (услуги/чеклист не перетираются).
    */
   duplicatePrefill?: WorkOrderDuplicatePrefill;
+  /**
+   * Режим правки существующего наряда (07.11.2026, любой статус): клиент и договор
+   * зафиксированы, остальное правится; пункты чеклиста, отмеченные мастером, — только просмотр.
+   */
+  editPrefill?: WorkOrderEditPrefill;
   onClose: () => void;
   onCreated?: () => void;
 }) {
@@ -210,35 +354,100 @@ export function WorkOrderDialog({
   const [isPending, startTransition] = useTransition();
   const hasClients = data.clients.length > 0;
   const isDuplicate = !!duplicatePrefill;
+  const isEdit = !!editPrefill;
+  // Источник предзаполнения: правка существующего наряда или копия.
+  const src = editPrefill ?? duplicatePrefill;
 
-  const [clientId, setClientId] = useState(duplicatePrefill?.clientId ?? preset?.clientId ?? '');
-  const [dealId, setDealId] = useState(duplicatePrefill?.dealId ?? preset?.dealId ?? '');
+  const [clientId, setClientId] = useState(src?.clientId ?? preset?.clientId ?? '');
+  const [dealId, setDealId] = useState(src?.dealId ?? preset?.dealId ?? '');
   // Мастер дубля — только если он ещё мастер (мог сменить роль/уволиться); иначе пусто.
+  // В правке неактивный мастер наряда приходит в data.masters с пометкой «(неактивен)».
   const [masterId, setMasterId] = useState(
-    duplicatePrefill?.masterId && data.masters.some((m) => m.id === duplicatePrefill.masterId)
-      ? duplicatePrefill.masterId
-      : '',
+    src?.masterId && data.masters.some((m) => m.id === src.masterId) ? src.masterId : '',
   );
   // Напарники (бригада, 10.2026): дубль едет тем же составом — кроме тех, кто уже не мастер.
   const [partnerIds, setPartnerIds] = useState<string[]>(() =>
-    (duplicatePrefill?.partnerIds ?? []).filter((id) => data.masters.some((m) => m.id === id)),
+    (src?.partnerIds ?? []).filter((id) => data.masters.some((m) => m.id === id)),
   );
-  const [plannedAt, setPlannedAt] = useState(preset?.plannedAtLocal ?? ''); // datetime-local
-  const [preparations, setPreparations] = useState(duplicatePrefill?.preparations ?? '');
+  const [plannedAt, setPlannedAt] = useState(
+    editPrefill?.plannedAtLocal ?? preset?.plannedAtLocal ?? '',
+  ); // datetime-local
+  const [preparations, setPreparations] = useState(src?.preparations ?? '');
   // Объекты наряда с услугами. Всегда ≥1 блок (пустой блок = «выбери объект»).
   const [blocks, setBlocks] = useState<ObjectBlock[]>(() => {
-    if (!duplicatePrefill) return [newBlock()];
+    if (!src) return [newBlock()];
     const catalogIds = new Set(data.catalog.map((c) => c.id));
-    return blocksFromDuplicate(duplicatePrefill, catalogIds);
+    return blocksFromDuplicate(src, catalogIds, isEdit);
   });
   const [checklist, setChecklist] = useState<ChecklistRow[]>(
-    duplicatePrefill ? toChkRows(duplicatePrefill.checklist) : [],
+    editPrefill
+      ? editChkRows(editPrefill.checklist)
+      : duplicatePrefill
+        ? toChkRows(duplicatePrefill.checklist)
+        : [],
   );
   const [chkLoading, setChkLoading] = useState(false);
   const [pendingInsert, setPendingInsert] = useState<{
     items: ChecklistRow[];
     label: string;
   } | null>(null);
+  // «Документальный» наряд: мастеру 0 %, вся сумма в кассу организации.
+  // Дубль копирует и «документальный» (копия того же типа наряда).
+  const [noMasterPay, setNoMasterPay] = useState(src?.noMasterPay ?? false);
+  // Прайс выбранного договора — подсказки цены строк. Привязан к dealId: пока грузится
+  // прайс нового договора, старые подсказки не применяются.
+  const [hints, setHints] = useState<{ dealId: string; items: DealPriceHint[] } | null>(null);
+  // Открытый выбор цены из прайса: ключ `${blockKey}:${rowIndex}`.
+  const [choiceOpen, setChoiceOpen] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!dealId) {
+      setHints(null);
+      return;
+    }
+    let alive = true;
+    getDealPriceHints(dealId)
+      .then((items) => {
+        if (alive) setHints({ dealId, items });
+      })
+      .catch(() => {
+        // Без подсказок форма работает как раньше — цену можно ввести руками.
+        if (alive) setHints({ dealId, items: [] });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [dealId]);
+  const dealHints = hints && hints.dealId === dealId ? hints.items : null;
+
+  // Подстановка цены из прайса: строкам с услугой из каталога, где цена пуста или взята
+  // из договора, ставим ОДНОЗНАЧНУЮ цену (объект блока + услуга). Ручные цены не трогаем.
+  // Апдейтер возвращает тот же массив, если менять нечего, — без лишних рендеров и циклов.
+  useEffect(() => {
+    if (!dealHints || dealHints.length === 0) return;
+    setBlocks((bs) => {
+      let changed = false;
+      const next = bs.map((b) => {
+        if (!b.objectId) return b;
+        let rowsChanged = false;
+        const rows = b.rows.map((r) => {
+          if (!r.serviceId || r.frozen) return r;
+          const auto = r.priceSource === 'contract' || (r.priceSource === null && !r.price.trim());
+          if (!auto) return r;
+          const prices = contractPrices(dealHints, b.objectId, r.serviceId);
+          if (prices.length !== 1) return r;
+          const v = priceToInput(prices[0]);
+          if (r.price === v && r.priceSource === 'contract') return r;
+          rowsChanged = true;
+          return { ...r, price: v, priceSource: 'contract' as const };
+        });
+        if (!rowsChanged) return b;
+        changed = true;
+        return { ...b, rows };
+      });
+      return changed ? next : bs;
+    });
+  }, [dealHints, blocks]);
 
   const client = useMemo(
     () => data.clients.find((c) => c.id === clientId) ?? null,
@@ -273,10 +482,17 @@ export function WorkOrderDialog({
   // Выбор объекта в блоке + подгрузка его дефолтов (последний наряд → услуги объекта).
   async function pickObject(key: string, objectId: string) {
     setPendingInsert(null);
-    // Режим дубля: услуги/препараты/чеклист уже скопированы из исходного наряда —
-    // смена объекта (перенос копии) НЕ должна затирать их дефолтами целевого объекта.
-    if (isDuplicate) {
-      patchBlock(key, { objectId });
+    // Режим дубля/правки: услуги/препараты/чеклист уже подставлены из наряда —
+    // смена объекта НЕ должна затирать их дефолтами целевого объекта.
+    if (isDuplicate || isEdit) {
+      // Цены «из договора» были по прежнему объекту — снимаем, подставятся по новому.
+      setBlocks((bs) =>
+        bs.map((b) =>
+          b.key === key && b.objectId !== objectId
+            ? { ...b, objectId, rows: b.rows.map(dropContractPrice) }
+            : b,
+        ),
+      );
       return;
     }
     if (!objectId) {
@@ -332,8 +548,8 @@ export function WorkOrderDialog({
 
   // Применяем preset при открытии (объект → первый блок + подгрузка дефолтов).
   useEffect(() => {
-    // В режиме дубля данные уже подставлены из duplicatePrefill — дефолты по объекту не тянем.
-    if (isDuplicate) return;
+    // В режиме дубля/правки данные уже подставлены — дефолты по объекту не тянем.
+    if (isDuplicate || isEdit) return;
     if (preset?.objectId) {
       // Подстраховка: combobox объекта показывает подпись из опций, а опции зависят
       // от выбранного клиента. Если caller дал objectId без clientId — выведем клиента
@@ -351,14 +567,26 @@ export function WorkOrderDialog({
     setClientId(v);
     setDealId('');
     setPendingInsert(null);
+    setChoiceOpen(null);
     if (isDuplicate) {
       // В режиме дубля услуги/чеклист/препараты переносятся на нового клиента — не чистим,
-      // только снимаем объекты (они принадлежали старому клиенту).
-      setBlocks((bs) => bs.map((b) => ({ ...b, objectId: '' })));
+      // только снимаем объекты (они принадлежали старому клиенту) и цены старого договора.
+      setBlocks((bs) =>
+        bs.map((b) => ({ ...b, objectId: '', rows: b.rows.map(dropContractPrice) })),
+      );
     } else {
       setBlocks([newBlock()]);
       setChecklist([]);
     }
+  }
+
+  // Смена договора: цены «из договора» были по старому прайсу — снимаем, эффект подставит
+  // однозначные цены нового договора, как только прайс загрузится.
+  function onDeal(v: string) {
+    if (v === dealId) return;
+    setDealId(v);
+    setChoiceOpen(null);
+    setBlocks((bs) => bs.map((b) => ({ ...b, rows: b.rows.map(dropContractPrice) })));
   }
 
   // ── Чеклист: ручные правки ──
@@ -376,7 +604,8 @@ export function WorkOrderDialog({
     ]);
   }
   function removeChkRow(i: number) {
-    setChecklist((c) => c.filter((_, idx) => idx !== i));
+    // Отмеченный мастером пункт удалить нельзя (кнопки у него нет; страховка от гонки).
+    setChecklist((c) => c.filter((row, idx) => idx !== i || row.marked));
   }
   function patchChkRow(i: number, patch: Partial<ChecklistRow>) {
     setChecklist((c) => c.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
@@ -398,7 +627,10 @@ export function WorkOrderDialog({
   function confirmInsert(mode: 'append' | 'replace') {
     if (!pendingInsert) return;
     const ins = pendingInsert.items;
-    setChecklist((cur) => (mode === 'replace' ? ins : mergeChecklist(cur, ins)));
+    // «Заменить» в правке не трогает пункты, отмеченные мастером.
+    setChecklist((cur) =>
+      mode === 'replace' ? mergeChecklist(cur.filter((c) => c.marked), ins) : mergeChecklist(cur, ins),
+    );
     setPendingInsert(null);
   }
   async function loadFromTemplates() {
@@ -437,16 +669,12 @@ export function WorkOrderDialog({
   function addRow(blockKey: string) {
     setBlocks((bs) =>
       bs.map((b) =>
-        b.key === blockKey
-          ? {
-              ...b,
-              rows: [...b.rows, { serviceId: '', customName: '', method: '', unit: 'm2', quantity: '' }],
-            }
-          : b,
+        b.key === blockKey ? { ...b, rows: [...b.rows, emptyRow()] } : b,
       ),
     );
   }
   function removeRow(blockKey: string, i: number) {
+    setChoiceOpen(null);
     setBlocks((bs) =>
       bs.map((b) => (b.key === blockKey ? { ...b, rows: b.rows.filter((_, idx) => idx !== i) } : b)),
     );
@@ -461,12 +689,25 @@ export function WorkOrderDialog({
     );
   }
   function onPickService(blockKey: string, i: number, value: string) {
+    // Другая услуга — другая цена: снимаем всё, кроме введённой руками суммы
+    // (пустая/из договора освобождается под подстановку из прайса).
+    const cur = blocks.find((b) => b.key === blockKey)?.rows[i];
+    const keepManual = cur?.priceSource === 'manual' && cur.price.trim() !== '';
+    const pricePatch: Partial<SvcRow> = keepManual
+      ? { frozen: false }
+      : { price: '', priceSource: null, frozen: false };
+    if (choiceOpen === `${blockKey}:${i}`) setChoiceOpen(null);
     if (value === '__custom__') {
-      patchRow(blockKey, i, { serviceId: '', customName: '' });
+      patchRow(blockKey, i, { serviceId: '', customName: '', ...pricePatch });
       return;
     }
     const svc = data.catalog.find((c) => c.id === value);
-    patchRow(blockKey, i, { serviceId: value, customName: '', method: svc?.defaultMethod ?? '' });
+    patchRow(blockKey, i, {
+      serviceId: value,
+      customName: '',
+      method: svc?.defaultMethod ?? '',
+      ...pricePatch,
+    });
   }
 
   // allowSameDay — второй заход после переспроса «на объект в этот день уже есть наряд».
@@ -491,6 +732,10 @@ export function WorkOrderDialog({
       toast.error('Поставь дату выезда для копии');
       return;
     }
+    if (isEdit && !plannedAt) {
+      toast.error('Укажи дату и время наряда');
+      return;
+    }
     // Объект без услуг выпал бы из акта (строки идут по услугам) — не даём его сохранить.
     const empty = filled.find((b) => !b.rows.some(rowFilled));
     if (empty) {
@@ -498,16 +743,28 @@ export function WorkOrderDialog({
       toast.error(`У объекта «${name}» нет услуг — добавь услугу или убери объект из наряда`);
       return;
     }
+    if (filled.some((b) => b.rows.some((r) => rowFilled(r) && isBadPrice(r.price)))) {
+      toast.error('Цена услуги — неотрицательное число, например 1500 или 1500,50');
+      return;
+    }
     const objectIds = filled.map((b) => b.objectId);
     const services = filled.flatMap((b) =>
-      b.rows.filter(rowFilled).map((r) => ({
-        serviceId: r.serviceId || null,
-        customName: r.customName.trim() || null,
-        method: r.method.trim() || null,
-        unit: r.unit,
-        quantity: r.quantity.trim() ? r.quantity.replace(',', '.') : null,
-        objectId: b.objectId,
-      })),
+      b.rows.filter(rowFilled).map((r) => {
+        // Нормализуем как сервер («1 500,5» → '1500.50'); пусто → цены нет, источника тоже.
+        const price = normalizePrice(r.price);
+        const priceSource: PriceSource =
+          price === null ? null : r.priceSource === 'contract' ? 'contract' : 'manual';
+        return {
+          serviceId: r.serviceId || null,
+          customName: r.customName.trim() || null,
+          method: r.method.trim() || null,
+          unit: r.unit,
+          quantity: r.quantity.trim() ? r.quantity.replace(',', '.') : null,
+          objectId: b.objectId,
+          price,
+          priceSource,
+        };
+      }),
     );
     if (services.length === 0) {
       toast.error('Добавь хотя бы одну услугу');
@@ -526,6 +783,48 @@ export function WorkOrderDialog({
         sourceTemplateId: c.sourceTemplateId,
       }));
 
+    if (editPrefill) {
+      const editId = editPrefill.workLogId;
+      startTransition(async () => {
+        const res = await updateWorkOrderAction({
+          workLogId: editId,
+          objectIds,
+          masterId,
+          partnerIds: partnerIds.filter((id) => id !== masterId),
+          plannedAtIso,
+          preparations: preparations.trim() || null,
+          services,
+          checklist: checklist
+            .filter((c) => c.title.trim())
+            .map((c) => ({
+              id: c.dbId ?? null,
+              title: c.title.trim(),
+              description: c.description.trim() || null,
+              required: c.required,
+              source: c.source,
+              sourceTemplateId: c.sourceTemplateId,
+            })),
+          noMasterPay,
+          allowSameDay,
+          // Пункты, которые были в форме при открытии: удалять сервер будет только из них.
+          knownChecklistIds: editPrefill.checklist.map((c) => c.id),
+        });
+        if (res.ok) {
+          toast.success('Наряд сохранён');
+          onCreated?.();
+          router.refresh();
+          onClose();
+        } else if (res.needsConfirm) {
+          if (window.confirm(`${res.error}\n\nВсё равно сохранить на этот день?`)) {
+            submit(true);
+          }
+        } else {
+          toast.error(res.error);
+        }
+      });
+      return;
+    }
+
     startTransition(async () => {
       const res = await createWorkOrderAction({
         dealId,
@@ -539,6 +838,7 @@ export function WorkOrderDialog({
         services,
         checklist: checklistPayload,
         allowSameDay,
+        noMasterPay,
       });
       if (res.ok) {
         toast.success(
@@ -564,14 +864,50 @@ export function WorkOrderDialog({
   const canAddBlock = blocks.every((b) => b.objectId);
   const multi = blocks.length > 1;
 
+  // Итог наряда по заполненным строкам: Σ цен (копейки); null — ни одной цены.
+  const priceTotals = useMemo(() => {
+    let sum = 0;
+    let priced = 0;
+    let unpriced = 0;
+    for (const b of blocks) {
+      for (const r of b.rows) {
+        if (!rowFilled(r)) continue;
+        const p = normalizePrice(r.price);
+        if (p === null) {
+          unpriced++;
+          continue;
+        }
+        sum += toKop(p) ?? 0;
+        priced++;
+      }
+    }
+    return { totalKop: priced > 0 ? sum : null, unpriced, rows: priced + unpriced };
+  }, [blocks]);
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-orbitron uppercase tracking-wide">
-            {isDuplicate ? 'Дублировать заказ-наряд' : 'Новый заказ-наряд'}
+            {isEdit
+              ? 'Редактировать заказ-наряд'
+              : isDuplicate
+                ? 'Дублировать заказ-наряд'
+                : 'Новый заказ-наряд'}
           </DialogTitle>
         </DialogHeader>
+
+        {editPrefill && (
+          <p className="text-xs text-content-muted -mt-1">
+            {editPrefill.status === 'completed'
+              ? 'Наряд выполнен. Правка услуг и цен сразу меняет сводку месяца; уже выданные акты не меняются — после правки сформируй их заново.'
+              : editPrefill.status === 'in_progress'
+                ? 'Мастер уже в работе — изменения бригада увидит сразу (придёт уведомление).'
+                : 'Изменения бригада увидит сразу (придёт уведомление).'}{' '}
+            Клиент и договор у наряда не меняются; пункты чеклиста, отмеченные мастером, — только
+            для просмотра.
+          </p>
+        )}
 
         {isDuplicate && hasClients && (
           <p className="text-xs text-content-muted -mt-1">
@@ -599,6 +935,7 @@ export function WorkOrderDialog({
                   options={clientOptions}
                   value={clientId}
                   onChange={onClient}
+                  disabled={isEdit}
                   placeholder="— выбери клиента —"
                   searchPlaceholder="Поиск по названию…"
                   emptyText="Клиент не найден"
@@ -610,8 +947,8 @@ export function WorkOrderDialog({
                   id="wo-deal"
                   className={fieldClass}
                   value={dealId}
-                  onChange={(e) => setDealId(e.target.value)}
-                  disabled={!client}
+                  onChange={(e) => onDeal(e.target.value)}
+                  disabled={!client || isEdit}
                 >
                   <option value="">— договор —</option>
                   {client?.deals.map((d) => (
@@ -731,7 +1068,8 @@ export function WorkOrderDialog({
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs text-content-secondary">
                         Услуги
-                        {b.rows.length > 0 && !isDuplicate && ' (из прошлого наряда — можно править)'}
+                        {b.rows.length > 0 && !isDuplicate && !isEdit && ' (из прошлого наряда — можно править)'}
+                        {isEdit && b.rows.length > 0 && ' наряда'}
                         {isDuplicate && b.rows.length > 0 && ' (скопировано — можно править)'}
                         {b.loading && (
                           <Loader2 className="inline w-3 h-3 ml-1.5 animate-spin text-content-muted" />
@@ -751,86 +1089,212 @@ export function WorkOrderDialog({
                       </p>
                     )}
                     <div className="space-y-2">
-                      {b.rows.map((row, i) => (
-                        <div key={i} className="grid grid-cols-12 gap-2 items-start">
-                          <div className="col-span-12 sm:col-span-4 min-w-0">
-                            <select
-                              className={fieldClass}
-                              value={row.serviceId || '__custom__'}
-                              onChange={(e) => onPickService(b.key, i, e.target.value)}
-                            >
-                              <option value="__custom__">— своя услуга —</option>
-                              {data.catalog.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {/* Полное название (с видом в скобках) — у Регины несколько услуг
-                                      с одинаковым коротким именем «Дезинсекция», но разным видом
-                                      (тараканы/осы/муравьи). Короткое имя их не различало. */}
-                                  {c.name}
-                                </option>
-                              ))}
-                            </select>
-                            {!row.serviceId && (
+                      {b.rows.map((row, i) => {
+                        // Цена строки: подсказки из прайса договора (объект блока + услуга).
+                        const rowKey = `${b.key}:${i}`;
+                        const choices =
+                          dealHints && b.objectId && row.serviceId
+                            ? priceChoices(dealHints, b.objectId, row.serviceId)
+                            : [];
+                        const curPrice = normalizePrice(row.price);
+                        const showChoices =
+                          choices.length > 1 ||
+                          (choices.length === 1 && curPrice !== choices[0].price);
+                        const badPrice = isBadPrice(row.price);
+                        return (
+                          <div
+                            key={i}
+                            className="space-y-1.5 pb-2 border-b border-gray-100 last:border-b-0 last:pb-0"
+                          >
+                            <div className="grid grid-cols-12 gap-2 items-start">
+                              <div className="col-span-12 sm:col-span-4 min-w-0">
+                                <select
+                                  className={fieldClass}
+                                  value={row.serviceId || '__custom__'}
+                                  onChange={(e) => onPickService(b.key, i, e.target.value)}
+                                >
+                                  <option value="__custom__">— своя услуга —</option>
+                                  {data.catalog.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {/* Полное название (с видом в скобках) — у Регины несколько услуг
+                                          с одинаковым коротким именем «Дезинсекция», но разным видом
+                                          (тараканы/осы/муравьи). Короткое имя их не различало. */}
+                                      {c.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                {!row.serviceId && (
+                                  <input
+                                    className={fieldClass}
+                                    placeholder="Название услуги"
+                                    value={row.customName}
+                                    onChange={(e) => patchRow(b.key, i, { customName: e.target.value })}
+                                  />
+                                )}
+                              </div>
+                              <div className="col-span-6 sm:col-span-3 min-w-0">
+                                <select
+                                  className={fieldClass}
+                                  value={row.method}
+                                  onChange={(e) => patchRow(b.key, i, { method: e.target.value })}
+                                >
+                                  <option value="">способ…</option>
+                                  {methodOptions(row.method).map((m) => (
+                                    <option key={m} value={m}>
+                                      {m}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="col-span-3 sm:col-span-2 min-w-0">
+                                <input
+                                  className={fieldClass}
+                                  inputMode="decimal"
+                                  placeholder="кол-во"
+                                  value={row.quantity}
+                                  onChange={(e) => patchRow(b.key, i, { quantity: e.target.value })}
+                                />
+                              </div>
+                              <div className="col-span-6 sm:col-span-2 min-w-0">
+                                <select
+                                  className={fieldClass}
+                                  value={row.unit}
+                                  onChange={(e) =>
+                                    patchRow(b.key, i, { unit: e.target.value as PriceItemUnit })
+                                  }
+                                >
+                                  {UNIT_OPTIONS.map((u) => (
+                                    <option key={u.value} value={u.value}>
+                                      {u.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="col-span-3 sm:col-span-1 flex items-center justify-end pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => removeRow(b.key, i)}
+                                  className="p-2 text-content-muted hover:text-red-500"
+                                  aria-label="Удалить услугу"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Цена строки (видит только менеджер; мастеру цены не показываются) */}
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <label
+                                htmlFor={`wo-price-${rowKey}`}
+                                className="text-xs text-content-secondary"
+                              >
+                                Цена, ₽
+                              </label>
                               <input
-                                className={fieldClass}
-                                placeholder="Название услуги"
-                                value={row.customName}
-                                onChange={(e) => patchRow(b.key, i, { customName: e.target.value })}
+                                id={`wo-price-${rowKey}`}
+                                className={`w-28 sm:w-32 px-2 py-1.5 text-sm bg-bg-primary border rounded-md focus:outline-none tabular-nums ${
+                                  badPrice
+                                    ? 'border-red-400 focus:border-red-500'
+                                    : 'border-gray-300 focus:border-neon-orange'
+                                }`}
+                                inputMode="decimal"
+                                placeholder="не указана"
+                                value={row.price}
+                                onChange={(e) =>
+                                  patchRow(b.key, i, { price: e.target.value, priceSource: 'manual' })
+                                }
                               />
+                              <PriceSourceTag price={row.price} source={row.priceSource} />
+                              {showChoices &&
+                                (choices.length === 1 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      patchRow(b.key, i, {
+                                        price: priceToInput(choices[0].price),
+                                        priceSource: 'contract',
+                                      })
+                                    }
+                                    className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap"
+                                    title={choices[0].note || 'Подставить цену из прайса договора'}
+                                  >
+                                    в договоре: {formatRub(toKop(choices[0].price))}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setChoiceOpen((c) => (c === rowKey ? null : rowKey))
+                                    }
+                                    className="text-[11px] px-1.5 py-0.5 rounded border border-gray-300 text-content-secondary hover:border-neon-orange hover:text-neon-orange whitespace-nowrap"
+                                    aria-expanded={choiceOpen === rowKey}
+                                  >
+                                    в договоре {choices.length} {pricesWord(choices.length)} — выбрать
+                                  </button>
+                                ))}
+                            </div>
+                            {choiceOpen === rowKey && choices.length > 1 && (
+                              <div className="rounded border border-gray-200 bg-bg-primary divide-y divide-gray-100">
+                                {choices.map((c) => (
+                                  <button
+                                    key={c.price}
+                                    type="button"
+                                    onClick={() => {
+                                      patchRow(b.key, i, {
+                                        price: priceToInput(c.price),
+                                        priceSource: 'contract',
+                                      });
+                                      setChoiceOpen(null);
+                                    }}
+                                    className="w-full text-left px-2 py-1.5 text-xs hover:bg-neon-orange/5 flex items-baseline justify-between gap-2"
+                                  >
+                                    <span className="min-w-0 break-words text-content-secondary">
+                                      {c.note}
+                                    </span>
+                                    <span className="font-semibold tabular-nums whitespace-nowrap text-content-primary">
+                                      {formatRub(toKop(c.price))}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </div>
-                          <div className="col-span-6 sm:col-span-3 min-w-0">
-                            <select
-                              className={fieldClass}
-                              value={row.method}
-                              onChange={(e) => patchRow(b.key, i, { method: e.target.value })}
-                            >
-                              <option value="">способ…</option>
-                              {methodOptions(row.method).map((m) => (
-                                <option key={m} value={m}>
-                                  {m}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="col-span-3 sm:col-span-2 min-w-0">
-                            <input
-                              className={fieldClass}
-                              inputMode="decimal"
-                              placeholder="кол-во"
-                              value={row.quantity}
-                              onChange={(e) => patchRow(b.key, i, { quantity: e.target.value })}
-                            />
-                          </div>
-                          <div className="col-span-6 sm:col-span-2 min-w-0">
-                            <select
-                              className={fieldClass}
-                              value={row.unit}
-                              onChange={(e) =>
-                                patchRow(b.key, i, { unit: e.target.value as PriceItemUnit })
-                              }
-                            >
-                              {UNIT_OPTIONS.map((u) => (
-                                <option key={u.value} value={u.value}>
-                                  {u.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="col-span-3 sm:col-span-1 flex items-center justify-end pt-1">
-                            <button
-                              type="button"
-                              onClick={() => removeRow(b.key, i)}
-                              className="p-2 text-content-muted hover:text-red-500"
-                              aria-label="Удалить услугу"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Деньги наряда: итог по строкам + «документальный» (мастеру 0 %) */}
+              <div className="mt-3 rounded-md border border-gray-200 px-3 py-2 space-y-1.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <span className="text-sm text-content-primary">
+                    Итого по наряду:{' '}
+                    <b className="tabular-nums">
+                      {priceTotals.totalKop === null
+                        ? 'цена не указана'
+                        : formatRub(priceTotals.totalKop)}
+                    </b>
+                  </span>
+                  {priceTotals.unpriced > 0 && priceTotals.totalKop !== null && (
+                    <span className="text-xs text-amber-700">
+                      без цены: {priceTotals.unpriced} стр.
+                    </span>
+                  )}
+                </div>
+                <label className="flex items-start gap-2 text-xs text-content-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="accent-neon-orange mt-0.5 flex-shrink-0"
+                    checked={noMasterPay}
+                    onChange={(e) => setNoMasterPay(e.target.checked)}
+                  />
+                  <span>{NO_MASTER_PAY_LABEL}</span>
+                </label>
+                <p className="text-[11px] text-content-muted">
+                  Цены видят только менеджер и админ — мастеру они не показываются.
+                </p>
               </div>
             </div>
 
@@ -907,7 +1371,29 @@ export function WorkOrderDialog({
               )}
 
               <div className="space-y-2">
-                {checklist.map((row, i) => (
+                {checklist.map((row, i) =>
+                  row.marked ? (
+                    // Отмечен мастером (статус / заметка / фото) — только просмотр.
+                    <div
+                      key={row.id}
+                      className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <span className="min-w-0 break-words">
+                          {row.title}
+                          {row.required && <span className="text-red-500"> *</span>}
+                        </span>
+                        <span className="text-xs text-content-muted shrink-0">
+                          {CHK_STATUS_LABEL[row.status ?? 'pending']}
+                          {(row.photosCount ?? 0) > 0 && ` · фото ${row.photosCount}`}
+                          {row.byMaster && ' · добавил мастер'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-content-muted mt-0.5">
+                        Отмечен мастером — не меняется и не удаляется.
+                      </p>
+                    </div>
+                  ) : (
                   <div key={row.id} className="grid grid-cols-12 gap-2 items-start">
                     <div className="col-span-12 sm:col-span-8 space-y-1 min-w-0">
                       <input
@@ -943,7 +1429,8 @@ export function WorkOrderDialog({
                       </button>
                     </div>
                   </div>
-                ))}
+                  ),
+                )}
               </div>
             </div>
 
@@ -975,7 +1462,13 @@ export function WorkOrderDialog({
               молча отключив переспрос о втором наряде на тот же день. */}
           {hasClients && (
             <CyberpunkButton variant="primary" onClick={() => submit()} disabled={isPending}>
-              {isPending ? 'Создаю…' : 'Создать наряд'}
+              {isEdit
+                ? isPending
+                  ? 'Сохраняю…'
+                  : 'Сохранить'
+                : isPending
+                  ? 'Создаю…'
+                  : 'Создать наряд'}
             </CyberpunkButton>
           )}
         </DialogFooter>

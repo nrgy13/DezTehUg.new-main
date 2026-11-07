@@ -4,12 +4,13 @@ import { useMemo, useState } from 'react';
 import { Search, X, MapPin, Wrench, User as UserIcon, FlaskConical, ListChecks } from 'lucide-react';
 import type { SerializedVisitHistoryItem } from '@/lib/calendar/deal-events';
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
+import { WorkOrderPricingButton } from '@/components/crm/WorkOrderPricingButton';
+import { WorkOrderEditButton, WorkOrderOpenLink } from '@/components/crm/WorkOrderManageButtons';
 
-// Ссылка на выезд: у мастера — на страницу выезда, у менеджера — на сделку (таб «Выезды»).
+// Ссылка на выезд: у мастера — на страницу выезда, у менеджера — на карточку наряда
+// (07.11.2026: всё по наряду, фото, журнал, правка).
 function historyHref(hrefBase: string, item: SerializedVisitHistoryItem): string {
-  return hrefBase === '/master/visits'
-    ? `/master/visits/${item.id}`
-    : `${hrefBase}/${item.dealId}?tab=visits`;
+  return hrefBase === '/master/visits' ? `/master/visits/${item.id}` : `/manager/visits/${item.id}`;
 }
 
 type DayGroup = { dayKey: string; label: string; items: SerializedVisitHistoryItem[] };
@@ -193,8 +194,12 @@ export function VisitHistoryList({
                     )}
                   </a>
                   {canGenerateActs && it.dealId && it.objectName && (
-                    <div className="flex items-center gap-1 mt-1 mb-1 pl-3">
+                    <div className="flex flex-wrap items-center gap-1 mt-1 mb-1 pl-3">
+                      <WorkOrderOpenLink workLogId={it.id} />
+                      <WorkOrderEditButton workLogId={it.id} />
                       <VisitActButtons dealId={it.dealId} workLogId={it.id} />
+                      {/* Цена выполненного наряда (задним числом) — только менеджер/админ. */}
+                      <WorkOrderPricingButton workLogId={it.id} />
                     </div>
                   )}
                   </div>

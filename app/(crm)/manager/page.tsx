@@ -7,33 +7,62 @@ import {
   ArrowRight,
   AlertTriangle,
   CalendarDays,
-  Wallet,
   TrendingUp,
   BarChart3,
   KanbanSquare,
   CalendarClock,
   Flag,
+  Gauge,
+  Percent,
 } from 'lucide-react';
 import { requireRole } from '@/lib/auth/helpers';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
-import { getManagerDashboardStats, formatRubShort } from '@/lib/dashboard/manager-stats';
+import { getManagerDashboardStats } from '@/lib/dashboard/manager-stats';
 import { PageTitle } from '@/components/crm/PageTitle';
+import { RescheduleRequestsPanel } from '@/components/crm/RescheduleRequestsPanel';
+import { listPendingRescheduleRequests } from '@/lib/visits/reschedule-requests';
+import { getMonthData, currentMskMonth, shiftMonth } from '@/lib/finance/monthly';
+import { MonthPulse, ClientsOverview } from './summary/DashboardBlocks';
 
 export const metadata = { title: 'Менеджер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
 
+/**
+ * Новые блоки (запросы на перенос, сводка месяца, клиенты) не должны ронять весь дашборд:
+ * если их запрос упал — блок просто не показываем, остальные виджеты работают.
+ */
+function orFallback<T>(label: string, fallback: T) {
+  return (err: unknown): T => {
+    console.error(`[manager-dashboard] ${label}:`, err);
+    return fallback;
+  };
+}
+
 export default async function ManagerDashboard() {
   const user = await requireRole('manager');
-  const stats = await getManagerDashboardStats(user.id, user.role === 'admin');
+  const month = currentMskMonth();
+  const [stats, pendingResched, monthNow, monthPrev] = await Promise.all([
+    getManagerDashboardStats(user.id, user.role === 'admin'),
+    listPendingRescheduleRequests().catch(orFallback('reschedule requests', [])),
+    getMonthData(month).catch(orFallback('month data', null)),
+    getMonthData(shiftMonth(month, -1)).catch(orFallback('prev month data', null)),
+  ]);
 
   return (
     <div className="space-y-6">
+      {/* Срочное — в самом верху: запросы мастеров на перенос ждут решения. */}
+      <RescheduleRequestsPanel requests={pendingResched} />
+
       <div>
         <PageTitle>Дашборд менеджера</PageTitle>
         <p className="text-content-muted mt-1 text-sm">
           Привет, {user.name}! Сводка по твоей работе и общему состоянию воронки.
         </p>
       </div>
+
+      {monthNow && monthPrev && (
+        <MonthPulse cur={monthNow.kpis} prev={monthPrev.kpis} inProgress />
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <StatCard
@@ -89,14 +118,8 @@ export default async function ManagerDashboard() {
           hint="объекты с обработкой по графику без заказ-наряда"
           accent={stats.workOrdersDue > 0 ? 'orange' : 'muted'}
         />
-        <StatCard
-          label="Выручка за 30 дней"
-          value={formatRubShort(stats.revenue30d)}
-          icon={Wallet}
-          href="/manager/analytics"
-          hint="по завершённым договорам"
-          accent={stats.revenue30d > 0 ? 'green' : 'muted'}
-        />
+        {/* «Выручка за 30 дней» убрана (11.2026): считала deals.status='completed', таких нет —
+            всегда 0. Выручка теперь по выполненным нарядам — в блоке месяца выше и в «Сводке месяца». */}
         <StatCard
           label="Клиенты в базе"
           value={stats.clientsCount}
@@ -127,11 +150,25 @@ export default async function ManagerDashboard() {
         />
       </div>
 
+      {monthNow && <ClientsOverview data={monthNow} />}
+
       <CyberpunkCard variant="default" hoverEffect={false} className="p-6">
         <h2 className="text-base font-orbitron font-semibold tracking-wider text-content-primary mb-3 uppercase">
           Быстрые переходы
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <QuickLink
+            href="/manager/summary"
+            icon={Gauge}
+            title="Сводка месяца"
+            subtitle="Выручка, маржа, зарплата мастеров, тренд; выгрузка в Excel"
+          />
+          <QuickLink
+            href="/manager/masters"
+            icon={Percent}
+            title="Мастера и ставки"
+            subtitle="Процент от наряда и минимальная выплата"
+          />
           <QuickLink
             href="/manager/analytics"
             icon={BarChart3}

@@ -148,6 +148,7 @@ export default async function ClientsListPage({
             <option value="active">Активные</option>
             <option value="inactive">Неактивные</option>
             <option value="blocked">Заблокированы</option>
+            <option value="refused">Отказались</option>
           </select>
           <select
             name="category"

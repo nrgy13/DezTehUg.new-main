@@ -11,7 +11,20 @@ export const clientStatusEnum = pgEnum('client_status', [
   'active',
   'inactive',
   'blocked',
+  // 11.2026: клиент отказался от работ — ставит менеджер с обязательной причиной (refusal_reason).
+  'refused',
 ]);
+
+// Причины отказа клиента (clients.refusal_reason — varchar, список держим в коде).
+export const CLIENT_REFUSAL_REASONS = {
+  price: 'Дорого',
+  competitor: 'Ушёл к другим',
+  closed: 'Закрылся / переехал',
+  no_need: 'Больше не нужно',
+  quality: 'Недоволен качеством',
+  other: 'Другое',
+} as const;
+export type ClientRefusalReason = keyof typeof CLIENT_REFUSAL_REASONS;
 
 // Откуда пришёл клиент
 export const clientSourceEnum = pgEnum('client_source', [
@@ -66,6 +79,10 @@ export const clients = pgTable('clients', {
   status: clientStatusEnum('status').notNull().default('lead'),
   // Категория для директора. Дефолт 'old' — при миграции 0020 все текущие клиенты = «Старый».
   category: clientCategoryEnum('category').notNull().default('old'),
+  // Отказ (status='refused'): причина из CLIENT_REFUSAL_REASONS + комментарий + когда.
+  refusalReason: varchar('refusal_reason', { length: 32 }),
+  refusalComment: text('refusal_comment'),
+  refusedAt: timestamp('refused_at', { withTimezone: true }),
   notes: text('notes'),
 
   // Зарезервировано для будущих расширений (не ломая миграции)

@@ -207,6 +207,9 @@ export const dealWorkLogs = pgTable(
     // Релиз A: препараты обработки (free-text, заполняется в заказ-наряде).
     preparations: text('preparations'),
 
+    // 11.2026 (деньги нарядов): «документальный» наряд — мастеру 0, вся сумма в кассу организации.
+    noMasterPay: boolean('no_master_pay').notNull().default(false),
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -239,6 +242,10 @@ export const dealWorkLogServices = pgTable(
     method: varchar('method', { length: 128 }),
     unit: priceItemUnitEnum('unit').notNull().default('m2'),
     quantity: decimal('quantity', { precision: 10, scale: 2 }),
+    // 11.2026 (деньги нарядов): цена строки — снимок. NULL = цена не указана (наряды до запуска).
+    // priceSource: 'contract' — подставлена из прайса договора, 'manual' — своя (договорённость с заказчиком).
+    price: decimal('price', { precision: 12, scale: 2 }),
+    priceSource: varchar('price_source', { length: 16 }),
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -266,6 +273,26 @@ export const dealWorkLogMasters = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.workLogId, t.userId] }),
     userIdx: index('deal_work_log_masters_user_idx').on(t.userId),
+  }),
+);
+
+// Ручная сумма мастеру в конкретном наряде (11.2026): перекрывает расчёт «процент от стоимости».
+// Ставит менеджер, когда договорились иначе. Удаление строки = вернуть расчёт по ставке.
+export const dealWorkLogPayOverrides = pgTable(
+  'deal_work_log_pay_overrides',
+  {
+    workLogId: uuid('work_log_id')
+      .notNull()
+      .references(() => dealWorkLogs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    amount: decimal('amount', { precision: 12, scale: 2 }).notNull(),
+    setById: uuid('set_by_id').references(() => users.id, { onDelete: 'set null' }),
+    setAt: timestamp('set_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.workLogId, t.userId] }),
   }),
 );
 

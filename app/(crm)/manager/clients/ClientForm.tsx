@@ -394,6 +394,11 @@ export function ClientForm({ mode, initial }: Props) {
               <option value="active">Активный</option>
               <option value="inactive">Неактивный</option>
               <option value="blocked">Заблокирован</option>
+              {/* «Отказался» ставится только в карточке (нужна причина); здесь — чтобы форма
+                  отказавшегося клиента сохранялась, не теряя статус. */}
+              <option value="refused" disabled={initial?.status !== 'refused'}>
+                Отказался
+              </option>
             </select>
           </Field>
           <Field label="Категория" error={errors.category?.message} className="md:col-span-2">

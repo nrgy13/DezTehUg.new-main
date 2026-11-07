@@ -48,10 +48,12 @@ export async function GET(
   const role = session.user.role;
   const uid = session.user.id;
   // Бригада (10.2026): фото наряда видит любой его член — основной мастер или напарник.
+  // Менеджер — ЛЮБОГО наряда (07.11.2026, карточка наряда для Регины): менеджер видит все
+  // наряды (Релиз B), а assigned_manager_id у большинства договоров пуст — фото не открывались.
   const allowed =
     role === 'admin' ||
-    (role === 'master' && (wl.masterId === uid || (await isWorkLogPartner(workLogId, uid)))) ||
-    (role === 'manager' && wl.managerId === uid);
+    role === 'manager' ||
+    (role === 'master' && (wl.masterId === uid || (await isWorkLogPartner(workLogId, uid))));
   if (!allowed) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }

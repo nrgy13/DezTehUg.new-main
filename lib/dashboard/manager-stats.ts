@@ -18,7 +18,6 @@ export type ManagerDashboardStats = {
   docsPreparing: number;
   staleLeads: number;
   upcomingVisits7d: number;
-  revenue30d: number;
   conversion30d: number | null;
   /** Релиз B: «горящие» напоминания «оформи заказ-наряд» (просрочено/сегодня/скоро). */
   workOrdersDue: number;
@@ -43,7 +42,6 @@ export async function getManagerDashboardStats(
     [{ wonThisMonth }],
     staleLeads,
     upcomingVisitsResult,
-    revenueResult,
     conversionResult,
     workOrdersDue,
   ] = await Promise.all([
@@ -85,12 +83,6 @@ export async function getManagerDashboardStats(
               start_date
             ) BETWEEN current_date AND current_date + INTERVAL '7 days'
     `),
-    db.execute<{ revenue: string | null }>(sql`
-      SELECT COALESCE(SUM(total_amount), 0)::numeric AS revenue
-      FROM deals
-      WHERE status = 'completed'
-        AND updated_at >= NOW() - INTERVAL '30 days'
-    `),
     db.execute<{ won: number; lost: number }>(sql`
       SELECT
         COUNT(*) FILTER (WHERE status = 'won')::int  AS won,
@@ -102,11 +94,9 @@ export async function getManagerDashboardStats(
   ]);
 
   const upcomingRows = getRows<{ cnt: number }>(upcomingVisitsResult);
-  const revenueRows = getRows<{ revenue: string | null }>(revenueResult);
   const conversionRows = getRows<{ won: number; lost: number }>(conversionResult);
 
   const upcomingVisits7d = upcomingRows[0]?.cnt ?? 0;
-  const revenue30d = Number(revenueRows[0]?.revenue ?? 0);
   const won = conversionRows[0]?.won ?? 0;
   const lost = conversionRows[0]?.lost ?? 0;
   const conversion30d = won + lost > 0 ? Math.round((won / (won + lost)) * 1000) / 10 : null;
@@ -120,7 +110,6 @@ export async function getManagerDashboardStats(
     docsPreparing,
     staleLeads,
     upcomingVisits7d,
-    revenue30d,
     conversion30d,
     workOrdersDue,
   };

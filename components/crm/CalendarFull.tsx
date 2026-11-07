@@ -16,6 +16,12 @@ import { updateVisitPlannedAt } from '@/app/(crm)/manager/deals/[id]/visits-acti
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
 import { WorkOrderCrewButton } from '@/components/crm/WorkOrderCrewButton';
 import { WorkOrderRescheduleButton } from '@/components/crm/WorkOrderRescheduleButton';
+import { WorkOrderPricingButton } from '@/components/crm/WorkOrderPricingButton';
+import {
+  WorkOrderCloseButton,
+  WorkOrderEditButton,
+  WorkOrderOpenLink,
+} from '@/components/crm/WorkOrderManageButtons';
 import './calendar.css';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -134,10 +140,10 @@ function groupVisitsByDay(events: SerializedDealEvent[]): VisitDayGroup[] {
     });
 }
 
+// Ссылка на выезд: у мастера — его страница выезда, у менеджера — карточка наряда
+// (07.11.2026: всё по наряду + правка/закрытие; раньше вела на таб «Выезды» договора).
 function visitHref(dealHrefBase: string, e: SerializedDealEvent): string {
-  return dealHrefBase === '/master/visits'
-    ? `/master/visits/${e.id}`
-    : `${dealHrefBase}/${e.dealId}?tab=visits`;
+  return dealHrefBase === '/master/visits' ? `/master/visits/${e.id}` : `/manager/visits/${e.id}`;
 }
 
 type TooltipState = {
@@ -754,7 +760,13 @@ function VisitsList({
                 )}
               </a>
               {canGenerateActs && e.objectName !== null && (
-                <div className="flex items-center gap-1 mt-1 mb-1 pl-3">
+                <div className="flex flex-wrap items-center gap-1 mt-1 mb-1 pl-3">
+                  <WorkOrderOpenLink workLogId={e.id} />
+                  <WorkOrderEditButton workLogId={e.id} />
+                  <WorkOrderCloseButton
+                    workLogId={e.id}
+                    status={e.status as 'planned' | 'in_progress' | 'completed'}
+                  />
                   <VisitActButtons dealId={e.dealId} workLogId={e.id} />
                   {/* Активный календарь = только planned/in_progress → бригаду ещё можно править. */}
                   <WorkOrderCrewButton workLogId={e.id} />
@@ -762,6 +774,8 @@ function VisitsList({
                   {e.status === 'planned' && (
                     <WorkOrderRescheduleButton workLogId={e.id} plannedAtIso={e.startAt} />
                   )}
+                  {/* Цена наряда и начисления мастерам — только менеджер/админ (canGenerateActs). */}
+                  <WorkOrderPricingButton workLogId={e.id} />
                 </div>
               )}
               </div>

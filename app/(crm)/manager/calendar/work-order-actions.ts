@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { eq, asc, and, or, desc, inArray, exists, sql } from 'drizzle-orm';
-import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import {
@@ -24,6 +23,11 @@ import {
   type WorkOrderServiceInput,
   type WorkOrderChecklistInput,
 } from '@/lib/visits/create';
+import {
+  checklistInputSchema,
+  woServiceSchema,
+  MAX_WORK_ORDER_OBJECTS,
+} from '@/lib/visits/work-order-schemas';
 import { MSK_TZ } from '@/lib/datetime/msk';
 import {
   getCrewIds,
@@ -90,6 +94,9 @@ export type WorkOrderDefaultService = {
   method: string | null;
   unit: PriceItemUnit;
   quantity: string | null;
+  /** Цена строки (11.2026): из прошлого/копируемого наряда; null — форма подставит из прайса. */
+  price: string | null;
+  priceSource: string | null;
 };
 /** Пункт стартового чеклиста для формы наряда (из прошлого наряда или из шаблонов услуг). */
 export type WorkOrderChecklistDefault = {
@@ -133,6 +140,8 @@ export type WorkOrderDuplicatePrefill = {
   /** Напарники исходного наряда — копия едет тем же составом. */
   partnerIds: string[];
   preparations: string | null;
+  /** «Документальный» исходного наряда (мастеру 0) — копия того же типа. */
+  noMasterPay: boolean;
   services: WorkOrderDuplicateService[];
   checklist: WorkOrderChecklistDefault[];
 };
@@ -259,38 +268,6 @@ export async function getWorkOrderFormData(clientId?: string): Promise<WorkOrder
 }
 
 // ─── Создание заказ-наряда ────────────────────────────────────
-const checklistInputSchema = z.array(
-  z.object({
-    title: z.string().trim().min(2, 'минимум 2 символа в пункте').max(200),
-    description: z.string().trim().max(1000).nullable().optional(),
-    required: z.boolean(),
-    source: z.enum(['template', 'manager']),
-    sourceTemplateId: z.string().uuid().nullable().optional(),
-  }),
-);
-
-// Валидация услуг наряда (раньше количество шло сырьём → -5/'abc' падали уже на уровне PG).
-const woServiceSchema = z.array(
-  z.object({
-    serviceId: z.string().uuid().nullable().optional(),
-    customName: z.string().trim().max(255).nullable().optional(),
-    method: z.string().trim().max(128).nullable().optional(),
-    unit: z.enum(['m2', 'pcs', 'm3']).optional(),
-    quantity: z
-      .union([z.string(), z.number()])
-      .nullable()
-      .optional()
-      .refine(
-        (q) => q == null || q === '' || (Number.isFinite(Number(q)) && Number(q) >= 0),
-        'количество — неотрицательное число',
-      ),
-    // Мульти-объектный наряд: объект услуги (один из объектов наряда; null → основной).
-    objectId: z.string().uuid().nullable().optional(),
-  }),
-);
-
-/** Потолок объектов в одном наряде — защита от случайного «выбрать всё» у сетей (Хадыжи: 31 магазин). */
-const MAX_WORK_ORDER_OBJECTS = 30;
 
 export async function createWorkOrderAction(input: {
   dealId: string;
@@ -322,6 +299,8 @@ export async function createWorkOrderAction(input: {
    * ответа на переспрос, сама по себе его не шлёт.
    */
   allowSameDay?: boolean;
+  /** «Документальный» наряд (11.2026): мастеру 0, вся сумма в кассу организации. */
+  noMasterPay?: boolean;
 }): Promise<CreateWorkOrderResult> {
   const actor = await getManager();
   if (!actor) return { ok: false, error: 'Нет доступа' };
@@ -477,6 +456,7 @@ export async function createWorkOrderAction(input: {
       preparations,
       services: svc,
       checklist,
+      noMasterPay: input.noMasterPay === true,
     });
     workLogId = created.workLogId;
   } catch (err) {
@@ -835,6 +815,8 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
           unit: dealWorkLogServices.unit,
           quantity: dealWorkLogServices.quantity,
           objectId: dealWorkLogServices.objectId,
+          price: dealWorkLogServices.price,
+          priceSource: dealWorkLogServices.priceSource,
         })
         .from(dealWorkLogServices)
         .where(eq(dealWorkLogServices.workLogId, last.id))
@@ -869,6 +851,8 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
         method: s.method,
         unit: s.unit,
         quantity: s.quantity,
+        price: s.price,
+        priceSource: s.priceSource,
       })),
       preparations: last.preparations,
       masterId: last.masterId,
@@ -960,6 +944,9 @@ export async function getObjectWorkOrderDefaults(objectId: string): Promise<Work
       method: s.method,
       unit: s.unit,
       quantity: s.quantity ?? areaM2,
+      // Цену форма подставит из прайса договора (зависит от выбранного договора).
+      price: null,
+      priceSource: null,
     })),
     preparations: null,
     masterId: null,
@@ -1059,6 +1046,7 @@ export async function getWorkOrderDuplicateData(
       objectId: dealWorkLogs.objectId,
       masterId: dealWorkLogs.masterId,
       preparations: dealWorkLogs.preparations,
+      noMasterPay: dealWorkLogs.noMasterPay,
       clientId: deals.clientId,
     })
     .from(dealWorkLogs)
@@ -1082,6 +1070,8 @@ export async function getWorkOrderDuplicateData(
         unit: dealWorkLogServices.unit,
         quantity: dealWorkLogServices.quantity,
         objectId: dealWorkLogServices.objectId,
+        price: dealWorkLogServices.price,
+        priceSource: dealWorkLogServices.priceSource,
       })
       .from(dealWorkLogServices)
       .leftJoin(services, eq(dealWorkLogServices.serviceId, services.id))
@@ -1123,6 +1113,7 @@ export async function getWorkOrderDuplicateData(
       masterId: wl.masterId,
       partnerIds: (dupPartners.get(wl.id) ?? []).map((p) => p.id),
       preparations: wl.preparations,
+      noMasterPay: wl.noMasterPay,
       services: svc.map((s) => ({
         serviceId: s.serviceId,
         customName: s.customName,
@@ -1130,6 +1121,8 @@ export async function getWorkOrderDuplicateData(
         method: s.method,
         unit: s.unit,
         quantity: s.quantity,
+        price: s.price,
+        priceSource: s.priceSource,
         objectId: s.objectId ?? primaryObjectId,
       })),
       // Скопированные пункты переходят во владение менеджеру (как в getLastOrderChecklist).

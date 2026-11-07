@@ -13,6 +13,7 @@ import { getPartnersByWorkLogIds, workLogHasMember } from '@/lib/visits/crew';
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { unitLabel, formatQuantity } from '@/lib/constants/units';
 import { MSK_TZ } from '@/lib/datetime/msk';
+import { workOrderDate } from '@/lib/visits/order-date';
 import type { PriceItemUnit } from '@/lib/db/schema/deals';
 import { PageTitle } from '@/components/crm/PageTitle';
 
@@ -307,10 +308,8 @@ function fmtDealNum(n: string): string {
 }
 
 function fmtVisitDate(v: VisitRow): string {
-  const d =
-    v.status === 'completed'
-      ? v.performedAt ?? v.finalizedAt
-      : v.startedAt ?? v.plannedAt;
+  // Дата наряда = плановая: «Начать»/«Завершить» её не двигают (запрос Регины 07.11.2026).
+  const d = workOrderDate(v);
   if (!d) return 'без даты';
   return d.toLocaleString('ru-RU', {
     timeZone: MSK_TZ,

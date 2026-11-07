@@ -25,6 +25,12 @@ const STATUS_STYLE: Record<ClientStatus, { bg: string; text: string; border: str
     border: 'border-red-300',
     label: 'Заблокирован',
   },
+  refused: {
+    bg: 'bg-amber-50',
+    text: 'text-amber-700',
+    border: 'border-amber-300',
+    label: 'Отказался',
+  },
 };
 
 const TYPE_LABEL: Record<ClientType, string> = {

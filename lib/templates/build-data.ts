@@ -1,4 +1,4 @@
-import { eq, and, asc, isNotNull } from 'drizzle-orm';
+import { eq, and, asc, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { clients, type Client } from '@/lib/db/schema/clients';
 import { clientObjects, clientObjectServices } from '@/lib/db/schema/objects';
@@ -18,6 +18,8 @@ import { CONTRACT_PROVIDER } from '@/lib/contract-provider';
 import { unitLabel, formatQuantity } from '@/lib/constants/units';
 import { spaceAfterCommas, actContact } from './act-format';
 import type { DocumentType } from '@/lib/db/schema/documents';
+import { workOrderDate } from '@/lib/visits/order-date';
+import { utcToMskParts } from '@/lib/datetime/msk';
 
 /**
  * Контекст для построения данных шаблона. Все поля опциональные —
@@ -119,9 +121,11 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
 
   // Объект акта: явный ctx.objectId, иначе — объект выезда. Сужает прайс/объекты/услуги.
   const objectId = ctx.objectId ?? visit?.objectId ?? undefined;
-  // Дата выезда (для даты акта в варианте по наряду) — факт выполнения или плановая.
-  const visitDateIso =
-    (visit?.performedAt ?? visit?.plannedAt)?.toISOString().slice(0, 10) ?? null;
+  // Дата выезда (для даты акта в варианте по наряду) = дата наряда (плановая; без плана —
+  // факт). 07.11.2026: «Завершить» у мастера дату наряда не двигает (lib/visits/order-date.ts).
+  // День — по МСК (toISOString дал бы UTC: наряд на 00:30 МСК попал бы в акт вчерашним днём).
+  const visitDate = visit ? workOrderDate(visit) : null;
+  const visitDateIso = visitDate ? (utcToMskParts(visitDate)?.date ?? null) : null;
 
   // Объекты клиента
   const objects = client
@@ -241,7 +245,10 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
     ? await db
         .select({
           id: dealWorkLogs.id,
+          plannedAt: dealWorkLogs.plannedAt,
           performedAt: dealWorkLogs.performedAt,
+          finalizedAt: dealWorkLogs.finalizedAt,
+          startedAt: dealWorkLogs.startedAt,
           description: dealWorkLogs.description,
           areaM2: dealWorkLogs.areaM2,
           notes: dealWorkLogs.notes,
@@ -250,7 +257,12 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         .from(dealWorkLogs)
         .leftJoin(users, eq(dealWorkLogs.masterId, users.id))
         .where(eq(dealWorkLogs.dealId, deal.id))
-        .orderBy(asc(dealWorkLogs.performedAt))
+        // Порядок — по дате наряда (то же правило, что workOrderDate).
+        .orderBy(
+          asc(
+            sql`COALESCE(${dealWorkLogs.plannedAt}, ${dealWorkLogs.performedAt}, ${dealWorkLogs.finalizedAt}, ${dealWorkLogs.startedAt})`,
+          ),
+        )
     : [];
 
   // Sprint 10: услуги объекта — источник таблицы для АО/АВР по объекту
@@ -508,16 +520,18 @@ export async function buildDocumentData(ctx: BuildContext): Promise<{
         responsiblePhone: responsible.phone,
         ...(ctx.overrides ?? {}),
       };
-      data.workLogs = workLogs.map((w, i) => ({
-        index: i + 1,
-        date: w.performedAt
-          ? formatHumanDate(w.performedAt.toISOString().slice(0, 10))
-          : '',
-        description: w.description ?? '',
-        area: w.areaM2 ?? '',
-        master: w.masterName ?? '',
-        notes: w.notes ?? '',
-      }));
+      data.workLogs = workLogs.map((w, i) => {
+        const d = workOrderDate(w);
+        const day = d ? utcToMskParts(d)?.date : null;
+        return {
+          index: i + 1,
+          date: day ? formatHumanDate(day) : '',
+          description: w.description ?? '',
+          area: w.areaM2 ?? '',
+          master: w.masterName ?? '',
+          notes: w.notes ?? '',
+        };
+      });
       break;
     }
     case 'act_inspection':

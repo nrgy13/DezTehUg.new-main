@@ -25,12 +25,20 @@ import { WorkOrderDialog } from '@/components/crm/WorkOrderDialog';
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
 import { WorkOrderCrewButton } from '@/components/crm/WorkOrderCrewButton';
 import { WorkOrderRescheduleButton } from '@/components/crm/WorkOrderRescheduleButton';
+import { WorkOrderPricingButton } from '@/components/crm/WorkOrderPricingButton';
+import {
+  WorkOrderCloseButton,
+  WorkOrderEditButton,
+  WorkOrderOpenLink,
+} from '@/components/crm/WorkOrderManageButtons';
 import {
   deleteWorkOrder,
   getWorkOrderDuplicateData,
   type WorkOrderFormData,
   type WorkOrderDuplicateData,
 } from '@/app/(crm)/manager/calendar/work-order-actions';
+import { MSK_TZ } from '@/lib/datetime/msk';
+import { workOrderDate } from '@/lib/visits/order-date';
 
 export type VisitItemView = {
   id: string;
@@ -295,11 +303,13 @@ function VisitListItem({
   const naCount = v.items.filter((i) => i.status === 'na').length;
   return (
     <li>
-      <div className="w-full px-4 py-3 flex items-start gap-3">
+      {/* flex-wrap + базис 14rem у описания: на узком экране кнопки наряда уходят строкой
+          ниже, а не сжимают описание в полоску (кнопок стало много — +«Цена»). */}
+      <div className="w-full px-4 py-3 flex flex-wrap items-start gap-3">
         <button
           type="button"
           onClick={onToggle}
-          className="flex items-start gap-3 flex-1 min-w-0 text-left"
+          className="flex items-start gap-3 flex-[1_1_14rem] min-w-0 text-left"
         >
           <div className="flex-shrink-0 mt-0.5">
             {isOpen ? (
@@ -348,7 +358,11 @@ function VisitListItem({
             )}
           </div>
         </button>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-1 ml-auto max-w-full">
+          {/* Карточка наряда, правка (любой статус) и закрытие менеджером — запрос Регины 07.11. */}
+          <WorkOrderOpenLink workLogId={v.id} />
+          {hasObject && <WorkOrderEditButton workLogId={v.id} />}
+          <WorkOrderCloseButton workLogId={v.id} status={v.status} />
           {hasObject && <VisitActButtons dealId={dealId} workLogId={v.id} />}
           {(v.status === 'planned' || v.status === 'in_progress') && (
             <WorkOrderCrewButton workLogId={v.id} />
@@ -356,6 +370,8 @@ function VisitListItem({
           {v.status === 'planned' && (
             <WorkOrderRescheduleButton workLogId={v.id} plannedAtIso={v.plannedAt} />
           )}
+          {/* Цена — в любом статусе, в т.ч. выполненным нарядам задним числом. */}
+          <WorkOrderPricingButton workLogId={v.id} />
           <button
             type="button"
             onClick={onDuplicate}
@@ -443,9 +459,11 @@ function VisitListItem({
 }
 
 function fmtVisitDate(v: VisitView): string {
-  const iso = v.performedAt || v.finalizedAt || v.startedAt || v.plannedAt;
+  // Дата наряда = плановая («Начать»/«Завершить» её не двигают), время — по МСК.
+  const iso = workOrderDate(v);
   if (!iso) return 'без даты';
   return new Date(iso).toLocaleString('ru-RU', {
+    timeZone: MSK_TZ,
     day: '2-digit',
     month: '2-digit',
     year: '2-digit',

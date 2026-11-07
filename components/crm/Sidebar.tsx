@@ -20,6 +20,8 @@ import {
   UserCircle,
   Trash2,
   BookOpen,
+  PieChart,
+  Percent,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/db/schema/users';
 import { LogoText } from '@/components/layout/LogoText';
@@ -45,7 +47,10 @@ const NAV: NavItem[] = [
   { href: '/manager/analytics', label: 'Аналитика', icon: BarChart3, roles: ['manager'] },
   { href: '/manager/documents', label: 'Документы', icon: FileText, roles: ['manager'] },
   { href: '/manager/calendar', label: 'Календарь', icon: Calendar, roles: ['manager'] },
+  // 11.2026: сводка месяца для директора (деньги, мастера, переносы, клиенты + Excel) и ставки мастеров.
+  { href: '/manager/summary', label: 'Сводка месяца', icon: PieChart, roles: ['manager'] },
   { href: '/manager/reports', label: 'Отчёты', icon: BarChart3, roles: ['manager'] },
+  { href: '/manager/masters', label: 'Мастера и ставки', icon: Percent, roles: ['manager'] },
   { href: '/manager/inbox', label: 'Уведомления', icon: Bell, roles: ['manager'] },
 
   // Мастер

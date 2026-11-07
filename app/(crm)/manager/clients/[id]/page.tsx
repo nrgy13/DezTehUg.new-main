@@ -74,7 +74,12 @@ export default async function ClientCardPage({
             <PageTitle>{client.shortName}</PageTitle>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <ClientTypeBadge type={client.type} />
-              <ClientStatusControl clientId={client.id} initial={client.status} />
+              <ClientStatusControl
+                clientId={client.id}
+                initial={client.status}
+                refusalReason={client.refusalReason}
+                refusalComment={client.refusalComment}
+              />
               <ClientCategoryControl clientId={client.id} initial={client.category} />
             </div>
           </div>

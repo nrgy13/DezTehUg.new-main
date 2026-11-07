@@ -71,6 +71,9 @@ export async function createClient(rawInput: unknown): Promise<Result<{ id: stri
     return { ok: false, error: first.message, field: first.path.join('.') };
   }
   const data = parsed.data;
+  if (data.status === 'refused') {
+    return { ok: false, error: 'Статус «Отказался» ставится в карточке клиента (нужна причина)', field: 'status' };
+  }
 
   // Проверка дубля по ИНН (если введён)
   if (data.inn) {
@@ -136,12 +139,26 @@ export async function updateClient(id: string, rawInput: unknown): Promise<Resul
   const [existing] = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
   if (!existing) return { ok: false, error: 'Клиент не найден' };
 
+  // «Отказался» — только через карточку (updateClientStatus) с причиной. Из формы статус
+  // 'refused' принимается лишь как «не менялся» (round-trip формы отказавшегося клиента).
+  if (data.status === 'refused' && existing.status !== 'refused') {
+    return { ok: false, error: 'Статус «Отказался» ставится в карточке клиента (нужна причина)', field: 'status' };
+  }
+  // Ушёл из «Отказался» через форму — поля отказа чистим, прежняя причина остаётся в журнале.
+  const leavingRefusal = existing.status === 'refused' && data.status !== 'refused';
+  const refusalReset = leavingRefusal ? { refusalReason: null, refusalComment: null, refusedAt: null } : {};
+
   await db
     .update(clients)
-    .set({ ...data, updatedAt: new Date() })
+    .set({ ...data, ...refusalReset, updatedAt: new Date() })
     .where(eq(clients.id, id));
 
-  await logActivity(actor.id, 'client.update', 'client', id, computeDiff(existing, data));
+  await logActivity(actor.id, 'client.update', 'client', id, {
+    ...computeDiff(existing, data),
+    ...(leavingRefusal
+      ? { prevRefusalReason: existing.refusalReason, prevRefusalComment: existing.refusalComment }
+      : {}),
+  });
 
   revalidatePath('/manager/clients');
   revalidatePath(`/manager/clients/${id}`);
@@ -160,14 +177,30 @@ export async function updateClientStatus(rawInput: unknown): Promise<Result> {
   const [existing] = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
   if (!existing) return { ok: false, error: 'Клиент не найден' };
 
+  // Отказ: причина + комментарий + когда. Уход из «Отказался» — поля отказа чистим
+  // (история остаётся в activity_log: from/to + прежняя причина).
+  const refusal =
+    status === 'refused'
+      ? {
+          refusalReason: parsed.data.refusalReason ?? null,
+          refusalComment: parsed.data.refusalComment?.trim() || null,
+          refusedAt: existing.status === 'refused' && existing.refusedAt ? existing.refusedAt : new Date(),
+        }
+      : { refusalReason: null, refusalComment: null, refusedAt: null };
+
   await db
     .update(clients)
-    .set({ status, updatedAt: new Date() })
+    .set({ status, ...refusal, updatedAt: new Date() })
     .where(eq(clients.id, id));
 
   await logActivity(actor.id, 'client.status_change', 'client', id, {
     from: existing.status,
     to: status,
+    ...(status === 'refused'
+      ? { refusalReason: refusal.refusalReason, refusalComment: refusal.refusalComment }
+      : existing.status === 'refused'
+        ? { prevRefusalReason: existing.refusalReason, prevRefusalComment: existing.refusalComment }
+        : {}),
   });
 
   revalidatePath('/manager/clients');

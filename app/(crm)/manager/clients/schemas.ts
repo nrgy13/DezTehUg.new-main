@@ -43,7 +43,9 @@ const baseFields = {
   postalAddress: optionalTrimmed,
   notes: optionalTrimmed,
   source: z.enum(['website', 'phone', 'manager', 'recurring', 'referral', 'other']),
-  status: z.enum(['lead', 'active', 'inactive', 'blocked']),
+  // 'refused' принимается ТОЛЬКО чтобы форма переваривала свой же вывод у отказавшегося клиента;
+  // поставить «Отказался» из формы нельзя (нужна причина) — гард в create/updateClient.
+  status: z.enum(['lead', 'active', 'inactive', 'blocked', 'refused']),
   // Категория-метка для директора. default('old') — safety net, если форма не прислала значение.
   category: z.enum(['new', 'old', 'permanent', 'tender']).default('old'),
   assignedManagerId: z
@@ -157,10 +159,25 @@ export const clientFormSchema = z
   });
 
 // === Дополнительные действия по клиенту ===
-export const updateClientStatusSchema = z.object({
-  id: z.string().uuid(),
-  status: z.enum(['lead', 'active', 'inactive', 'blocked']),
-});
+export const updateClientStatusSchema = z
+  .object({
+    id: z.string().uuid(),
+    status: z.enum(['lead', 'active', 'inactive', 'blocked', 'refused']),
+    // Отказ (11.2026): причина обязательна, комментарий обязателен для «Другое».
+    refusalReason: z
+      .enum(['price', 'competitor', 'closed', 'no_need', 'quality', 'other'])
+      .nullable()
+      .optional(),
+    refusalComment: z.string().trim().max(1000).nullable().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.status !== 'refused') return;
+    if (!v.refusalReason) {
+      ctx.addIssue({ code: 'custom', message: 'Укажи причину отказа', path: ['refusalReason'] });
+    } else if (v.refusalReason === 'other' && !v.refusalComment?.trim()) {
+      ctx.addIssue({ code: 'custom', message: 'Для «Другое» напиши причину словами', path: ['refusalComment'] });
+    }
+  });
 
 export const updateClientCategorySchema = z.object({
   id: z.string().uuid(),

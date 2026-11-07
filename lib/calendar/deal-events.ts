@@ -10,11 +10,13 @@ import { services } from '@/lib/db/schema/services';
 import { users } from '@/lib/db/schema/users';
 import { dealChecklistItems } from '@/lib/db/schema/checklists';
 import { crewLabel, getPartnersByWorkLogIds, workLogHasMember } from '@/lib/visits/crew';
+import { workOrderDate } from '@/lib/visits/order-date';
 
 // SERVER-ONLY: запросы для календарей.
 // Sprint 6: календарь показывает ВЫЕЗДЫ (work_logs), не периоды сделок.
 // Каждое событие = один work_log по позиции прайса. Длительность по умолчанию
-// 2 часа от plannedAt (или startedAt/performedAt — в зависимости от статуса).
+// 2 часа от ДАТЫ НАРЯДА = plannedAt (07.11.2026: «Начать»/«Завершить» её не двигают,
+// см. lib/visits/order-date.ts; без плана — откат на факт).
 //
 // Для /manager/calendar — выезды всех сделок, где он assignedManager (admin видит всё).
 // Для /master/calendar — выезды этого мастера.
@@ -30,9 +32,9 @@ export type DealEvent = {
   /** Дата только (YYYY-MM-DD), синтезируется из plannedAt/performedAt для backward-compat MiniCalendar. */
   startDate: Date | null;
   endDate: Date | null;
-  /** Точный timestamp начала выезда (planned/started/performed). */
+  /** Дата и время наряда (плановые; без плана — факт), см. workOrderDate. */
   startAt: Date | null;
-  /** start + 2 часа (default duration) или performedAt для completed. */
+  /** start + 2 часа (default duration). */
   endAt: Date | null;
   /** Всегда false — выезды позиционные, с конкретным временем. */
   isAllDay: boolean;
@@ -209,27 +211,11 @@ export async function getDealEvents(mode: Mode): Promise<DealEvent[]> {
   }
 
   return rows.map((r) => {
-    // Выбираем start для отображения исходя из статуса:
-    // - planned: plannedAt
-    // - in_progress: startedAt (если есть) или plannedAt
-    // - completed: performedAt/finalizedAt (если есть) или startedAt/plannedAt
+    // Дата наряда — плановая при ЛЮБОМ статусе. Раньше «в работе» показывался по startedAt:
+    // мастер нажал «Начать» 07.11 на наряде за 09.11 — и наряд в календаре уехал на 07.11.
     const status = r.status as VisitStatus;
-    let start: Date | null = null;
-    let end: Date | null = null;
-
-    // NB: completed-выезды отфильтрованы из этого запроса (inArray planned/in_progress выше),
-    // поэтому ветка completed недостижима — выполненные обрабатываются в getVisitHistory.
-    // Оставлена для полноты switch по статусу.
-    if (status === 'completed') {
-      start = r.performedAt ?? r.startedAt ?? r.plannedAt;
-      end = r.finalizedAt ?? (start ? addHours(start, DEFAULT_VISIT_HOURS) : null);
-    } else if (status === 'in_progress') {
-      start = r.startedAt ?? r.plannedAt;
-      end = start ? addHours(start, DEFAULT_VISIT_HOURS) : null;
-    } else {
-      start = r.plannedAt;
-      end = start ? addHours(start, DEFAULT_VISIT_HOURS) : null;
-    }
+    const start: Date | null = workOrderDate(r);
+    const end: Date | null = start ? addHours(start, DEFAULT_VISIT_HOURS) : null;
 
     const woServiceTitle = svcByWl.get(r.workLogId)?.join(', ');
     const serviceTitle =
@@ -361,7 +347,7 @@ export type VisitHistoryItem = {
   objectName: string | null;
   /** Все объекты наряда (основной первым) — для поиска по любому из них. */
   objectNames: string[];
-  /** Дата выполнения (performedAt ?? finalizedAt ?? startedAt ?? plannedAt). */
+  /** Дата наряда (плановая; без плана — факт выполнения), см. workOrderDate. */
   completedAt: Date | null;
   services: string[];
   preparations: string | null;
@@ -472,7 +458,7 @@ export async function getVisitHistory(mode: Mode): Promise<VisitHistoryItem[]> {
   }
 
   const out: VisitHistoryItem[] = rows.map((r) => {
-    const completedAt = r.performedAt ?? r.finalizedAt ?? r.startedAt ?? r.plannedAt;
+    const completedAt = workOrderDate(r);
     const woServices = svcByWl.get(r.workLogId);
     const visitServices =
       woServices && woServices.length > 0

@@ -19,8 +19,14 @@ import { dealChecklistItems, type ChecklistPhoto } from '@/lib/db/schema/checkli
 import { CyberpunkCard } from '@/components/cyberpunk/CyberpunkCard';
 import { formatQuantity, unitLabel } from '@/lib/constants/units';
 import { MSK_TZ } from '@/lib/datetime/msk';
+import { workOrderRescheduleRequests } from '@/lib/db/schema/finance';
+import { latestRequestForWorkLog, RESCHEDULE_REASON_MIN } from '@/lib/visits/reschedule-requests';
 import { VisitChecklist, type VisitItem } from './VisitChecklist';
+import { RescheduleRequestButton, RescheduleRequestStatus } from './RescheduleRequestButton';
 import { PageTitle } from '@/components/crm/PageTitle';
+
+/** Сколько показывать мастеру итог решения по переносу (одобрен/отклонён). */
+const RESCHEDULE_DECISION_VISIBLE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const metadata = { title: 'Выезд — мастер — ДезТехЮг CRM' };
 export const dynamic = 'force-dynamic';
@@ -175,6 +181,29 @@ export default async function MasterVisitPage({
 
   const readOnly = wl.status === 'completed';
 
+  // Перенос ЗАПРОСОМ (11.2026): мастер сам дату не меняет — просит менеджера с причиной.
+  const latestResched = await latestRequestForWorkLog(wl.id);
+  // Отозвать может только тот, кто просил (у напарника по бригаде — без кнопки).
+  let canCancelResched = false;
+  if (latestResched?.status === 'pending') {
+    const [req] = await db
+      .select({ requestedById: workOrderRescheduleRequests.requestedById })
+      .from(workOrderRescheduleRequests)
+      .where(eq(workOrderRescheduleRequests.id, latestResched.id))
+      .limit(1);
+    canCancelResched = req?.requestedById === user.id;
+  }
+  const showResched =
+    !!latestResched &&
+    (latestResched.status === 'pending' ||
+      ((latestResched.status === 'approved' || latestResched.status === 'rejected') &&
+        !!latestResched.decidedAt &&
+        Date.now() - new Date(latestResched.decidedAt).getTime() < RESCHEDULE_DECISION_VISIBLE_MS));
+  // Админ открывает любой наряд, но просить перенос может только член бригады (сервер проверяет).
+  const isCrewMember = user.role !== 'admin' || (await isWorkLogMember(wl, user.id));
+  const canRequestResched =
+    wl.status === 'planned' && isCrewMember && latestResched?.status !== 'pending';
+
   return (
     <div className="space-y-5 pb-24">
       <Link
@@ -224,6 +253,26 @@ export default async function MasterVisitPage({
           <p className="text-sm text-neon-orange mt-1">👥 Бригада: {crew}</p>
         )}
       </div>
+
+      {/* Перенос наряда: статус последнего запроса + кнопка нового (пока нет висящего) */}
+      {(showResched || canRequestResched) && (
+        <div className="space-y-2">
+          {showResched && latestResched && (
+            <RescheduleRequestStatus
+              request={latestResched}
+              workLogId={wl.id}
+              canCancel={canCancelResched}
+            />
+          )}
+          {canRequestResched && (
+            <RescheduleRequestButton
+              workLogId={wl.id}
+              plannedAtIso={wl.plannedAt?.toISOString() ?? null}
+              reasonMin={RESCHEDULE_REASON_MIN}
+            />
+          )}
+        </div>
+      )}
 
       {/* Мульти-объектный наряд: все точки выезда с адресами и контактами */}
       {multiObjects && (

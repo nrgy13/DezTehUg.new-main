@@ -2,6 +2,7 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import { sql } from 'drizzle-orm';
+import { workOrderDateSql } from '@/lib/visits/order-date';
 
 // SERVER-ONLY: SQL-агрегаты для всех отчётов /manager/reports.
 // Все функции принимают опц. период в днях (null = весь период).
@@ -383,9 +384,10 @@ export async function getMasterLoad(periodDays: number | null): Promise<MasterLo
       COALESCE(SUM(wl.area_m2), 0)::int   AS total_area
     -- Бригада (10.2026): выезд засчитывается КАЖДОМУ члену — основному и напарникам.
     FROM (
-      SELECT w.performed_at, w.area_m2, w.master_id AS uid FROM deal_work_logs w
+      -- Дата наряда = плановая (07.11.2026, lib/visits/order-date.ts); без плана — факт.
+      SELECT ${workOrderDateSql('w')} AS performed_at, w.area_m2, w.master_id AS uid FROM deal_work_logs w
       UNION ALL
-      SELECT w.performed_at, w.area_m2, m.user_id AS uid
+      SELECT ${workOrderDateSql('w')} AS performed_at, w.area_m2, m.user_id AS uid
         FROM deal_work_logs w
         JOIN deal_work_log_masters m ON m.work_log_id = w.id
     ) wl

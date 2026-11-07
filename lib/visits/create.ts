@@ -29,7 +29,21 @@ export type WorkOrderServiceInput = {
    * null/undefined → основной объект наряда.
    */
   objectId?: string | null;
+  /** Цена строки (11.2026): строка/число/пусто. Пусто → NULL (цена не указана). */
+  price?: string | number | null;
+  /** 'contract' — из прайса договора, 'manual' — своя. */
+  priceSource?: 'contract' | 'manual' | null;
 };
+
+/** Цена строки услуги → строка для numeric(12,2) или null (пусто/мусор/минус). */
+export function normalizeLinePrice(p: string | number | null | undefined): string | null {
+  if (p === null || p === undefined) return null;
+  const s = String(p).trim().replace(/\s/g, '').replace(',', '.');
+  if (s === '') return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return (Math.round(n * 100) / 100).toFixed(2);
+}
 
 /**
  * Пункт чеклиста, собранный менеджером в форме наряда.
@@ -73,6 +87,8 @@ export async function createWorkOrder(params: {
   services: WorkOrderServiceInput[];
   /** Явный чеклист от формы. undefined → автокопия из шаблонов услуг (старое поведение). */
   checklist?: WorkOrderChecklistInput[];
+  /** «Документальный» наряд: мастеру 0, вся сумма в кассу организации. */
+  noMasterPay?: boolean;
 }): Promise<{ workLogId: string; itemsCount: number }> {
   const { dealId, masterId, plannedAt, preparations, services: svcList, checklist } = params;
 
@@ -97,6 +113,7 @@ export async function createWorkOrder(params: {
         status: 'planned',
         plannedAt: plannedAt ?? null,
         preparations: preparations?.trim() ? preparations.trim() : null,
+        noMasterPay: params.noMasterPay === true,
       })
       .returning({ id: dealWorkLogs.id });
 
@@ -131,6 +148,8 @@ export async function createWorkOrder(params: {
             s.quantity !== null && s.quantity !== undefined && String(s.quantity).trim() !== ''
               ? String(s.quantity)
               : null,
+          price: normalizeLinePrice(s.price),
+          priceSource: normalizeLinePrice(s.price) === null ? null : (s.priceSource ?? 'manual'),
           sortOrder: i,
         })),
       );

@@ -27,6 +27,7 @@ import { MSK_TZ } from '@/lib/datetime/msk';
 import { getWorkOrderFormData } from '@/app/(crm)/manager/calendar/work-order-actions';
 import { ObjectActions } from './ObjectActions';
 import { ObjectVisitsSection, type ObjectVisitView } from './ObjectVisitsSection';
+import { workOrderDate } from '@/lib/visits/order-date';
 import { PageTitle } from '@/components/crm/PageTitle';
 import { Breadcrumbs, type Crumb } from '@/components/crm/Breadcrumbs';
 
@@ -193,7 +194,8 @@ export default async function ObjectCardPage({ params }: { params: Promise<{ id:
   }
 
   const objectVisits: ObjectVisitView[] = visitRows.map((v) => {
-    const iso = v.performedAt ?? v.finalizedAt ?? v.startedAt ?? v.plannedAt;
+    // Дата наряда = плановая («Начать»/«Завершить» её не двигают); без плана — факт.
+    const iso = workOrderDate(v);
     const dateLabel = iso
       ? iso.toLocaleString('ru-RU', {
           timeZone: MSK_TZ,

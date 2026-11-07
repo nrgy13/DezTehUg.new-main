@@ -47,6 +47,12 @@ export type PushPayload = {
    * для каждого получателя (getBadgeCount) — одно число и в push, и в приложении.
    */
   badge?: number;
+  /**
+   * Срочное (11.2026, запрос мастера на перенос): уведомление висит, пока не нажмут
+   * (Android/десктоп; iOS это поле игнорирует), и уходит push-сервису с Urgency: high —
+   * доставка без отложенной пачки при экономии батареи.
+   */
+  urgent?: boolean;
 };
 
 export type PushSendResult = {
@@ -98,7 +104,10 @@ export async function sendPushToUser(
         keys: { p256dh: s.p256dh, auth: s.auth },
       };
       try {
-        await webpush.sendNotification(subscription, json, { TTL: 60 * 60 * 24 });
+        await webpush.sendNotification(subscription, json, {
+          TTL: 60 * 60 * 24,
+          urgency: payload.urgent ? 'high' : 'normal',
+        });
         sent++;
         // Обновим last_used_at — для отладки и очистки протухших подписок.
         await db
