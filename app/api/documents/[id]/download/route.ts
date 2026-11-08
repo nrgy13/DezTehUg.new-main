@@ -21,6 +21,11 @@ export async function GET(
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Не авторизован' }, { status: 401 });
   }
+  // Документы (договор, КП, счёт, акты) содержат цены — только менеджер и админ. Мастер
+  // документы не генерирует и не скачивает; раньше хватало любого входа + id документа.
+  if (session.user.role !== 'manager' && session.user.role !== 'admin') {
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 403 });
+  }
 
   const { id } = await params;
   const url = new URL(request.url);
