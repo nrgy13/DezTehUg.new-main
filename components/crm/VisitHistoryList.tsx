@@ -5,7 +5,11 @@ import { Search, X, MapPin, Wrench, User as UserIcon, FlaskConical, ListChecks }
 import type { SerializedVisitHistoryItem } from '@/lib/calendar/deal-events';
 import { VisitActButtons } from '@/components/crm/VisitActButtons';
 import { WorkOrderPricingButton } from '@/components/crm/WorkOrderPricingButton';
-import { WorkOrderEditButton, WorkOrderOpenLink } from '@/components/crm/WorkOrderManageButtons';
+import {
+  WorkOrderDuplicateButton,
+  WorkOrderEditButton,
+  WorkOrderOpenLink,
+} from '@/components/crm/WorkOrderManageButtons';
 
 // Ссылка на выезд: у мастера — на страницу выезда, у менеджера — на карточку наряда
 // (07.11.2026: всё по наряду, фото, журнал, правка).
@@ -200,6 +204,7 @@ export function VisitHistoryList({
                       <VisitActButtons dealId={it.dealId} workLogId={it.id} />
                       {/* Цена выполненного наряда (задним числом) — только менеджер/админ. */}
                       <WorkOrderPricingButton workLogId={it.id} />
+                      <WorkOrderDuplicateButton workLogId={it.id} />
                     </div>
                   )}
                   </div>

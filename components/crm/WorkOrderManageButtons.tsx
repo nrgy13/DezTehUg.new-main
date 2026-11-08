@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Eye, Loader2, Pencil } from 'lucide-react';
+import { CheckCircle2, Copy, Eye, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -19,8 +19,13 @@ import {
   getWorkOrderEditData,
   type WorkOrderEditData,
 } from '@/app/(crm)/manager/calendar/work-order-edit-actions';
+import {
+  getWorkOrderDuplicateData,
+  type WorkOrderDuplicateData,
+} from '@/app/(crm)/manager/calendar/work-order-actions';
 
 type EditLoaded = Extract<WorkOrderEditData, { ok: true }>;
+type DuplicateLoaded = Extract<WorkOrderDuplicateData, { ok: true }>;
 
 const iconBtn =
   'p-1.5 text-content-muted hover:text-neon-orange hover:bg-neon-orange/10 rounded border border-gray-200 disabled:opacity-50';
@@ -92,6 +97,67 @@ export function WorkOrderEditButton({
         <WorkOrderDialog
           data={loaded.formData}
           editPrefill={loaded.prefill}
+          onClose={() => setLoaded(null)}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * «Дублировать наряд» (менеджер): форма-копия со снимком услуг/препаратов/мастера/чеклиста,
+ * дата новая, можно сменить объект/договор/клиента. Та же логика, что в табе «Выезды» договора
+ * и карточке объекта; 08.11.2026 вынесена сюда — клик в календаре с 07.11 ведёт в карточку
+ * наряда, где копирования не было (Регина потеряла кнопку).
+ */
+export function WorkOrderDuplicateButton({
+  workLogId,
+  variant = 'icon',
+}: {
+  workLogId: string;
+  variant?: 'icon' | 'button';
+}) {
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState<DuplicateLoaded | null>(null);
+
+  async function open() {
+    if (loading) return; // не плодим параллельные загрузки копии
+    setLoading(true);
+    try {
+      const res = await getWorkOrderDuplicateData(workLogId);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setLoaded(res);
+    } catch {
+      toast.error('Не удалось загрузить наряд для копирования');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={open}
+        disabled={loading}
+        className={variant === 'icon' ? iconBtn : textBtn}
+        title="Дублировать наряд (можно перенести на другой объект/договор)"
+        aria-label="Дублировать наряд"
+      >
+        {loading ? (
+          <Loader2 className={variant === 'icon' ? 'w-3.5 h-3.5 animate-spin' : 'w-4 h-4 animate-spin'} />
+        ) : (
+          <Copy className={variant === 'icon' ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+        )}
+        {variant === 'button' && 'Дублировать'}
+      </button>
+      {loaded && (
+        <WorkOrderDialog
+          data={loaded.formData}
+          duplicatePrefill={loaded.prefill}
           onClose={() => setLoaded(null)}
         />
       )}

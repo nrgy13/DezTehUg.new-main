@@ -26,6 +26,7 @@ import { WorkOrderPricingButton } from '@/components/crm/WorkOrderPricingButton'
 import { WorkOrderCrewButton } from '@/components/crm/WorkOrderCrewButton';
 import {
   WorkOrderCloseButton,
+  WorkOrderDuplicateButton,
   WorkOrderEditButton,
 } from '@/components/crm/WorkOrderManageButtons';
 
@@ -273,6 +274,7 @@ export default async function WorkOrderCardPage({ params }: { params: Promise<{ 
           <div className="flex items-center gap-2 flex-wrap">
             <WorkOrderEditButton workLogId={wl.id} variant="button" />
             <WorkOrderCloseButton workLogId={wl.id} status={status} variant="button" />
+            {wl.objectId && <WorkOrderDuplicateButton workLogId={wl.id} variant="button" />}
             {status !== 'completed' && <WorkOrderCrewButton workLogId={wl.id} />}
             <WorkOrderPricingButton workLogId={wl.id} label />
             {wl.objectId && <VisitActButtons dealId={wl.dealId} workLogId={wl.id} />}

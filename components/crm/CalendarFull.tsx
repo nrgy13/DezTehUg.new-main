@@ -19,6 +19,7 @@ import { WorkOrderRescheduleButton } from '@/components/crm/WorkOrderRescheduleB
 import { WorkOrderPricingButton } from '@/components/crm/WorkOrderPricingButton';
 import {
   WorkOrderCloseButton,
+  WorkOrderDuplicateButton,
   WorkOrderEditButton,
   WorkOrderOpenLink,
 } from '@/components/crm/WorkOrderManageButtons';
@@ -776,6 +777,7 @@ function VisitsList({
                   )}
                   {/* Цена наряда и начисления мастерам — только менеджер/админ (canGenerateActs). */}
                   <WorkOrderPricingButton workLogId={e.id} />
+                  <WorkOrderDuplicateButton workLogId={e.id} />
                 </div>
               )}
               </div>
